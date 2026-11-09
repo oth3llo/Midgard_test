@@ -1,0 +1,10 @@
+{
+  "TYPES": {
+    "Actor": {
+      "abenteurer": "Abenteurer"
+    }
+  },
+  "MIDGARD": {
+    "Bogen": "Midgard-Bogen (CMT)"
+  }
+}

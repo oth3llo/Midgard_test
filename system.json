@@ -1,0 +1,43 @@
+{
+  "id": "midgard5-cmt",
+  "title": "Midgard 5 – Charakter-Management (CMT)",
+  "description": "Charaktererschaffung nach dem Kodex und Lernen im Spielverlauf (EP, Praxispunkte, Gold) für Midgard 5. Keine Würfe, kein Kampf. Inoffiziell, für den privaten Gebrauch.",
+  "version": "0.3.0",
+  "compatibility": {
+    "minimum": "14",
+    "verified": "14.370",
+    "maximum": "14"
+  },
+  "esmodules": [
+    "cmt.mjs"
+  ],
+  "styles": [
+    "styles/cmt.css"
+  ],
+  "languages": [
+    {
+      "lang": "de",
+      "name": "Deutsch",
+      "path": "lang/de.json"
+    },
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/de.json"
+    }
+  ],
+  "documentTypes": {
+    "Actor": {
+      "abenteurer": {}
+    },
+    "Item": {}
+  },
+  "grid": {
+    "distance": 1,
+    "units": "m"
+  },
+  "socket": false,
+  "url": "https://github.com/oth3llo/Midgard_test",
+  "manifest": "https://github.com/oth3llo/Midgard_test/releases/latest/download/system.json",
+  "download": "https://github.com/oth3llo/Midgard_test/releases/download/v0.3.0/midgard5-cmt.zip"
+}

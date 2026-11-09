@@ -1,0 +1,378 @@
+/* Automatisch erzeugt mit foundry/bauen.py aus charaktergenerator/style.css */
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("../schrift/PixelifySans.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
+.midgard-cmt.midgard-cmt, .theme-light .midgard-cmt.midgard-cmt, .application.theme-light .midgard-cmt.midgard-cmt {--grund: #efe6d2;
+  --flaeche: #fbf6ea;
+  --text: #2b2233;
+  --leise: #5f5468;
+  --rand: #3b2f45;          
+  --schatten: #c9b994;      
+  --linie: #d5c7a8;         
+  --akzent: #3d5fa8;        
+  --akzent-hell: #dfe6f5;
+  --auf-akzent: #ffffff;
+  --gut: #2f7a43;
+  --schlecht: #b2382f;
+  --warn: #8a5600;
+  --warn-grund: #faecc8;
+  --fehler-grund: #f6dcd6;
+  --raster: rgba(59, 47, 69, .035);
+  
+  --a1: #c8423b; --a1h: #f5d9d5;
+  --a2: #d9771f; --a2h: #f8e3cc;
+  --a3: #b8901c; --a3h: #f4ebc6;
+  --a4: #2f7a40; --a4h: #d8eedb;
+  --a5: #1d7677; --a5h: #d2ecec;
+  --a6: #3d5fa8; --a6h: #dbe3f4;
+  --a7: #7b4fa6; --a7h: #e8dcf3;
+  
+  --a1t: #fff; --a2t: #1b1726; --a3t: #1b1726; --a4t: #fff; --a5t: #fff; --a6t: #fff; --a7t: #fff;
+  --radius: 0;
+  color-scheme: light;
+  
+  --icon-stern: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 8 8%22 shape-rendering=%22crispEdges%22%3E%3Crect x=%223%22 y=%220%22 width=%222%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%222%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%223%22 y=%221%22 width=%222%22 height=%221%22 fill=%22%23ffd23f%22/%3E%3Crect x=%225%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%220%22 y=%222%22 width=%223%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%223%22 y=%222%22 width=%222%22 height=%221%22 fill=%22%23ffd23f%22/%3E%3Crect x=%225%22 y=%222%22 width=%223%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%220%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%221%22 y=%223%22 width=%226%22 height=%221%22 fill=%22%23ffd23f%22/%3E%3Crect x=%227%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%221%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%222%22 y=%224%22 width=%224%22 height=%221%22 fill=%22%23ffd23f%22/%3E%3Crect x=%226%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%222%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%223%22 y=%225%22 width=%222%22 height=%221%22 fill=%22%23ffd23f%22/%3E%3Crect x=%225%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%221%22 y=%226%22 width=%221%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%222%22 y=%226%22 width=%221%22 height=%221%22 fill=%22%23ffd23f%22/%3E%3Crect x=%223%22 y=%226%22 width=%222%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%225%22 y=%226%22 width=%221%22 height=%221%22 fill=%22%23ffd23f%22/%3E%3Crect x=%226%22 y=%226%22 width=%221%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%221%22 y=%227%22 width=%222%22 height=%221%22 fill=%22%233b2a12%22/%3E%3Crect x=%225%22 y=%227%22 width=%222%22 height=%221%22 fill=%22%233b2a12%22/%3E%3C/svg%3E");
+  --icon-muenze: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 8 8%22 shape-rendering=%22crispEdges%22%3E%3Crect x=%222%22 y=%220%22 width=%224%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%221%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%222%22 y=%221%22 width=%224%22 height=%221%22 fill=%22%23f2b636%22/%3E%3Crect x=%226%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%220%22 y=%222%22 width=%221%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%221%22 y=%222%22 width=%221%22 height=%221%22 fill=%22%23f2b636%22/%3E%3Crect x=%222%22 y=%222%22 width=%221%22 height=%221%22 fill=%22%23fff3b0%22/%3E%3Crect x=%223%22 y=%222%22 width=%224%22 height=%221%22 fill=%22%23f2b636%22/%3E%3Crect x=%227%22 y=%222%22 width=%221%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%220%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%221%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%23f2b636%22/%3E%3Crect x=%222%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%23fff3b0%22/%3E%3Crect x=%223%22 y=%223%22 width=%222%22 height=%221%22 fill=%22%23f2b636%22/%3E%3Crect x=%225%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%23c8841c%22/%3E%3Crect x=%226%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%23f2b636%22/%3E%3Crect x=%227%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%220%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%221%22 y=%224%22 width=%224%22 height=%221%22 fill=%22%23f2b636%22/%3E%3Crect x=%225%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%23c8841c%22/%3E%3Crect x=%226%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%23f2b636%22/%3E%3Crect x=%227%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%220%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%221%22 y=%225%22 width=%223%22 height=%221%22 fill=%22%23f2b636%22/%3E%3Crect x=%224%22 y=%225%22 width=%222%22 height=%221%22 fill=%22%23c8841c%22/%3E%3Crect x=%226%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%23f2b636%22/%3E%3Crect x=%227%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%221%22 y=%226%22 width=%221%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%222%22 y=%226%22 width=%224%22 height=%221%22 fill=%22%23c8841c%22/%3E%3Crect x=%226%22 y=%226%22 width=%221%22 height=%221%22 fill=%22%234a2e05%22/%3E%3Crect x=%222%22 y=%227%22 width=%224%22 height=%221%22 fill=%22%234a2e05%22/%3E%3C/svg%3E");
+  --icon-edelstein: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 8 8%22 shape-rendering=%22crispEdges%22%3E%3Crect x=%222%22 y=%220%22 width=%224%22 height=%221%22 fill=%22%230e3b22%22/%3E%3Crect x=%221%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%230e3b22%22/%3E%3Crect x=%222%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%23b6f5c8%22/%3E%3Crect x=%223%22 y=%221%22 width=%222%22 height=%221%22 fill=%22%233ccf6e%22/%3E%3Crect x=%225%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%231f8a46%22/%3E%3Crect x=%226%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%230e3b22%22/%3E%3Crect x=%220%22 y=%222%22 width=%221%22 height=%221%22 fill=%22%230e3b22%22/%3E%3Crect x=%221%22 y=%222%22 width=%222%22 height=%221%22 fill=%22%23b6f5c8%22/%3E%3Crect x=%223%22 y=%222%22 width=%222%22 height=%221%22 fill=%22%233ccf6e%22/%3E%3Crect x=%225%22 y=%222%22 width=%222%22 height=%221%22 fill=%22%231f8a46%22/%3E%3Crect x=%227%22 y=%222%22 width=%221%22 height=%221%22 fill=%22%230e3b22%22/%3E%3Crect x=%220%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%230e3b22%22/%3E%3Crect x=%221%22 y=%223%22 width=%225%22 height=%221%22 fill=%22%233ccf6e%22/%3E%3Crect x=%226%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%231f8a46%22/%3E%3Crect x=%227%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%230e3b22%22/%3E%3Crect x=%221%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%230e3b22%22/%3E%3Crect x=%222%22 y=%224%22 width=%223%22 height=%221%22 fill=%22%233ccf6e%22/%3E%3Crect x=%225%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%231f8a46%22/%3E%3Crect x=%226%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%230e3b22%22/%3E%3Crect x=%222%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%230e3b22%22/%3E%3Crect x=%223%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%233ccf6e%22/%3E%3Crect x=%224%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%231f8a46%22/%3E%3Crect x=%225%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%230e3b22%22/%3E%3Crect x=%223%22 y=%226%22 width=%222%22 height=%221%22 fill=%22%230e3b22%22/%3E%3C/svg%3E");
+  --icon-krone: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 8 8%22 shape-rendering=%22crispEdges%22%3E%3Crect x=%220%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%223%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%226%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%220%22 y=%222%22 width=%222%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%223%22 y=%222%22 width=%222%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%226%22 y=%222%22 width=%222%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%220%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%221%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%23b07cf0%22/%3E%3Crect x=%222%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%223%22 y=%223%22 width=%222%22 height=%221%22 fill=%22%23b07cf0%22/%3E%3Crect x=%225%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%226%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%23b07cf0%22/%3E%3Crect x=%227%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%220%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%221%22 y=%224%22 width=%226%22 height=%221%22 fill=%22%23b07cf0%22/%3E%3Crect x=%227%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%220%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%221%22 y=%225%22 width=%222%22 height=%221%22 fill=%22%23b07cf0%22/%3E%3Crect x=%223%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%23ffffff%22/%3E%3Crect x=%224%22 y=%225%22 width=%223%22 height=%221%22 fill=%22%23b07cf0%22/%3E%3Crect x=%227%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%232a1640%22/%3E%3Crect x=%220%22 y=%226%22 width=%228%22 height=%221%22 fill=%22%232a1640%22/%3E%3C/svg%3E");}
+@media (prefers-color-scheme: dark) {
+.midgard-cmt.midgard-cmt {--grund: #1b1726; --flaeche: #262037; --text: #efe7d6; --leise: #b9adc6;
+    --rand: #0b0812; --schatten: #0b0812; --linie: #3d3452;
+    --akzent: #7aa2ff; --akzent-hell: #2a3352; --auf-akzent: #14111d;
+    --gut: #6bd47a; --schlecht: #ff7b6e; --warn: #ffc85a; --warn-grund: #3a3020; --fehler-grund: #3d2229;
+    --raster: rgba(255, 255, 255, .025);
+    --a1: #ff6b5e; --a1h: #3b2230; --a2: #ff9f43; --a2h: #3b2a24; --a3: #ffd166; --a3h: #393224;
+    --a4: #6bd47a; --a4h: #213529; --a5: #4fd1c5; --a5h: #1d3436; --a6: #7aa2ff; --a6h: #23294a;
+    --a7: #b48cff; --a7h: #2e2546;
+    --a1t: #14111d; --a2t: #14111d; --a3t: #14111d; --a4t: #14111d; --a5t: #14111d; --a6t: #14111d; --a7t: #14111d;
+    color-scheme: dark;}
+}
+.theme-dark .midgard-cmt.midgard-cmt, .application.theme-dark .midgard-cmt.midgard-cmt {--grund: #1b1726; --flaeche: #262037; --text: #efe7d6; --leise: #b9adc6;
+  --rand: #0b0812; --schatten: #0b0812; --linie: #3d3452;
+  --akzent: #7aa2ff; --akzent-hell: #2a3352; --auf-akzent: #14111d;
+  --gut: #6bd47a; --schlecht: #ff7b6e; --warn: #ffc85a; --warn-grund: #3a3020; --fehler-grund: #3d2229;
+  --raster: rgba(255, 255, 255, .025);
+  --a1: #ff6b5e; --a1h: #3b2230; --a2: #ff9f43; --a2h: #3b2a24; --a3: #ffd166; --a3h: #393224;
+  --a4: #6bd47a; --a4h: #213529; --a5: #4fd1c5; --a5h: #1d3436; --a6: #7aa2ff; --a6h: #23294a;
+  --a7: #b48cff; --a7h: #2e2546;
+  --a1t: #14111d; --a2t: #14111d; --a3t: #14111d; --a4t: #14111d; --a5t: #14111d; --a6t: #14111d; --a7t: #14111d;
+  color-scheme: dark;}
+.midgard-cmt.midgard-cmt, .midgard-cmt.midgard-cmt * {box-sizing: border-box;}
+.midgard-cmt.midgard-cmt {margin: 0;
+  background-color: var(--grund);
+  background-image: repeating-conic-gradient(var(--raster) 0 25%, transparent 0 50%);
+  background-size: 8px 8px;
+  color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;}
+.midgard-cmt.midgard-cmt h1, .midgard-cmt.midgard-cmt h2, .midgard-cmt.midgard-cmt h3, .midgard-cmt.midgard-cmt h4, .midgard-cmt.midgard-cmt .nav-titel, .midgard-cmt.midgard-cmt button, .midgard-cmt.midgard-cmt .knopf, .midgard-cmt.midgard-cmt .marke, .midgard-cmt.midgard-cmt thead th, .midgard-cmt.midgard-cmt .eig-kachel strong, .midgard-cmt.midgard-cmt .konto-kachel strong, .midgard-cmt.midgard-cmt .wz-ergebnis, .midgard-cmt.midgard-cmt .m1-ergebnis, .midgard-cmt.midgard-cmt .topf-rest, .midgard-cmt.midgard-cmt .seitenleiste .nr {font-family: "Pixelify Sans", ui-monospace, monospace;}
+.midgard-cmt.midgard-cmt h1, .midgard-cmt.midgard-cmt h2, .midgard-cmt.midgard-cmt h3, .midgard-cmt.midgard-cmt h4 {font-weight: 600; line-height: 1.2; letter-spacing: .01em;}
+.midgard-cmt.midgard-cmt h2 {font-size: 1.7rem; margin: 0 0 1rem;}
+.midgard-cmt.midgard-cmt h3 {font-size: 1.2rem; margin: 1.2rem 0 .5rem;}
+.midgard-cmt.midgard-cmt h4 {font-size: 1.05rem; margin: .8rem 0 .4rem; color: var(--leise);}
+.midgard-cmt.midgard-cmt small, .midgard-cmt.midgard-cmt .klein {font-size: .85rem; color: var(--leise);}
+.midgard-cmt.midgard-cmt .karte, .midgard-cmt.midgard-cmt .bogen, .midgard-cmt.midgard-cmt .lerntabelle, .midgard-cmt.midgard-cmt .eig-kachel, .midgard-cmt.midgard-cmt .konto-kachel, .midgard-cmt.midgard-cmt .dialog, .midgard-cmt.midgard-cmt .typ, .midgard-cmt.midgard-cmt .option, .midgard-cmt.midgard-cmt button, .midgard-cmt.midgard-cmt .knopf, .midgard-cmt.midgard-cmt input[type="text"], .midgard-cmt.midgard-cmt input[type="number"], .midgard-cmt.midgard-cmt input[type="search"], .midgard-cmt.midgard-cmt select, .midgard-cmt.midgard-cmt textarea, .midgard-cmt.midgard-cmt .wichtig-info, .midgard-cmt.midgard-cmt .nachwurf-hinweis, .midgard-cmt.midgard-cmt .warnung, .midgard-cmt.midgard-cmt .meldungen p {border: 0;
+  border-radius: 0;
+  box-shadow: 0 -2px 0 0 var(--rand), 0 2px 0 0 var(--rand), -2px 0 0 0 var(--rand), 2px 0 0 0 var(--rand);}
+.midgard-cmt.midgard-cmt .karte, .midgard-cmt.midgard-cmt .bogen, .midgard-cmt.midgard-cmt .lerntabelle, .midgard-cmt.midgard-cmt .konto-kachel, .midgard-cmt.midgard-cmt .dialog {box-shadow: 0 -2px 0 0 var(--rand), 0 2px 0 0 var(--rand), -2px 0 0 0 var(--rand), 2px 0 0 0 var(--rand),
+    5px 6px 0 0 var(--schatten);}
+.midgard-cmt.midgard-cmt .kopf {display: flex; justify-content: space-between; align-items: end; gap: 1rem; flex-wrap: wrap;
+  padding: 1rem 1.5rem; background: var(--flaeche); border-bottom: 4px solid var(--rand);}
+.midgard-cmt.midgard-cmt .kopf h1 {margin: 0; font-size: 1.7rem;}
+.midgard-cmt.midgard-cmt .kopf h1::before {content: ""; display: inline-block; width: 1.1rem; height: 1.1rem; margin-right: .5rem; vertical-align: -.1rem;
+  background: var(--icon-krone) center / contain no-repeat; image-rendering: pixelated;}
+.midgard-cmt.midgard-cmt .kopf p {margin: 0; color: var(--leise); font-size: .9rem;}
+.midgard-cmt.midgard-cmt .kopf-name {font-family: "Pixelify Sans", monospace; font-size: 1.15rem; color: var(--akzent);}
+.midgard-cmt.midgard-cmt .rahmen {display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: calc(100vh - 80px);}
+.midgard-cmt.midgard-cmt .rahmen > * {min-width: 0;}
+.midgard-cmt.midgard-cmt .seitenleiste {background: var(--flaeche); padding: 1rem .75rem; border-right: 4px solid var(--rand);}
+.midgard-cmt.midgard-cmt .seitenleiste ol {list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px;}
+.midgard-cmt.midgard-cmt .seitenleiste ol button {width: 100%; display: flex; justify-content: flex-start; gap: .6rem; align-items: center; text-align: left;
+  background: none; box-shadow: none; padding: .4rem .5rem; color: var(--text); font-family: inherit; font-size: .95rem;
+  cursor: pointer;}
+.midgard-cmt.midgard-cmt .seitenleiste ol button:hover {background: var(--grund);}
+.midgard-cmt.midgard-cmt .seitenleiste ol button.aktiv {background: var(--fh, var(--akzent-hell)); color: var(--text); font-weight: 600;
+  box-shadow: inset 4px 0 0 var(--f, var(--akzent));}
+.midgard-cmt.midgard-cmt .seitenleiste li:nth-child(7n+1) {--f: var(--a1); --fh: var(--a1h); --ft: var(--a1t);}
+.midgard-cmt.midgard-cmt .seitenleiste li:nth-child(7n+2) {--f: var(--a2); --fh: var(--a2h); --ft: var(--a2t);}
+.midgard-cmt.midgard-cmt .seitenleiste li:nth-child(7n+3) {--f: var(--a3); --fh: var(--a3h); --ft: var(--a3t);}
+.midgard-cmt.midgard-cmt .seitenleiste li:nth-child(7n+4) {--f: var(--a4); --fh: var(--a4h); --ft: var(--a4t);}
+.midgard-cmt.midgard-cmt .seitenleiste li:nth-child(7n+5) {--f: var(--a5); --fh: var(--a5h); --ft: var(--a5t);}
+.midgard-cmt.midgard-cmt .seitenleiste li:nth-child(7n+6) {--f: var(--a6); --fh: var(--a6h); --ft: var(--a6t);}
+.midgard-cmt.midgard-cmt .seitenleiste li:nth-child(7n+7) {--f: var(--a7); --fh: var(--a7h); --ft: var(--a7t);}
+.midgard-cmt.midgard-cmt .seitenleiste .nr {flex: none; width: 1.6rem; height: 1.6rem; display: grid; place-items: center; font-size: .85rem;
+  color: var(--text); background: var(--fh);
+  box-shadow: 0 -2px 0 0 var(--f), 0 2px 0 0 var(--f), -2px 0 0 0 var(--f), 2px 0 0 0 var(--f);}
+.midgard-cmt.midgard-cmt .seitenleiste ol button.fertig .nr {background: var(--f); color: var(--ft);}
+.midgard-cmt.midgard-cmt .seitenleiste .nr.punkt {width: .7rem; height: .7rem; margin: 0 .45rem; background: var(--f); box-shadow: none;}
+.midgard-cmt.midgard-cmt .seitenleiste ol button.aktiv .nr.punkt {box-shadow: 0 0 0 2px var(--rand);}
+.midgard-cmt.midgard-cmt .nav-titel {font-size: .85rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--leise);
+  margin: 1.1rem .5rem .4rem;}
+.midgard-cmt.midgard-cmt .speicherhinweis {font-size: .8rem; color: var(--leise); margin-top: 1.5rem;}
+.midgard-cmt.midgard-cmt .versionshinweis {font-family: "Pixelify Sans", monospace; font-size: .8rem; color: var(--leise); margin: 1.5rem .5rem 0;}
+.midgard-cmt.midgard-cmt main {padding: 1.5rem 1.75rem; max-width: 1100px; width: 100%;}
+.midgard-cmt.midgard-cmt .schritt-titel::before {content: ""; display: inline-block; width: .7em; height: .7em; margin-right: .45em; vertical-align: .05em;
+  background: var(--akzent); box-shadow: 3px 3px 0 var(--schatten);}
+.midgard-cmt.midgard-cmt .karte {position: relative; background: var(--flaeche); padding: 1.15rem 1.3rem 1rem; margin: 0 6px 1.3rem 2px;}
+.midgard-cmt.midgard-cmt .karte::before {content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px; background: var(--f, var(--akzent));}
+.midgard-cmt.midgard-cmt .cmt-inhalt > .karte:nth-of-type(5n+1), .midgard-cmt.midgard-cmt .cmt-inhalt > section:nth-of-type(5n+1) {--f: var(--a6); --fh: var(--a6h);}
+.midgard-cmt.midgard-cmt .cmt-inhalt > .karte:nth-of-type(5n+2), .midgard-cmt.midgard-cmt .cmt-inhalt > section:nth-of-type(5n+2) {--f: var(--a4); --fh: var(--a4h);}
+.midgard-cmt.midgard-cmt .cmt-inhalt > .karte:nth-of-type(5n+3), .midgard-cmt.midgard-cmt .cmt-inhalt > section:nth-of-type(5n+3) {--f: var(--a2); --fh: var(--a2h);}
+.midgard-cmt.midgard-cmt .cmt-inhalt > .karte:nth-of-type(5n+4), .midgard-cmt.midgard-cmt .cmt-inhalt > section:nth-of-type(5n+4) {--f: var(--a7); --fh: var(--a7h);}
+.midgard-cmt.midgard-cmt .cmt-inhalt > .karte:nth-of-type(5n+5), .midgard-cmt.midgard-cmt .cmt-inhalt > section:nth-of-type(5n+5) {--f: var(--a5); --fh: var(--a5h);}
+.midgard-cmt.midgard-cmt .karte > h3:first-child {margin-top: .2rem;}
+.midgard-cmt.midgard-cmt .karte > h3:first-child::before, .midgard-cmt.midgard-cmt .topf-kopf h3::before {content: ""; display: inline-block; width: .55em; height: .55em; margin-right: .45em; vertical-align: .1em;
+  background: var(--f, var(--akzent));}
+.midgard-cmt.midgard-cmt .info {color: var(--leise); font-size: .92rem; margin: .4rem 0 .8rem;}
+.midgard-cmt.midgard-cmt input, .midgard-cmt.midgard-cmt select, .midgard-cmt.midgard-cmt textarea, .midgard-cmt.midgard-cmt button {font: inherit; color: inherit;}
+.midgard-cmt.midgard-cmt input[type="text"], .midgard-cmt.midgard-cmt input[type="number"], .midgard-cmt.midgard-cmt input[type="search"], .midgard-cmt.midgard-cmt select, .midgard-cmt.midgard-cmt textarea {background: var(--grund); color: var(--text); padding: .38rem .55rem; min-width: 0; margin: 2px;}
+.midgard-cmt.midgard-cmt input[type="text"]:focus, .midgard-cmt.midgard-cmt input[type="number"]:focus, .midgard-cmt.midgard-cmt input[type="search"]:focus, .midgard-cmt.midgard-cmt select:focus, .midgard-cmt.midgard-cmt textarea:focus {outline: none;
+  box-shadow: 0 -2px 0 0 var(--akzent), 0 2px 0 0 var(--akzent), -2px 0 0 0 var(--akzent), 2px 0 0 0 var(--akzent),
+    0 0 0 5px var(--akzent-hell);}
+.midgard-cmt.midgard-cmt button:focus-visible, .midgard-cmt.midgard-cmt .knopf:focus-within {outline: 3px dashed var(--akzent); outline-offset: 3px;}
+.midgard-cmt.midgard-cmt input[type="checkbox"], .midgard-cmt.midgard-cmt input[type="radio"] {accent-color: var(--akzent); width: 1rem; height: 1rem;}
+.midgard-cmt.midgard-cmt textarea {width: calc(100% - 4px);}
+.midgard-cmt.midgard-cmt .zahl {width: 5.5rem;}
+.midgard-cmt.midgard-cmt .zahl.breit {width: 7rem;}
+.midgard-cmt.midgard-cmt .zahl.klein {width: 4.2rem; padding: .15rem .3rem;}
+.midgard-cmt.midgard-cmt button, .midgard-cmt.midgard-cmt .knopf {background: var(--flaeche); color: var(--text); padding: .4rem .85rem; margin: 2px; cursor: pointer; font-size: 1rem; line-height: 1.3;
+  box-shadow: 0 -2px 0 0 var(--rand), 0 2px 0 0 var(--rand), -2px 0 0 0 var(--rand), 2px 0 0 0 var(--rand),
+    inset 0 -3px 0 0 var(--schatten);}
+.midgard-cmt.midgard-cmt button:hover:not(:disabled), .midgard-cmt.midgard-cmt .knopf:hover {background: var(--grund);}
+.midgard-cmt.midgard-cmt button:active:not(:disabled) {transform: translate(1px, 2px); box-shadow: 0 -2px 0 0 var(--rand), 0 2px 0 0 var(--rand), -2px 0 0 0 var(--rand), 2px 0 0 0 var(--rand);}
+.midgard-cmt.midgard-cmt button:disabled {opacity: .45; cursor: not-allowed;}
+.midgard-cmt.midgard-cmt button.haupt {background: var(--akzent); color: var(--auf-akzent);
+  box-shadow: 0 -2px 0 0 var(--rand), 0 2px 0 0 var(--rand), -2px 0 0 0 var(--rand), 2px 0 0 0 var(--rand),
+    inset 0 -3px 0 0 rgba(0, 0, 0, .28), inset 0 3px 0 0 rgba(255, 255, 255, .18);}
+.midgard-cmt.midgard-cmt button.haupt:hover:not(:disabled) {background: var(--akzent); filter: brightness(1.08);}
+.midgard-cmt.midgard-cmt button.wuerfel {white-space: nowrap;}
+.midgard-cmt.midgard-cmt button.entfernen {font-size: .8rem; padding: .1rem .5rem;}
+.midgard-cmt.midgard-cmt button.gefahr {color: var(--schlecht);}
+.midgard-cmt.midgard-cmt .versteckt {display: none;}
+.midgard-cmt.midgard-cmt .feld {display: flex; flex-direction: column; gap: .25rem;}
+.midgard-cmt.midgard-cmt .feld-label {font-weight: 600; font-size: .92rem;}
+.midgard-cmt.midgard-cmt .hilfe {font-size: .8rem;}
+.midgard-cmt.midgard-cmt .raster2 {display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;}
+.midgard-cmt.midgard-cmt .raster3 {display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .8rem 1rem;}
+.midgard-cmt.midgard-cmt .inline {display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;}
+.midgard-cmt.midgard-cmt .knopfreihe {display: flex; gap: .7rem; flex-wrap: wrap; margin: .9rem 0;}
+.midgard-cmt.midgard-cmt .methoden {display: flex; flex-direction: column; gap: .4rem;}
+.midgard-cmt.midgard-cmt .methoden label, .midgard-cmt.midgard-cmt .schalter {display: flex; gap: .5rem; align-items: center;}
+.midgard-cmt.midgard-cmt .schalter {margin: 0 0 1rem; font-size: .92rem;}
+.midgard-cmt.midgard-cmt .wurfzeile {display: grid; grid-template-columns: minmax(200px, 1.4fr) auto minmax(90px, .5fr); gap: .5rem 1rem; align-items: center;
+  padding: .6rem 0; border-bottom: 2px dotted var(--linie);}
+.midgard-cmt.midgard-cmt .wurfzeile:last-child {border-bottom: 0;}
+.midgard-cmt.midgard-cmt .wz-label {display: flex; flex-direction: column;}
+.midgard-cmt.midgard-cmt .wz-eingabe {display: flex; gap: .4rem;}
+.midgard-cmt.midgard-cmt .wz-ergebnis {font-size: 1.25rem; color: var(--f, var(--akzent));}
+.midgard-cmt.midgard-cmt .eig-raster {display: flex; flex-direction: column;}
+.midgard-cmt.midgard-cmt .eig-zeile {display: grid; grid-template-columns: minmax(180px, 1fr) auto auto minmax(120px, 1fr); gap: .5rem 1rem; align-items: center;
+  padding: .45rem .4rem .45rem .7rem; border-bottom: 2px dotted var(--linie);}
+.midgard-cmt.midgard-cmt .eig-zeile.ungueltig strong {color: var(--schlecht);}
+.midgard-cmt.midgard-cmt .eig-zeile select {width: 8rem;}
+.midgard-cmt.midgard-cmt .eig-zeile.wichtig-haupt {background: var(--a3h); box-shadow: inset 5px 0 0 var(--a3);}
+.midgard-cmt.midgard-cmt .eig-zeile.wichtig-alt {background: var(--a5h); box-shadow: inset 5px 0 0 var(--a5);}
+.midgard-cmt.midgard-cmt .marke {display: inline-block; margin-left: .5rem; font-size: .8rem; padding: .05rem .45rem; white-space: nowrap;
+  background: var(--a3); color: var(--a3t); box-shadow: 2px 2px 0 var(--rand);}
+.midgard-cmt.midgard-cmt .marke.alt {background: var(--a5); color: var(--a5t);}
+.midgard-cmt.midgard-cmt .wichtig-info {background: var(--a3h); padding: .6rem .9rem; margin: 2px 2px 1.2rem;}
+.midgard-cmt.midgard-cmt .protokoll {font-variant-numeric: tabular-nums;}
+.midgard-cmt.midgard-cmt .eig-zeile.m1 {grid-template-columns: minmax(180px, 1fr) auto minmax(0, 1.4fr) 3rem;}
+.midgard-cmt.midgard-cmt .m1-ergebnis {font-size: 1.3rem; color: var(--akzent); text-align: right;}
+.midgard-cmt.midgard-cmt .nachwurf small {color: var(--warn);}
+.midgard-cmt.midgard-cmt .nachwurf-hinweis {background: var(--warn-grund); color: var(--warn); padding: .55rem .85rem; margin: 2px 2px .8rem;}
+.midgard-cmt.midgard-cmt .wurfreihe {display: flex; gap: .45rem; flex-wrap: wrap; align-items: center;}
+.midgard-cmt.midgard-cmt .wurfreihe .zahl {width: 4.6rem;}
+.midgard-cmt.midgard-cmt .eig-uebersicht {display: grid; grid-template-columns: repeat(6, 1fr); gap: .8rem; margin: 1.2rem 2px;}
+.midgard-cmt.midgard-cmt .eig-kachel {background: var(--flaeche); text-align: center; padding: .45rem;}
+.midgard-cmt.midgard-cmt .eig-kachel small {display: block;}
+.midgard-cmt.midgard-cmt .eig-kachel strong {font-size: 1.55rem; font-variant-numeric: tabular-nums;}
+.midgard-cmt.midgard-cmt .eig-kachel.wichtig-haupt {background: var(--a3h); box-shadow: 0 -3px 0 0 var(--a3), 0 3px 0 0 var(--a3), -3px 0 0 0 var(--a3), 3px 0 0 0 var(--a3);}
+.midgard-cmt.midgard-cmt .eig-kachel.wichtig-alt {background: var(--a5h); box-shadow: 0 -3px 0 0 var(--a5), 0 3px 0 0 var(--a5), -3px 0 0 0 var(--a5), 3px 0 0 0 var(--a5);}
+.midgard-cmt.midgard-cmt .eig-kachel.ungueltig {color: var(--schlecht); box-shadow: 0 -3px 0 0 var(--schlecht), 0 3px 0 0 var(--schlecht), -3px 0 0 0 var(--schlecht), 3px 0 0 0 var(--schlecht);}
+.midgard-cmt.midgard-cmt .typen {display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .9rem;}
+.midgard-cmt.midgard-cmt .typ {display: flex; flex-direction: column; gap: .2rem; align-items: flex-start; text-align: left; padding: .7rem .85rem;}
+.midgard-cmt.midgard-cmt .typ strong {font-size: 1.1rem;}
+.midgard-cmt.midgard-cmt .typ.gewaehlt, .midgard-cmt.midgard-cmt .option.gewaehlt {background: var(--fh, var(--akzent-hell));
+  box-shadow: 0 -3px 0 0 var(--f, var(--akzent)), 0 3px 0 0 var(--f, var(--akzent)), -3px 0 0 0 var(--f, var(--akzent)), 3px 0 0 0 var(--f, var(--akzent));}
+.midgard-cmt.midgard-cmt .typ-eig {display: flex; gap: .6rem; font-size: .9rem; font-family: system-ui, sans-serif;}
+.midgard-cmt.midgard-cmt .typ-eig .gut {color: var(--gut); font-weight: 600;}
+.midgard-cmt.midgard-cmt .typ-eig .schlecht {color: var(--schlecht); font-weight: 600;}
+.midgard-cmt.midgard-cmt .typ small, .midgard-cmt.midgard-cmt .option small {font-family: system-ui, sans-serif;}
+.midgard-cmt.midgard-cmt .typisch {padding: .5rem 0; border-bottom: 2px dotted var(--linie); display: flex; flex-direction: column; gap: .3rem;}
+.midgard-cmt.midgard-cmt .typisch:last-child {border-bottom: 0;}
+.midgard-cmt.midgard-cmt .wahl {display: flex; flex-direction: column; gap: .3rem;}
+.midgard-cmt.midgard-cmt .wahl label {display: flex; gap: .5rem; align-items: center;}
+.midgard-cmt.midgard-cmt .topf-kopf {display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap;}
+.midgard-cmt.midgard-cmt .topf-kopf h3 {margin: .2rem 0 0;}
+.midgard-cmt.midgard-cmt .topf-rest {font-size: 1.05rem; color: var(--f, var(--akzent)); white-space: nowrap;}
+.midgard-cmt.midgard-cmt .topf-rest.leer {color: var(--gut);}
+.midgard-cmt.midgard-cmt .topf-rest.ueber {color: var(--schlecht);}
+.midgard-cmt.midgard-cmt .optionen {display: flex; flex-wrap: wrap; gap: .65rem; margin: .7rem 0;}
+.midgard-cmt.midgard-cmt .option {display: flex; flex-direction: column; align-items: flex-start; padding: .35rem .6rem; text-align: left; font-size: .95rem;}
+.midgard-cmt.midgard-cmt .option small {font-size: .75rem;}
+.midgard-cmt.midgard-cmt .extra {display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: .4rem 0;}
+.midgard-cmt.midgard-cmt .gekauft {list-style: none; padding: 0; margin: .7rem 0 0; border-top: 2px dashed var(--linie);}
+.midgard-cmt.midgard-cmt .gekauft li {display: flex; gap: .8rem; align-items: center; padding: .3rem 0;}
+.midgard-cmt.midgard-cmt .gekauft li span {flex: 1;}
+.midgard-cmt.midgard-cmt .waffenstufe h4 {margin-bottom: 0;}
+.midgard-cmt.midgard-cmt .meldungen {margin: 1rem 2px; display: flex; flex-direction: column; gap: .55rem;}
+.midgard-cmt.midgard-cmt .meldungen p {margin: 0; padding: .45rem .75rem; font-size: .92rem;}
+.midgard-cmt.midgard-cmt .meldungen .fehler {background: var(--fehler-grund); color: var(--schlecht);}
+.midgard-cmt.midgard-cmt .meldungen .hinweis {background: var(--warn-grund); color: var(--warn);}
+.midgard-cmt.midgard-cmt .warnung {background: var(--warn-grund); color: var(--warn); padding: .6rem 1rem; margin: 2px 2px 1.2rem;}
+.midgard-cmt.midgard-cmt .warnung ul {margin: .3rem 0 0; padding-left: 1.2rem;}
+.midgard-cmt.midgard-cmt .weiter {display: flex; justify-content: space-between; margin-top: 1.5rem;}
+.midgard-cmt.midgard-cmt .bogen, .midgard-cmt.midgard-cmt .lerntabelle {background: var(--flaeche); padding: 1.3rem; margin: 0 6px 1.4rem 2px;}
+.midgard-cmt.midgard-cmt .kopfdaten {display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem 1rem; padding-bottom: .8rem; border-bottom: 3px solid var(--rand);}
+.midgard-cmt.midgard-cmt .kopfdaten small {display: block;}
+.midgard-cmt.midgard-cmt .bogen-raster {display: grid; grid-template-columns: 1fr 1.2fr; gap: 1.5rem;}
+.midgard-cmt.midgard-cmt table {border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums;}
+.midgard-cmt.midgard-cmt th, .midgard-cmt.midgard-cmt td {border-bottom: 1px solid var(--linie); padding: .3rem .45rem; text-align: left; vertical-align: top;}
+.midgard-cmt.midgard-cmt thead th {font-size: .85rem; color: var(--text); font-weight: 600; background: var(--grund); border-bottom: 3px solid var(--rand);}
+.midgard-cmt.midgard-cmt tbody tr:nth-child(even) {background: color-mix(in srgb, var(--grund) 55%, transparent);}
+.midgard-cmt.midgard-cmt .werte td {white-space: nowrap;}
+.midgard-cmt.midgard-cmt .tabelle-scroll {overflow-x: auto;}
+.midgard-cmt.midgard-cmt table.lern td, .midgard-cmt.midgard-cmt table.lern th {font-size: .85rem;}
+.midgard-cmt.midgard-cmt table.lern td.leer {color: var(--leise);}
+.midgard-cmt.midgard-cmt table.lern tr.gesperrt {opacity: .5;}
+.midgard-cmt.midgard-cmt table.kompakt td, .midgard-cmt.midgard-cmt table.kompakt th {padding: .2rem .35rem;}
+.midgard-cmt.midgard-cmt .spalten {columns: 2; padding-left: 1.2rem;}
+.midgard-cmt.midgard-cmt .vorformatiert {white-space: pre-wrap;}
+.midgard-cmt.midgard-cmt .spaeter {margin-top: 1.5rem; padding-top: 1rem; border-top: 2px dashed var(--linie);}
+.midgard-cmt.midgard-cmt .nur-drucken {display: none;}
+.midgard-cmt.midgard-cmt .dialog-hintergrund {position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; z-index: 10;
+  background: rgba(11, 8, 18, .55);
+  background-image: repeating-conic-gradient(rgba(0, 0, 0, .18) 0 25%, transparent 0 50%); background-size: 4px 4px;}
+.midgard-cmt.midgard-cmt .dialog {background: var(--flaeche); color: var(--text); padding: 0 1.4rem 1.2rem; max-width: 440px; width: 100%; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;}
+.midgard-cmt.midgard-cmt .dialog > h3:first-child {margin: 0 -1.4rem 1rem; padding: .55rem 1.4rem; background: var(--akzent); color: var(--auf-akzent); font-size: 1.15rem;}
+.midgard-cmt.midgard-cmt .dialog.breit {max-width: 660px;}
+.midgard-cmt.midgard-cmt .dialog textarea {font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .8rem;}
+.midgard-cmt.midgard-cmt .dialog .feld {margin: .6rem 0;}
+.midgard-cmt.midgard-cmt .daten-knoepfe {display: flex; flex-direction: column; gap: .55rem; margin: .7rem 0 1rem;}
+.midgard-cmt.midgard-cmt .daten-knoepfe button {text-align: left;}
+.midgard-cmt.midgard-cmt table.kosten {margin: .4rem 0 .9rem;}
+.midgard-cmt.midgard-cmt table.kosten th {width: 45%; font-weight: 400; color: var(--leise);}
+.midgard-cmt.midgard-cmt table.kosten tr.fehlt td, .midgard-cmt.midgard-cmt p.fehlt {color: var(--schlecht);}
+.midgard-cmt.midgard-cmt p.fehlt {font-weight: 600;}
+.midgard-cmt.midgard-cmt .charwahl {display: flex; flex-direction: column; gap: .5rem; padding: 0 .25rem 1rem; border-bottom: 3px solid var(--rand); margin-bottom: .6rem;}
+.midgard-cmt.midgard-cmt .charwahl select {width: calc(100% - 4px);}
+.midgard-cmt.midgard-cmt .charwahl-knoepfe {display: flex; gap: .45rem;}
+.midgard-cmt.midgard-cmt .charwahl-knoepfe > * {flex: 1; text-align: center; padding: .3rem .4rem; font-size: .9rem;}
+.midgard-cmt.midgard-cmt .konto {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 0 6px 1.4rem 2px;}
+.midgard-cmt.midgard-cmt .konto-kachel {position: relative; background: var(--fh); padding: .6rem .8rem .6rem 3.2rem; display: flex; flex-direction: column; min-height: 4.4rem;}
+.midgard-cmt.midgard-cmt .konto-kachel::before {content: ""; position: absolute; left: .7rem; top: .75rem; width: 1.9rem; height: 1.9rem;
+  background: var(--icon) center / contain no-repeat; image-rendering: pixelated;}
+.midgard-cmt.midgard-cmt .konto-kachel:nth-child(1) {--f: var(--a6); --fh: var(--a6h); --icon: var(--icon-stern);}
+.midgard-cmt.midgard-cmt .konto-kachel:nth-child(2) {--f: var(--a3); --fh: var(--a3h); --icon: var(--icon-muenze);}
+.midgard-cmt.midgard-cmt .konto-kachel:nth-child(3) {--f: var(--a4); --fh: var(--a4h); --icon: var(--icon-edelstein);}
+.midgard-cmt.midgard-cmt .konto-kachel:nth-child(4) {--f: var(--a7); --fh: var(--a7h); --icon: var(--icon-krone);}
+.midgard-cmt.midgard-cmt .konto-kachel strong {font-size: 1.5rem; font-variant-numeric: tabular-nums; color: var(--text);}
+.midgard-cmt.midgard-cmt .konto-kachel .offen-hinweis {color: var(--warn); font-weight: 600;}
+.midgard-cmt.midgard-cmt .grad-karte {--f: var(--a7); background: var(--a7h);}
+.midgard-cmt.midgard-cmt table.steigern td, .midgard-cmt.midgard-cmt table.steigern th {vertical-align: middle;}
+.midgard-cmt.midgard-cmt table.steigern td.wert {font-family: "Pixelify Sans", monospace; font-size: 1.1rem;}
+.midgard-cmt.midgard-cmt table.steigern td.naechste strong {display: block;}
+.midgard-cmt.midgard-cmt table.steigern td.naechste small {white-space: nowrap;}
+.midgard-cmt.midgard-cmt td.pp {white-space: nowrap;}
+.midgard-cmt.midgard-cmt td.pp span {display: inline-block; min-width: 1.5rem;}
+.midgard-cmt.midgard-cmt button.mini {font-size: .8rem; padding: .05rem .4rem;}
+.midgard-cmt.midgard-cmt button.klein-knopf {font-size: .9rem; padding: .25rem .6rem; white-space: nowrap;}
+.midgard-cmt.midgard-cmt .filter {margin-bottom: .7rem;}
+.midgard-cmt.midgard-cmt .filter input[type="search"] {min-width: 12rem;}
+.midgard-cmt.midgard-cmt table.zauberliste tr.bekannt th, .midgard-cmt.midgard-cmt table.zauberliste tr.bekannt td {color: var(--leise);}
+.midgard-cmt.midgard-cmt table.zauberliste td.schwarz {color: var(--schlecht);}
+.midgard-cmt.midgard-cmt .protokoll-liste {list-style: none; padding: 0; margin: 0;}
+.midgard-cmt.midgard-cmt .protokoll-liste li {display: grid; grid-template-columns: 1fr auto auto; gap: .8rem; align-items: center; padding: .4rem 0; border-bottom: 2px dotted var(--linie);}
+.midgard-cmt.midgard-cmt .protokoll-liste li:last-child {border-bottom: 0;}
+@media (max-width: 800px) {
+.midgard-cmt.midgard-cmt .rahmen {grid-template-columns: minmax(0, 1fr);}
+.midgard-cmt.midgard-cmt .seitenleiste {border-right: 0; border-bottom: 4px solid var(--rand);}
+.midgard-cmt.midgard-cmt .seitenleiste ol {flex-direction: row; overflow-x: auto; gap: .3rem; padding: 3px;}
+.midgard-cmt.midgard-cmt .seitenleiste li {flex: none;}
+.midgard-cmt.midgard-cmt .seitenleiste ol button span:not(.nr) {display: none;}
+.midgard-cmt.midgard-cmt .seitenleiste ol button.aktiv span:not(.nr) {display: inline;}
+.midgard-cmt.midgard-cmt .speicherhinweis {display: none;}
+.midgard-cmt.midgard-cmt .nav-titel {margin: .6rem .3rem .2rem;}
+.midgard-cmt.midgard-cmt .konto {grid-template-columns: repeat(2, minmax(0, 1fr));}
+.midgard-cmt.midgard-cmt .protokoll-liste li {grid-template-columns: 1fr; gap: .2rem;}
+.midgard-cmt.midgard-cmt .charwahl {border-bottom: 0; padding-bottom: .4rem;}
+.midgard-cmt.midgard-cmt main {padding: 1rem;}
+.midgard-cmt.midgard-cmt .wurfzeile, .midgard-cmt.midgard-cmt .eig-zeile, .midgard-cmt.midgard-cmt .eig-zeile.m1 {grid-template-columns: 1fr;}
+.midgard-cmt.midgard-cmt .m1-ergebnis {text-align: left;}
+.midgard-cmt.midgard-cmt .eig-uebersicht {grid-template-columns: repeat(3, 1fr);}
+.midgard-cmt.midgard-cmt .bogen-raster {grid-template-columns: minmax(0, 1fr);}
+.midgard-cmt.midgard-cmt .werte td {white-space: normal;}
+.midgard-cmt.midgard-cmt .werte th.nicht-drucken, .midgard-cmt.midgard-cmt .werte td.nicht-drucken {display: none;}
+.midgard-cmt.midgard-cmt .bogen, .midgard-cmt.midgard-cmt .lerntabelle {padding: .8rem;}
+}
+@media print {
+.midgard-cmt.midgard-cmt {--grund: #fff; --flaeche: #fff; --text: #000; --leise: #444; --linie: #bbb; --rand: #000; --schatten: transparent;
+    --akzent: #000; color-scheme: light;}
+.midgard-cmt.midgard-cmt {font-size: 10pt; background: #fff;}
+.midgard-cmt.midgard-cmt, .midgard-cmt.midgard-cmt * {box-shadow: none !important;}
+.midgard-cmt.midgard-cmt .karte::before {display: none;}
+.midgard-cmt.midgard-cmt .nicht-drucken, .midgard-cmt.midgard-cmt .schritt-titel, .midgard-cmt.midgard-cmt .meldungen {display: none !important;}
+.midgard-cmt.midgard-cmt .nur-drucken {display: inline;}
+.midgard-cmt.midgard-cmt .rahmen {display: block;}
+.midgard-cmt.midgard-cmt main {padding: 0; max-width: none;}
+.midgard-cmt.midgard-cmt .bogen, .midgard-cmt.midgard-cmt .lerntabelle {padding: 0; margin: 0;}
+.midgard-cmt.midgard-cmt thead th {background: none; border-bottom: 2px solid #000;}
+.midgard-cmt.midgard-cmt tbody tr:nth-child(even) {background: none;}
+.midgard-cmt.midgard-cmt .seitenumbruch {break-before: page;}
+.midgard-cmt.midgard-cmt tr {break-inside: avoid;}
+.midgard-cmt.midgard-cmt h3 {break-after: avoid;}
+.midgard-cmt.midgard-cmt .tabelle-scroll {overflow: visible;}
+.midgard-cmt.midgard-cmt .bogen-raster {grid-template-columns: 1fr 1.2fr; gap: 1rem;}
+.midgard-cmt.midgard-cmt .kopfdaten {grid-template-columns: repeat(4, 1fr);}
+.midgard-cmt.midgard-cmt th, .midgard-cmt.midgard-cmt td {padding: .15rem .3rem;}
+}
+
+/* Anpassungen nur für den Bogen im Foundry-Fenster (wird an styles/cmt.css angehängt) */
+.application.midgard-cmt-bogen .window-content {
+  padding: 0;
+  overflow: hidden auto;
+}
+.midgard-cmt.im-foundry {
+  min-height: 100%;
+  font-size: 15px;
+}
+.midgard-cmt.im-foundry .rahmen {
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 100%;
+}
+.midgard-cmt.im-foundry .seitenleiste {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100%;
+  overflow-y: auto;
+}
+.midgard-cmt.im-foundry main {
+  max-width: none;
+}
+/* Was Foundry für Formularelemente und Überschriften setzt, mein Stylesheet aber nicht,
+   wird hier neutralisiert. Gleiche Spezifität wie die Grundregeln, steht aber danach. */
+.midgard-cmt.midgard-cmt :is(input[type="text"], input[type="number"], input[type="search"], select, textarea) {
+  height: auto;
+  line-height: 1.4;
+  box-shadow: none;
+}
+.midgard-cmt.midgard-cmt :is(button, .knopf) {
+  height: auto;
+  line-height: 1.4;
+  box-shadow: none;
+}
+.midgard-cmt.midgard-cmt button:not(.seitenleiste ol button) { width: auto; }
+/* Foundry färbt Überschriften mit eigenen, sehr spezifischen Regeln; hier ausnahmsweise !important */
+.midgard-cmt.midgard-cmt :is(h1, h2, h3) { border: 0; text-shadow: none; color: var(--text) !important; }
+.midgard-cmt.midgard-cmt h4 { border: 0; text-shadow: none; color: var(--leise) !important; }
+.midgard-cmt.midgard-cmt .dialog > h3:first-child { color: var(--auf-akzent) !important; }
+.midgard-cmt.midgard-cmt :is(label, p, li, td, th, strong, small, span) { text-shadow: none; }
+/* Auswahllisten: Foundry färbt die aufgeklappten Einträge selbst; hier in Bogenfarben */
+.midgard-cmt.midgard-cmt :is(input[type="text"], input[type="number"], input[type="search"], select, textarea) { color: var(--text); background-color: var(--grund); }
+.midgard-cmt.midgard-cmt :is(option, optgroup) { color: var(--text); background-color: var(--flaeche); }
+.midgard-cmt.midgard-cmt option:disabled { color: var(--leise); }
+.midgard-cmt.midgard-cmt input::placeholder { color: var(--leise); opacity: 1; }
