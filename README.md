@@ -6,12 +6,12 @@ Inoffizielles Foundry-System (Foundry VTT 14) für Midgard 5: Charaktererschaffu
 
 1. Im Startbildschirm unter „Spielsysteme“ auf „System installieren“ gehen.
 2. Unten bei „Manifest-URL“ eintragen:
-   `https://github.com/oth3llo/Midgard_test/releases/latest/download/system.json`
+   `https://raw.githubusercontent.com/oth3llo/Midgard_test/main/system.json`
 3. „Installieren“. Neue Versionen meldet Foundry danach selbst unter „Spielsysteme“ („Update verfügbar“).
 
 ## Versionen
 
-Jede Version ist ein Release mit eigener `system.json` und `midgard5-cmt.zip`. Ältere Versionen lassen sich über die Download-Adresse ihres Releases wieder installieren.
+Jede Version liegt als eigenes ZIP unter `pakete/` (z. B. `pakete/midgard5-cmt-0.3.0.zip`). `system.json` im Wurzelverzeichnis beschreibt immer die neueste Version; Foundry vergleicht sie mit der installierten und bietet das Update an.
 
 Dieses Repository enthält nur das gebaute System. Entwickelt wird es in einem privaten Repository; Inhalte hier nicht von Hand ändern, sie werden bei jeder Version ersetzt.
 
