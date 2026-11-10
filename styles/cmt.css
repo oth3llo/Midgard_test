@@ -376,3 +376,150 @@
 .midgard-cmt.midgard-cmt :is(option, optgroup) { color: var(--text); background-color: var(--flaeche); }
 .midgard-cmt.midgard-cmt option:disabled { color: var(--leise); }
 .midgard-cmt.midgard-cmt input::placeholder { color: var(--leise); opacity: 1; }
+
+/* ---------------------------------------------------------------- Kompendium-Browser */
+.midgard-browser .window-content { padding: 0; overflow: hidden; }
+.midgard-browser .mb-wurzel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.midgard-browser .mb-reiter { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 8px 0; }
+.midgard-browser .mb-reiter button { flex: 0 0 auto; width: auto; padding: 2px 10px; }
+.midgard-browser .mb-reiter button.aktiv { font-weight: bold; outline: 2px solid var(--color-warm-2, #c9593f); }
+.midgard-browser .mb-werkzeuge { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; }
+.midgard-browser .mb-suche { flex: 1 1 200px; min-width: 160px; }
+.midgard-browser .mb-filter { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.midgard-browser .mb-filter select { width: auto; }
+.midgard-browser .mb-werkzeuge button { flex: 0 0 auto; width: auto; }
+.midgard-browser .mb-hinweis { margin: 0 8px 8px; padding: 6px 8px; border: 1px dashed currentColor; }
+.midgard-browser .mb-haupt { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 8px; flex: 1; min-height: 0; padding: 0 8px 8px; }
+.midgard-browser .mb-liste { overflow: auto; min-height: 0; }
+.midgard-browser .mb-anzahl { margin: 0 0 4px; opacity: .8; }
+.midgard-browser .mb-tabelle { width: 100%; border-collapse: collapse; margin: 0; }
+.midgard-browser .mb-tabelle th { position: sticky; top: 0; cursor: pointer; text-align: left; white-space: nowrap; background: var(--color-cool-5, #23262f); color: var(--color-light-1, #f0f0e0); padding: 3px 6px; }
+.midgard-browser .mb-tabelle th.auf::after { content: " ▲"; }
+.midgard-browser .mb-tabelle th.ab::after { content: " ▼"; }
+.midgard-browser .mb-tabelle td { padding: 2px 6px; vertical-align: middle; border-bottom: 1px solid rgba(127, 127, 127, .3); }
+.midgard-browser .mb-tabelle tr[data-id] { cursor: pointer; }
+.midgard-browser .mb-tabelle tr[data-id]:hover, .midgard-browser .mb-tabelle tr[data-id]:focus { background: rgba(127, 127, 127, .18); outline: none; }
+.midgard-browser .mb-tabelle tr.gewaehlt { background: rgba(201, 89, 63, .25); }
+.midgard-browser .mb-name { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.midgard-browser .mb-name img, .midgard-browser .mb-detail h3 img { width: 22px; height: 22px; border: none; flex: none; }
+.midgard-browser .mb-detail { overflow: auto; min-height: 0; padding: 8px; border-left: 2px solid rgba(127, 127, 127, .4); }
+.midgard-browser .mb-detail h3 { display: flex; align-items: center; gap: 6px; margin-top: 0; }
+.midgard-browser .mb-detail dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 0 0 8px; }
+.midgard-browser .mb-detail dt { font-weight: bold; }
+.midgard-browser .mb-detail dd { margin: 0; }
+.midgard-browser .mb-kurz { font-style: italic; }
+.midgard-browser-knopf { width: 100%; margin-top: 4px; }
+
+/* ---------------------------------------------------------------- Gegenstandsbogen */
+.midgard-gegenstand .mg-kopf { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.midgard-gegenstand .mg-bild { width: 56px; height: 56px; border: none; }
+.midgard-gegenstand .mg-kopf h2, .midgard-gegenstand .mg-kopf input { margin: 0; font-size: 1.3em; }
+.midgard-gegenstand .mg-typ { margin: 2px 0 0; opacity: .8; }
+.midgard-gegenstand .mg-felder { display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; align-items: center; margin: 0 0 10px; }
+.midgard-gegenstand .mg-felder dt { font-weight: bold; }
+.midgard-gegenstand .mg-felder dd { margin: 0; }
+.midgard-gegenstand .mg-gruppe { display: flex; gap: 8px; }
+.midgard-gegenstand .mg-gruppe input { width: 4em; }
+.midgard-gegenstand .mg-kurz { display: flex; flex-direction: column; gap: 2px; font-weight: bold; }
+.midgard-gegenstand .mg-kurz p, .midgard-gegenstand .mg-kurz input { font-weight: normal; margin: 0; }
+.midgard-gegenstand .mg-beschreibung textarea { width: 100%; min-height: 8em; }
+.midgard-gegenstand .mg-fundstelle { margin-top: 10px; opacity: .8; font-size: .9em; }
+
+/* ---------------------------------------------------------------- Abenteurerbogen */
+.midgard-abenteurer .window-content { padding: 0; overflow: hidden; }
+.midgard-abenteurer .ma-wurzel { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--grund); color: var(--text); }
+.midgard-abenteurer .ma-kopf { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 14px 10px; background: var(--flaeche); border-bottom: 3px solid var(--rand); }
+.midgard-abenteurer .ma-portrait { width: 96px; height: 96px; object-fit: cover; border: 3px solid var(--rand); box-shadow: 4px 4px 0 var(--schatten); cursor: pointer; background: var(--grund); }
+.midgard-abenteurer .ma-kopf-text { min-width: 0; }
+.midgard-abenteurer .ma-name { font-family: "Pixelify Sans", sans-serif; font-size: 1.9rem; margin: 0; border: none; background: transparent; width: 100%; color: var(--text); }
+.midgard-abenteurer input.ma-name { border-bottom: 2px dashed var(--linie); box-shadow: none; padding: 0; height: auto; }
+.midgard-abenteurer .ma-unter { margin: 2px 0 6px; font-size: 1.05rem; color: var(--leise); }
+.midgard-abenteurer .ma-konto { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.midgard-abenteurer .ma-konto span { padding: 1px 8px; background: var(--grund); border: 2px solid var(--rand); font-size: .9rem; }
+.midgard-abenteurer .ma-konto .ma-marke { background: var(--a7); color: var(--a7t); cursor: help; }
+.midgard-abenteurer .ma-vorraete { display: flex; flex-direction: column; gap: 6px; min-width: 250px; }
+.midgard-abenteurer .ma-vorrat { display: grid; grid-template-columns: 2.4em 1.8em minmax(0, 1fr) 1.8em; grid-template-rows: auto 7px; align-items: center; gap: 2px 4px; }
+.midgard-abenteurer .ma-vorrat-name { font-family: "Pixelify Sans", sans-serif; font-weight: 700; font-size: 1.15rem; grid-row: span 2; }
+.midgard-abenteurer .ma-vorrat button { padding: 0; width: 1.8em; height: 1.8em; line-height: 1; }
+.midgard-abenteurer .ma-vorrat-wert { text-align: center; white-space: nowrap; }
+.midgard-abenteurer .ma-vorrat-wert input { width: 3.4em; text-align: center; font-weight: 700; }
+.midgard-abenteurer .ma-balken { grid-column: 2 / span 3; height: 7px; background: var(--grund); border: 1px solid var(--rand); }
+.midgard-abenteurer .ma-balken span { display: block; height: 100%; background: var(--a1); }
+.midgard-abenteurer .ma-ap .ma-balken span { background: var(--a6); }
+.midgard-abenteurer .ma-glueck { display: flex; gap: 14px; justify-content: flex-end; }
+.midgard-abenteurer .ma-glueck input { width: 3.2em; text-align: center; }
+
+.midgard-abenteurer .ma-reiter { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 14px 0; background: var(--grund); border-bottom: 2px solid var(--rand); }
+.midgard-abenteurer .ma-reiter button { width: auto; flex: 0 0 auto; margin-bottom: -2px; padding: 4px 12px; border-bottom: none; box-shadow: none; font-family: "Pixelify Sans", sans-serif; font-size: 1rem; }
+.midgard-abenteurer .ma-reiter button.aktiv { background: var(--flaeche); border-bottom: 2px solid var(--flaeche); color: var(--text); }
+.midgard-abenteurer .ma-reiter button[data-reiter="werkzeug"] { margin-left: auto; }
+.midgard-abenteurer .ma-inhalt { flex: 1; min-height: 0; overflow: auto; padding: 14px; background: var(--flaeche); }
+.midgard-abenteurer .ma-panel { display: none; }
+.midgard-abenteurer .ma-panel.aktiv { display: block; }
+.midgard-abenteurer .ma-panel[data-panel="werkzeug"] { margin: -14px; }
+.midgard-abenteurer .karte { margin: 0 6px 14px 2px; background: var(--grund); }
+.midgard-abenteurer .karte > h3:first-child { margin-top: 0; font-size: 1.1rem; }
+
+.midgard-abenteurer .ma-raster-uebersicht { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 0 10px; align-items: start; }
+.midgard-abenteurer .ma-raster-zwei { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 10px; align-items: start; }
+.midgard-abenteurer .ma-k-eig { --f: var(--a1); }
+.midgard-abenteurer .ma-k-kampf { --f: var(--a2); }
+.midgard-abenteurer .ma-k-ruestung { --f: var(--a5); }
+.midgard-abenteurer .ma-k-waffen, .midgard-abenteurer .ma-k-wf { --f: var(--a3); }
+.midgard-abenteurer .ma-k-fert, .midgard-abenteurer .ma-k-ungelernt { --f: var(--a4); }
+.midgard-abenteurer .ma-k-sinne, .midgard-abenteurer .ma-k-zauber, .midgard-abenteurer .ma-k-zaubern { --f: var(--a7); }
+.midgard-abenteurer .ma-k-konto, .midgard-abenteurer .ma-k-geld { --f: var(--a3); }
+
+.midgard-abenteurer .ma-eigenschaften { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.midgard-abenteurer .ma-k-kampf .ma-grosswerte { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.midgard-abenteurer [data-panel=kampf] .ma-k-kampf .ma-grosswerte { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.midgard-abenteurer .ma-eig { display: flex; flex-direction: column; align-items: center; padding: 4px 2px 3px; background: var(--flaeche); border: 2px solid var(--rand); box-shadow: 3px 3px 0 var(--schatten); }
+.midgard-abenteurer .ma-eig-name { font-family: "Pixelify Sans", sans-serif; font-weight: 700; }
+.midgard-abenteurer .ma-eig-wert { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+.midgard-abenteurer input.ma-eig-wert { width: 3em; text-align: center; padding: 0; }
+.midgard-abenteurer .ma-eig-bonus { font-size: .85rem; color: var(--leise); min-height: 1.1em; }
+
+.midgard-abenteurer .ma-grosswerte { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.midgard-abenteurer .ma-gross { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 6px 4px; background: var(--flaeche); border: 2px solid var(--rand); box-shadow: 3px 3px 0 var(--schatten); }
+.midgard-abenteurer .ma-gross-name { font-size: .85rem; color: var(--leise); }
+.midgard-abenteurer .ma-gross-wert { font-size: 1.6rem; font-weight: 700; line-height: 1.15; }
+.midgard-abenteurer .ma-gross-wert.klein { font-size: 1.1rem; }
+.midgard-abenteurer .ma-gross small { font-size: .78rem; color: var(--leise); }
+.midgard-abenteurer .ma-gross .ma-hinweis { color: var(--gut); font-weight: 700; }
+.midgard-abenteurer .ma-boni th, .midgard-abenteurer .ma-boni td { text-align: center; }
+.midgard-abenteurer .ma-ruestung { display: grid; grid-template-columns: 90px 1fr; gap: 10px; align-items: center; }
+
+.midgard-abenteurer .ma-tabelle { width: 100%; margin: 0 0 6px; }
+.midgard-abenteurer .ma-tabelle th { text-align: left; font-size: .85rem; color: var(--leise); border-bottom: 2px solid var(--rand); padding: 2px 6px; white-space: nowrap; }
+.midgard-abenteurer .ma-tabelle td { padding: 3px 6px; border-bottom: 1px solid var(--linie); vertical-align: middle; }
+.midgard-abenteurer .ma-tabelle td { font-variant-numeric: tabular-nums; }
+.midgard-abenteurer .ma-tabelle .zahl { text-align: right; font-variant-numeric: tabular-nums; }
+.midgard-abenteurer .ma-tabelle .stark { font-weight: 700; }
+.midgard-abenteurer .ma-tabelle tr.ma-gruppe th { background: var(--a7h); color: var(--text); font-family: "Pixelify Sans", sans-serif; font-size: .95rem; padding-top: 5px; }
+.midgard-abenteurer .ma-tabelle tr.aktiv td { background: var(--akzent-hell); font-weight: 700; }
+.midgard-abenteurer .ma-zauberblatt td { font-size: .88rem; }
+.midgard-abenteurer .ma-zauber-pp th, .midgard-abenteurer .ma-zauber-pp td { text-align: center; font-size: .8rem; }
+.midgard-abenteurer .ma-wirkung { max-width: 16em; }
+.midgard-abenteurer .ma-warnung { color: var(--schlecht); font-size: .82rem; }
+.midgard-abenteurer input.ma-klein { width: 3.6em; text-align: right; padding: 0 3px; }
+.midgard-abenteurer a.ma-item { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: inherit; text-decoration: none; }
+.midgard-abenteurer a.ma-item:hover { text-decoration: underline; }
+.midgard-abenteurer a.ma-item img { width: 20px; height: 20px; border: none; flex: none; }
+.midgard-abenteurer .ma-fert-kurz { list-style: none; margin: 0; padding: 0; columns: 2; column-gap: 18px; }
+.midgard-abenteurer .ma-fert-kurz li { display: flex; justify-content: space-between; gap: 6px; break-inside: avoid; padding: 1px 0; border-bottom: 1px dotted var(--linie); }
+.midgard-abenteurer .ma-spalten { columns: 3; column-gap: 18px; margin: 0; padding-left: 1.1em; }
+.midgard-abenteurer .ma-sinne { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; }
+.midgard-abenteurer .ma-zeile { display: grid; grid-template-columns: 9em minmax(0, 1fr); align-items: center; gap: 8px; margin: 0 0 5px; }
+.midgard-abenteurer .ma-zeile > span:first-child { color: var(--leise); }
+.midgard-abenteurer .ma-zeile input, .midgard-abenteurer .ma-zeile select { width: 100%; }
+.midgard-abenteurer textarea { width: 100%; min-height: 7em; }
+.midgard-abenteurer .ma-protokoll { margin: 0; padding-left: 1.4em; max-height: 22em; overflow: auto; }
+.midgard-abenteurer .ma-protokoll small { color: var(--leise); }
+.midgard-abenteurer .ma-werkzeug-hinweis { margin: 10px 14px; }
+.midgard-abenteurer .vorformatiert { white-space: pre-wrap; }
+.midgard-abenteurer button.entfernen { width: auto; padding: 0 .45rem; }
+.midgard-abenteurer .karte > button { width: auto; }
+@container (max-width: 760px) {
+  .midgard-abenteurer .ma-raster-uebersicht, .midgard-abenteurer .ma-raster-zwei { grid-template-columns: minmax(0, 1fr); }
+}
+.midgard-abenteurer .window-content { container-type: inline-size; }

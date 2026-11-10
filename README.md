@@ -1,6 +1,8 @@
-# Midgard 5 – Charakter-Management (CMT) für Foundry VTT
+# Midgard 5 für Foundry VTT
 
-Inoffizielles Foundry-System (Foundry VTT 14) für Midgard 5: Charaktererschaffung nach dem Kodex und Lernen im Spielverlauf mit EP, Praxispunkten und Gold. Keine Würfe, kein Kampf. Für den privaten Gebrauch einer Spielrunde.
+Inoffizielles Foundry-System (Foundry VTT 14) für Midgard 5: Charakterbogen mit Reitern, Regeldaten (Fertigkeiten, Waffen, Rüstungen, Zauber, Rassen, Typen) als Kompendien mit Kompendium-Browser, Charaktererschaffung nach dem Kodex und Lernen im Spielverlauf mit EP, Praxispunkten und Gold. Würfe und Kampf folgen. Für den privaten Gebrauch einer Spielrunde.
+
+Die Kompendien legt das System beim ersten Start einer Welt durch den Spielleiter selbst an (Ordner „Midgard 5“). Sie enthalten nur mechanische Spielwerte mit Fundstelle, keine Regeltexte.
 
 ## Installation in Foundry
 
@@ -15,6 +17,6 @@ Jede Version liegt als eigenes ZIP unter `pakete/` (z. B. `pakete/midgard5-cmt-0
 
 Dieses Repository enthält nur das gebaute System. Entwickelt wird es in einem privaten Repository; Inhalte hier nicht von Hand ändern, sie werden bei jeder Version ersetzt.
 
-Midgard ist ein Rollenspiel des Verlags für F&SF-Spiele. Dieses System ist kein offizielles Produkt und enthält keine Regeltexte.
+Midgard ist ein Rollenspiel des Verlags für F&SF-Spiele. Dieses System ist kein offizielles Produkt und enthält keine Regel- oder Beschreibungstexte aus den Büchern.
 
 Schrift: Pixelify Sans, SIL Open Font License 1.1 (`schrift/OFL.txt`).

@@ -226,6 +226,27 @@ window.KODEX = {
     "Schilde": [["Buckler", "Gs61", "1W6–3", 10], ["Schild, großer", "St61", "–", 15], ["Schild, kleiner", "St31, Gs11", "–", 10]],
     "Parierwaffen": [["Kampfgabeln, Paar", "St31, Gs61", "1W6–3 / 2W6–4", 15], ["Parierdolch", "Gs61", "1W6–1", 8]],
   },
+  // S. 197-198: Gewicht in kg (Name wie in waffenListe)
+  waffenGewicht: {
+    "Handaxt": 1.5, "Keule": 2, "Kriegshammer": 2.5, "Schlachtbeil": 5, "Streitaxt": 2.5, "Streitkolben": 2.5,
+    "Anderthalbhänder": 4, "Krummsäbel": 2.5, "Langschwert": 2.5, "Florett": 1, "Fuchtel": 2, "Rapier": 1.5,
+    "Kriegsflegel": 7.5, "Morgenstern": 5, "NunChaku": 0.5, "Glefe": 3, "Hellebarde": 5, "Speer, leichter": 1.5,
+    "Stielhammer": 7.5, "Stoßspeer": 2.5, "Dolch": 0.5, "Kurzschwert": 1.5, "Ochsenzunge": 1, "Bo-Stab": 2.5,
+    "Kampfstab": 2.5, "Magierstab": 1.5, "Magierstecken": 2, "Barbarenstreitaxt": 6, "Ogerhammer": 10, "Stabkeule": 5,
+    "Bihänder": 5, "Faustkampf": 0, "Ringen": 0, "Wurfaxt": 1.5, "Wurfeisen": 2, "Wurfhammer": 2.5, "Wurfkeule": 2,
+    "Wurfmesser": 0.3, "Wurfpfeil": 0.3, "Wurfscheibe": 0.2, "Wurfstern": 0.1, "Speerschleuder": 1.5, "Wurfspeer": 1.5,
+    "Wurfspieß": 2, "Armbrust, leicht": 2.5, "Armbrust, schwer": 5, "Handarmbrust": 1, "Blasrohr, kurz": 0.5,
+    "Blasrohr, lang": 2, "Bogen": 0.6, "Kompositbogen": 0.7, "Kurzbogen": 0.5, "Langbogen": 1, "Schleuder": 0.1,
+    "Stockschleuder": 2, "Buckler": 1, "Schild, großer": 5, "Schild, kleiner": 2, "Kampfgabeln, Paar": 1.5, "Parierdolch": 0.7,
+  },
+  // S. 71-73, 198-199: Rüstungen. rs = LP-Abzug je Treffer, abb = Verlust an Abwehrbonus ("alle" = ganz)
+  ruestungen: [
+    { name: "Textilrüstung", kuerzel: "TR", rs: 1, abb: 0, preis: 20, gewicht: 7.5 },
+    { name: "Lederrüstung", kuerzel: "LR", rs: 2, abb: 0, preis: 30, gewicht: 12.5 },
+    { name: "Kettenrüstung", kuerzel: "KR", rs: 3, abb: 1, preis: 100, gewicht: 20 },
+    { name: "Plattenrüstung", kuerzel: "PR", rs: 4, abb: "alle", preis: 500, gewicht: 35 },
+    { name: "Vollrüstung", kuerzel: "VR", rs: 5, abb: "alle", preis: 600, gewicht: 45 },
+  ],
   // S. 37: Gnome und Halblinge können diese Waffen nicht benutzen
   kleineVerboten: {
     fertigkeiten: ["Zweihandschwerter", "Zweihandschlagwaffen", "Stockwaffen"],

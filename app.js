@@ -110,7 +110,7 @@
     S = BIBL.charaktere[BIBL.aktiv] || Object.values(BIBL.charaktere)[0];
   }
   function speichern() {
-    if (FOUNDRY) { if (opts.speichere) opts.speichere(S); return; }
+    if (FOUNDRY) { if (opts.speichere) opts.speichere(S, auswertung()); return; }
     BIBL.charaktere[S.id] = S; BIBL.aktiv = S.id;
     try { localStorage.setItem(BIBLIOTHEK, JSON.stringify(BIBL)); } catch (e) { /* privat/gesperrt: ohne Speicher weiter */ }
   }
@@ -1818,6 +1818,36 @@
     kopfzeile();
     if (akt.id === "eig") summenAbfrage();
   }
+  // Zusammenfassung für den Foundry-Bogen: alle Werte so, wie sie im Charakterbogen erscheinen
+  function auswertung() {
+    const kl = klasse(), r = berechne(), grad = aktGrad(), st = stand();
+    const eig = {};
+    for (const e of ["St", "Gs", "Gw", "Ko", "In", "Zt", "pA", "Wk", "Au"]) eig[e] = wert(e) ?? null;
+    const fertigkeiten = alleFertigkeiten().concat(S.spiel.neu.filter((n) => !n.waffe && !n.zauber)).map((f) => {
+      const key = "F:" + f.name + "|" + (f.spez || "");
+      const fd = fertigkeitDaten(f.name);
+      return { name: f.name, lernname: fd ? fd.name : f.name, spez: f.spez || "", wert: aktuellerWert(key, f.wert), le: f.le || (fd ? fd.le : ""), pp: S.spiel.pp[key] || 0, herkunft: f.quelle || "gelernt" };
+    });
+    const waffen = S.waffen.concat(S.spiel.neu.filter((n) => n.waffe)).map((w) => {
+      const key = "W:" + w.name;
+      return { name: w.name, wert: aktuellerWert(key, w.wert), pp: S.spiel.pp[key] || 0 };
+    });
+    const zauberPP = {};
+    for (const [k, v] of Object.entries(S.spiel.pp)) if (k.startsWith("Z:") && v) zauberPP[k.slice(2)] = v;
+    return {
+      fertig: !!(kl && K.eigenschaften.every((e) => S.eig[e] !== null) && r.LP !== null && r.AP !== null),
+      name: S.name, spieler: S.spieler, geschlecht: S.geschlecht, rasse: S.rasse,
+      typ: S.klasse, typName: kl ? kl.name : "", typArt: kl ? kl.art : "", grad, es: S.spiel.es, ep: S.spiel.ep, gold: S.spiel.gold,
+      eigenschaften: eig, lp: r.LP, ap: r.AP === null ? null : r.AP + S.spiel.apPlus, b: r.B, sg: r.SG + fl(grad / 2),
+      faehigkeiten: r.faehigkeiten, trinken: r.Trinken, wahrnehmung: r.Wahrnehmung,
+      stand: st ? st.name : "", heimat: S.heimat, glaube: S.glaube, alter: S.alter, groesse: S.groesse, gewicht: S.gewicht,
+      gestalt: `${istKlein() || S.rasse === "Zwerg" ? "klein" : S.gestaltGroesse}, ${S.gestaltFigur}`, hand: haendigkeit() || "",
+      spezialisierung: S.magierSpezial || "", fertigkeiten, waffen,
+      spezialwaffen: S.spezialwaffen.map((x) => { const [fertigkeit, name] = x.split("|"); return { fertigkeit, name }; }),
+      zauber: kannZaubern() ? bekannteZauber() : [], zauberPP, ausruestung: S.ausruestung || "",
+      protokoll: S.spiel.protokoll.map((e) => ({ zeit: e.zeit, text: e.text })),
+    };
+  }
   function kopfzeile() {
     const kopf = $(".cmt-kopf-name");
     if (kopf) kopf.textContent = [S.name || "Neuer Abenteurer", klasse() ? klasse().name : null, S.rasse !== "Mensch" ? S.rasse : null].filter(Boolean).join(" · ");
@@ -1841,7 +1871,7 @@
       h("main", { class: "cmt-inhalt" })),
   ].filter(Boolean));
   neuZeichnen();
-  return { neuZeichnen, zustand: () => S };
+  return { neuZeichnen, zustand: () => S, auswertung };
   }
 
   window.MidgardCMT = { starte };

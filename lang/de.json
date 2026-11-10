@@ -2,9 +2,20 @@
   "TYPES": {
     "Actor": {
       "abenteurer": "Abenteurer"
+    },
+    "Item": {
+      "fertigkeit": "Fertigkeit",
+      "waffenfertigkeit": "Waffenfertigkeit",
+      "waffe": "Waffe",
+      "ruestung": "Rüstung",
+      "gegenstand": "Gegenstand",
+      "zauber": "Zauber",
+      "rasse": "Rasse",
+      "typ": "Abenteurertyp"
     }
   },
   "MIDGARD": {
-    "Bogen": "Midgard-Bogen (CMT)"
+    "Bogen": "Midgard-Abenteurerbogen",
+    "GegenstandBogen": "Midgard-Gegenstand"
   }
 }
