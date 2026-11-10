@@ -5,7 +5,7 @@
 // Die Kompendien sind bis zum Import leer; der Import legt die Einträge an.
 import { SYSTEM_ID, packId } from "./kategorien.mjs";
 import { textzeilen } from "./pdf/textzeilen.mjs";
-import { istArkanum, zauberAusArkanum } from "./pdf/arkanum.mjs";
+import { istArkanum, zauberAusArkanum, zaubermittelAusArkanum } from "./pdf/arkanum.mjs";
 import { istKodex, fertigkeitenAusKodex, typenUndRassenAusKodex, ruestungenAusKodex } from "./pdf/kodex.mjs";
 import KOMPENDIUM from "../daten/kompendium.js";
 import { zuordnen, alsHtml } from "./pdf/zuordnen.mjs";
@@ -65,7 +65,10 @@ export async function pdfImportieren(daten, { dateiname = "PDF", ueberschreiben 
 async function arkanumImportieren(zeilen, ueberschreiben) {
   const gelesen = zauberAusArkanum(zeilen).map((z) => ({ ...z, gruppe: z.kategorie ?? z.gruppe }));
   const teil = await schreiben("zauber", gelesen, { gruppeVon: (z) => z.system.gruppe, buch: "Das Arkanum", ueberschreiben });
-  return { buch: "Das Arkanum", teile: [teil] };
+  const ausArkanum = (e) => e.system.quelle === "Arkanum";
+  const mittel = zaubermittelAusArkanum(zeilen, KOMPENDIUM.kategorien.gegenstaende.filter(ausArkanum).map((e) => e.name));
+  const teil2 = await schreiben("gegenstaende", mittel, { buch: "Das Arkanum", ueberschreiben, auswahl: ausArkanum });
+  return { buch: "Das Arkanum", teile: [teil, teil2] };
 }
 
 async function kodexImportieren(zeilen, ueberschreiben) {
@@ -87,6 +90,8 @@ async function kodexImportieren(zeilen, ueberschreiben) {
   teile.push(await schreiben("ruestungen", ruestungen.map((r) => ({ ...r, name: r.kuerzel })), { ...o, nurPassende: false, nameVon: (z) => z.system.kuerzel }));
   teile.push(await schreiben("typen", typen.flatMap((t) => t.kuerzel.map((k) => ({ ...t, name: k }))), { ...o, nurPassende: false, nameVon: (z) => z.system.kuerzel }));
   teile.push(await schreiben("rassen", rassen, { ...o, nurPassende: false }));
+  // Ausrüstung aus den Preislisten: ohne eigene Beschreibung im Kodex
+  teile.push(await schreiben("gegenstaende", [], { ...o, auswahl: (e) => e.system.quelle === "Kodex" }));
   return { buch, teile };
 }
 
@@ -96,11 +101,11 @@ async function kodexImportieren(zeilen, ueberschreiben) {
  * zu denen das Buch keinen Text hat, werden ohne Beschreibung angelegt, damit die Kategorie
  * vollständig ist (z. B. Mensch, Schilde).
  */
-async function schreiben(kat, gelesen, { aliase, gruppeVon, nameVon, buch, ueberschreiben, nurPassende = false }) {
+async function schreiben(kat, gelesen, { aliase, gruppeVon, nameVon, buch, ueberschreiben, nurPassende = false, auswahl = () => true }) {
   const pack = game.packs.get(packId(kat));
   if (!pack) throw new Error(`Kompendium ${kat} fehlt; zuerst die Welt als Spielleiter laden.`);
   const vorhanden = new Map((await pack.getDocuments()).map((d) => [d.id, d]));
-  const satz = KOMPENDIUM.kategorien[kat];
+  const satz = KOMPENDIUM.kategorien[kat].filter(auswahl); // nur Einträge dieses Buches
   const ziele = satz.map((e) => ({ _id: e._id, name: nameVon ? nameVon(e) : e.name, system: e.system, eintrag: e }));
   const gv = gruppeVon && ((z) => gruppeVon(z.eintrag));
   const { paare, nichtZugeordnet } = zuordnen(gelesen, ziele, { aliase, gruppeVon: gv });

@@ -248,6 +248,11 @@ window.KODEX = {
     { name: "Vollrüstung", kuerzel: "VR", rs: 5, abb: "alle", preis: 600, gewicht: 45 },
   ],
   // S. 37: Gnome und Halblinge können diese Waffen nicht benutzen
+  // Waffen, die der Kodex beschreibt, die aber nicht zur Auswahl bei Spielbeginn (S. 42-43) gehören;
+  // nur für die Foundry-Kompendien. [Fertigkeit, Name, Anforderung, Schaden, Preis GS, Gewicht kg, Fundstelle]
+  weitereWaffen: [
+    ["Stichwaffen", "Stilett", "", "1W6–1", 5, 0.3, "Kodex S. 139, 198"],
+  ],
   kleineVerboten: {
     fertigkeiten: ["Zweihandschwerter", "Zweihandschlagwaffen", "Stockwaffen"],
     waffen: ["Glefe", "Hellebarde", "Stielhammer", "Langbogen", "Kompositbogen", "Armbrust, schwer", "Stockschleuder", "Kriegsflegel"],

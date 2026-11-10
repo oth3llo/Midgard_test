@@ -79,3 +79,45 @@ function median(werte) {
   const s = [...werte].sort((a, b) => a - b);
   return s[Math.floor(s.length / 2)];
 }
+
+/**
+ * Beschreibungen der Zaubermittel und alchimistischen Metalle (Kapitel „Die Kunst der Alchimie“,
+ * bis „Zauberwerk“). Eine Beschreibung beginnt mit einer Zeile, die genau einem bekannten Namen
+ * entspricht und mit Abstand über ihr steht (Überschrift).
+ * @param {string[]} namen  bekannte Namen aus dem Datensatz
+ */
+export function zaubermittelAusArkanum(zeilen, namen) {
+  const norm = (s) => String(s).toLowerCase().replace(/[^a-zäöüß0-9*]/g, "");
+  const bekannt = new Map(namen.map((n) => [norm(n), n]));
+  const fliess = zeilen.filter((z) => z.groesse === 10);
+  const abstand = median(fliess.map((z) => z.abstand).filter((a) => a > 5 && a < 20)) || 12;
+  const ergebnis = [];
+  let aktiv = false, akt = null;
+  const abschliessen = () => {
+    if (!akt) return;
+    akt.absaetze = absaetze(akt.text, abstand).filter((a) => a.length > 1);
+    delete akt.text;
+    if (akt.absaetze.length) ergebnis.push(akt);
+    akt = null;
+  };
+  for (let i = 0; i < zeilen.length; i++) {
+    const z = zeilen[i];
+    if (z.groesse >= 30 && z.text.length <= 2) continue;
+    if (z.groesse >= 24) {
+      if (z.text === "Die Kunst") { aktiv = true; continue; }
+      if (aktiv && z.text === "Zauberwerk") { abschliessen(); break; }
+      continue;
+    }
+    if (!aktiv || (/^\d{1,3}$/.test(z.text) && z.groesse >= 14)) continue;
+    const name = bekannt.get(norm(z.text));
+    if (name && (z.abstand === null || z.abstand > abstand * 1.3)) {
+      abschliessen();
+      akt = { name, seite: z.seite, text: [] };
+      continue;
+    }
+    if (!akt || z.groesse < 9 || z.groesse > 10.5 || unlesbar(z.text)) continue;
+    akt.text.push(z);
+  }
+  abschliessen();
+  return ergebnis;
+}

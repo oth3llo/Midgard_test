@@ -59,8 +59,8 @@ class RuestungDaten extends foundry.abstract.TypeDataModel {
 class GegenstandDaten extends foundry.abstract.TypeDataModel {
   static defineSchema() {
     return {
-      anzahl: zahl(1, { min: 0 }), preis: zahlOderLeer({ min: 0, integer: false }),
-      gewicht: zahlOderLeer({ min: 0, integer: false }), ...gemeinsam(),
+      anzahl: zahl(1, { min: 0 }), preis: zahlOderLeer({ min: 0, integer: false }), preisText: text(),
+      gewicht: zahlOderLeer({ min: 0, integer: false }), kategorie: text(), unterkategorie: text(), ...gemeinsam(),
     };
   }
 }

@@ -39,6 +39,11 @@ export const KATEGORIEN = {
     spalten: [["typen", "Typen", (t) => (t || []).join(", ")], ["min", "Mindestwerte", (m) => Object.entries(m || {}).map(([k, v]) => `${k} ${v}`).join(", ")]],
     filter: [],
   },
+  gegenstaende: {
+    label: "Ausrüstung", typ: "gegenstand",
+    spalten: [["kategorie", "Kategorie"], ["unterkategorie", "Art"], ["preisText", "Preis"], ["gewicht", "kg"]],
+    filter: [["kategorie", "Kategorie"], ["unterkategorie", "Art"]],
+  },
   typen: {
     label: "Abenteurertypen", typ: "typ",
     spalten: [["kuerzel", "Kürzel"], ["artName", "Art"], ["wichtig", "Wichtig"], ["apBonus", "AP"], ["zauberGruppen", "Zaubergruppen", (z) => (z || []).join(", ")]],
@@ -81,7 +86,7 @@ export const FELDNAMEN = {
   apBonus: "AP-Bonus", standMod: "Stand-Modifikator", freiWaffen: "Freie Waffen", le: "Lerneinheiten",
   waffenLE: "Waffen-LE", zauberLE: "Zauber-LE", zauberGruppen: "Zaubergruppen", typisch: "Typische Fertigkeiten",
   typischerZauber: "Typischer Zauber", ausruestung: "Ausrüstung", zauberKosten: "Zauberkosten",
-  kurzwirkung: "Kurzwirkung", beschreibung: "Beschreibung", quelle: "Quelle",
+  kurzwirkung: "Kurzwirkung", beschreibung: "Beschreibung", quelle: "Quelle", preisText: "Preis", kategorie: "Kategorie", unterkategorie: "Art",
 };
 
 /** Anzeigetext für verschachtelte Regeldaten (Startlisten, typische Fertigkeiten, Fähigkeiten). */
