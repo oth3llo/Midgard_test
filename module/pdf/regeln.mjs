@@ -6,12 +6,20 @@ import { unlesbar } from "./arkanum.mjs";
 
 /** Seitenbereiche der Regelkapitel je Buch. */
 export const REGELBEREICHE = {
-  "Der Kodex": [[50, 94], [96, 100], [148, 157], [165, 168]],
-  "Das Arkanum": [[9, 24], [26, 36], [37, 61]],
+  "Der Kodex": [[50, 94, "Das Buch der Gesetze"], [96, 100, "Das Buch der Begabungen"], [148, 157, "Das Buch des Ruhmes"], [165, 168, "Das Buch des Ruhmes"]],
+  "Das Arkanum": [[9, 24, "Die Regeln der Magie"], [26, 36, "Die Welt der Magie"], [37, 61, "Der Konspekt der Zauberer"]],
 };
 
 /** Zierschrift mit falscher Zeichenzuordnung („Einfğhr§ng“ → „Einführung“). */
 const zierschrift = (t) => (/[ğ§]/.test(t) ? t.replace(/ğ/g, "ü").replace(/§/g, "u") : t);
+
+/** Titel eines Aufzählungseintrags: „Alba*: …“ → „Alba“, sonst der fette Einstieg, sonst die ersten Wörter. */
+function eintragTitel(z) {
+  const m = z.text.match(/^([^:]{2,40}?)\*?\s*(\([^)]{1,20}\))?\s*:/);
+  if (m) return `${m[1].replace(/\*/g, "").trim()}${m[2] ? " " + m[2] : ""}`;
+  if (z.fett && z.fett.length <= 40) return z.fett.replace(/:.*$/, "").trim();
+  return z.text.split(" ").slice(0, 5).join(" ").replace(/[,.;:]$/, "");
+}
 
 const median = (w) => { const s = [...w].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; };
 
@@ -35,19 +43,41 @@ export function regelnAusBuch(zeilen, bereiche) {
 
   const kapitel = [];
   let kap = null, seite = null, vorher = null;
+  let eltern = null; // Abschnitt, unter dem gerade Aufzählungseinträge gesammelt werden
+  const laengeVon = (zeilenListe) => zeilenListe.reduce((n, l) => n + l.text.length, 0);
+  // Aufzählungseintrag beenden: kurz → als Listenpunkt im Abschnitt, ausführlich → eigene Seite
+  const kindAbschliessen = () => {
+    if (!eltern || seite === eltern || !seite) return;
+    const laenge = laengeVon(seite.text);
+    const eigeneSeite = (seite.doppelpunkt && laenge >= 60) || (seite.mitFett && laenge >= 150);
+    if (!eigeneSeite) {
+      seite.text[0] = { ...seite.text[0], text: `• ${seite.text[0].text}`, abstand: 99 };
+      eltern.text.push(...seite.text);
+      if (seite.text.length > 1 || true) eltern.text.push({ text: "", abstand: 99, leer: true });
+    } else {
+      seite.absaetze = absaetze(seite.text, abstand);
+      delete seite.text;
+      eltern.kinder.push(seite);
+    }
+    seite = eltern;
+  };
   const seiteAbschliessen = () => {
+    kindAbschliessen();
     if (!seite) return;
-    seite.absaetze = absaetze(seite.text, abstand).filter((a) => a.length > 1);
+    seite.absaetze = absaetze(seite.text.filter((l) => !l.leer), abstand);
     delete seite.text;
-    const laenge = seite.absaetze.join(" ").length;
-    if (laenge >= 40) kap.seiten.push(seite);
+    const laenge = seite.absaetze.reduce((n, a) => n + (typeof a === "string" ? a.length : JSON.stringify(a).length), 0);
+    if (laenge >= 40 || seite.kinder?.length) kap.seiten.push(seite);
     else if (laenge && kap.seiten.length) kap.seiten.at(-1).absaetze.push(...seite.absaetze); // Splitter anhängen
+    for (const k of seite.kinder ?? []) kap.seiten.push(k);
+    delete seite.kinder;
     seite = null;
+    eltern = null;
   };
   const neueSeite = (titel, ebene, z) => {
     seiteAbschliessen();
     if (!kap) { kap = { titel, seite: z.seite, seiten: [] }; kapitel.push(kap); }
-    seite = { titel, ebene, seite: z.seite, text: [] };
+    seite = { titel, ebene, seite: z.seite, text: [], kinder: [] };
   };
   let stoppSeite = null;
   for (let i = 0; i < teil.length; i++) {
@@ -56,7 +86,7 @@ export function regelnAusBuch(zeilen, bereiche) {
     if (z.groesse >= 24 && z.text === "Allgemeine Fertigkeiten") { seiteAbschliessen(); stoppSeite = z.seite; continue; }
     if (z.seite === stoppSeite) continue;
     const folge = vorher && vorher.seite === z.seite && vorher.spalte === z.spalte;
-    if (z.groesse >= 30 && z.text.length <= 2) continue;                     // Initiale
+    if (z.groesse >= 30 && z.text.length <= 2) continue;                     // Initiale (schon zugeordnet)
     if (/^\d{1,3}$/.test(z.text) && z.groesse >= 14) continue;                 // Seitenzahl
     if (unlesbar(z.text)) continue;
     // mehrzeilige Überschrift („Der Schaden“ / „und die Folgen“) zusammenführen
@@ -70,9 +100,9 @@ export function regelnAusBuch(zeilen, bereiche) {
     }
     if (z.groesse >= 24) {                                                     // Kapitel (auch Buchtitel)
       seiteAbschliessen();
-      kap = { titel: z.text, seite: z.seite, seiten: [] };
+      kap = { titel: z.text, seite: z.seite, seiten: [], gross: z.groesse >= 29 };
       kapitel.push(kap);
-      seite = { titel: z.text, ebene: 1, seite: z.seite, text: [] };
+      seite = { titel: z.text, ebene: 1, seite: z.seite, text: [], kinder: [] };
       vorher = { ...z, kopf: { kapitel: kap, seite } };
       continue;
     }
@@ -88,7 +118,8 @@ export function regelnAusBuch(zeilen, bereiche) {
     const naechste = teil[i + 1]?.text ?? "";
     const kopfTauglich = kopfText.length <= 55 && /^[A-ZÄÖÜ]/.test(kopfText) && !/[.,;:!*-]$|[»«„“"=:]/.test(kopfText) && !/^(EW|WW|PW)\b|^\d/.test(kopfText)
       && !(kopfText.length > 40 && /^[a-zäöüß]/.test(naechste)); // lange Zeile, Satz läuft klein weiter: keine Überschrift
-    const unter = kopfTauglich && z.groesse >= 9.5 && z.groesse < 14 && (z.abstand ?? 99) > abstand * 2.2
+    // Überschriften eingerückter Kästen („Schaden durch Brände“) beginnen keinen Abschnitt
+    const unter = kopfTauglich && (z.einzug ?? 0) < 8 && z.groesse >= 9.5 && z.groesse < 14 && (z.abstand ?? 99) > abstand * 2.2
       && (z.schrift === kopfSchrift || z.groesse > 10.5);
     // zweite Zeile einer Unterüberschrift, wenn die erste erkennbar weiterläuft („Wurfwaffen bei“ / „Sturmangriffen“)
     if (vorher?.unterKopf && folge && /\s(bei|und|von|der|des|im|mit|für|aus|in|zu|gegen)$/.test(seite.titel) && (z.abstand ?? 99) < abstand * 1.5 && z.text.length < 40 && !/[.,;]$/.test(z.text)) {
@@ -102,11 +133,26 @@ export function regelnAusBuch(zeilen, bereiche) {
       vorher = { ...z, unterKopf: true };
       continue;
     }
+    // Aufzählungseintrag (Land, Gilde, Gottheit, Orden …): eigene Seite unter dem laufenden Abschnitt
+    if (z.aufzaehlung && z.groesse >= 8.5 && z.groesse <= 10.5 && seite) {
+      if (eltern) kindAbschliessen(); else eltern = seite;
+      // eigene Seite nur für benannte Einträge: „Name: …“ (Götter, Verletzungen) oder fetter Name (Gilden, Lehrmeister)
+      const titel = eintragTitel(z);
+      const gueltig = /^[A-Za-zÄÖÜäöü]/.test(titel) && titel.length >= 3 && !/^[IVX]+$/.test(titel);
+      const doppelpunkt = gueltig && /^[^:]{3,40}?\*?\s*(\([^)]{1,20}\))?\s*:/.test(z.text);
+      seite = { titel, ebene: 4, seite: z.seite, text: [{ ...z, abstand: null }], doppelpunkt, mitFett: gueltig && !!z.fett };
+      vorher = z;
+      continue;
+    }
+    // Absatz nach einer Aufzählung gehört wieder zum Abschnitt
+    if (eltern && seite !== eltern && z.groesse >= 8.5 && z.groesse <= 10.5 && (z.abstand ?? 0) > abstand * 1.45 && !/^[a-zäöüß]/.test(z.text)) kindAbschliessen();
     if (z.groesse < 8.5 || z.groesse > 10.5) { vorher = z; continue; }
     if (!seite) { vorher = z; continue; }
     seite.text.push(z);
     vorher = z;
   }
   seiteAbschliessen();
+  // Buchteil je Kapitel aus dem Seitenbereich (Ordner im Regel-Kompendium)
+  for (const k of kapitel) k.teil = bereiche.find(([a, b]) => k.seite >= a && k.seite <= b)?.[2] ?? null;
   return kapitel.filter((k) => k.seiten.length);
 }

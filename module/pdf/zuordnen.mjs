@@ -52,5 +52,17 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 
 /** Absätze als HTML mit Fundstelle am Ende. */
 export function alsHtml(absaetze, fundstelle) {
-  return absaetze.map((a) => `<p>${esc(a)}</p>`).join("") + (fundstelle ? `<p class="midgard-fundstelle"><em>${esc(fundstelle)}</em></p>` : "");
+  const block = (a) => {
+    if (typeof a === "string") return `<p>${esc(a)}</p>`;
+    if (a.tabelle) {
+      const breite = Math.max(...a.tabelle.map((r) => r.length));
+      return `<table class="midgard-tabelle"><tbody>${a.tabelle.map((r) => `<tr>${r.length === 1 || r.filter(Boolean).length === 1 && r[0] && breite > 1 && r.slice(1).every((c) => !c)
+        ? `<th colspan="${breite}">${esc(r[0])}</th>` : r.map((c) => (c.length <= 12 ? `<td class="kurz">${esc(c)}</td>` : `<td>${esc(c)}</td>`)).join("")}</tr>`).join("")}</tbody></table>`;
+    }
+    if (a.liste) return `<ul>${a.liste.map((z) => `<li>${esc(z)}</li>`).join("")}</ul>`;
+    // Kasten: Überschrift (erste kurze Zeile ohne Satzzeichen) und Stufen wie „(+4)“ fett
+    if (a.kasten) return `<div class="midgard-kasten">${a.kasten.map((z, i) => (/\([+–-]\d+\)$/.test(z) || (i === 0 && a.kasten.length > 1 && z.length < 50 && !/[.,;:]$/.test(z)) ? `<p><strong>${esc(z)}</strong></p>` : `<p>${esc(z)}</p>`)).join("")}</div>`;
+    return "";
+  };
+  return absaetze.map(block).join("") + (fundstelle ? `<p class="midgard-fundstelle"><em>${esc(fundstelle)}</em></p>` : "");
 }

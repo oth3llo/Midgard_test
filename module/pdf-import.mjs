@@ -105,6 +105,14 @@ async function kodexImportieren(zeilen, ueberschreiben) {
  * zu denen das Buch keinen Text hat, werden ohne Beschreibung angelegt, damit die Kategorie
  * vollständig ist (z. B. Mensch, Schilde).
  */
+// Unterordner je Kategorie: Zauber nach Gruppe, Waffen nach Fertigkeit, Ausrüstung nach Kategorie und Art, Typen nach Art
+const ORDNER_VON = {
+  zauber: (e) => [e.system.gruppe],
+  waffen: (e) => [e.system.fertigkeit],
+  gegenstaende: (e) => [e.system.kategorie, e.system.unterkategorie],
+  typen: (e) => [e.system.artName],
+};
+
 async function schreiben(kat, gelesen, { aliase, gruppeVon, nameVon, buch, ueberschreiben, nurPassende = false, auswahl = () => true }) {
   const pack = game.packs.get(packId(kat));
   if (!pack) throw new Error(`Kompendium ${kat} fehlt; zuerst die Welt als Spielleiter laden.`);
@@ -133,10 +141,25 @@ async function schreiben(kat, gelesen, { aliase, gruppeVon, nameVon, buch, ueber
     if (doc.system.beschreibung && !doc.getFlag(SYSTEM_ID, "pdfImport") && !ueberschreiben) { behalten.push(e.name); continue; }
     aenderungen.push({ _id: e._id, "system.beschreibung": html, [`flags.${SYSTEM_ID}.pdfImport`]: flag });
   }
-  if (neu.length || aenderungen.length) {
+  if (neu.length || aenderungen.length || ORDNER_VON[kat]) {
     const gesperrt = pack.locked;
     if (gesperrt) await pack.configure({ locked: false });
     try {
+      if (ORDNER_VON[kat]) {
+        const ordnerId = new Map();
+        for (const e of satz) {
+          const pfad = ORDNER_VON[kat](e).filter(Boolean);
+          const schl = pfad.join("/");
+          if (!ordnerId.has(schl)) ordnerId.set(schl, pfad.length ? await ordnerPfad(pack, pfad, "Item") : null);
+          const f = ordnerId.get(schl);
+          const d = neu.find((x) => x._id === e._id);
+          if (d) d.folder = f;
+          else if (vorhanden.get(e._id) && (vorhanden.get(e._id).folder?.id ?? vorhanden.get(e._id).folder ?? null) !== f) {
+            const a = aenderungen.find((x) => x._id === e._id);
+            if (a) a.folder = f; else aenderungen.push({ _id: e._id, folder: f });
+          }
+        }
+      }
       if (neu.length) await Item.createDocuments(neu, { pack: pack.collection, keepId: true });
       if (aenderungen.length) await Item.updateDocuments(aenderungen, { pack: pack.collection });
     } finally { if (gesperrt) await pack.configure({ locked: true }); }
@@ -159,35 +182,78 @@ export function stabileId(schluessel) {
   return out;
 }
 
-/** Regelkapitel eines Buches als Journale anlegen (vorherige Fassung desselben Buches ersetzen). */
+/**
+ * Ordnerpfad in einem Kompendium sicherstellen (z. B. ["Das Arkanum", "Der Konspekt der Zauberer"]).
+ * Gibt die ID des innersten Ordners zurück.
+ */
+async function ordnerPfad(pack, pfad, typ, flags = {}) {
+  let eltern = null;
+  for (const name of pfad.filter(Boolean)) {
+    const vorhanden = [...(pack.folders ?? [])].find((f) => f.name === name && (f.folder?.id ?? f.folder ?? null) === eltern);
+    if (vorhanden) { eltern = vorhanden.id; continue; }
+    const [neu] = await Folder.createDocuments([{ name, type: typ, folder: eltern, sorting: "m", flags: { [SYSTEM_ID]: flags } }], { pack: pack.collection });
+    eltern = neu.id;
+  }
+  return eltern;
+}
+
+/**
+ * Regelkapitel eines Buches als Journale anlegen (vorherige Fassung desselben Buches ersetzen).
+ * Ordner: Buch › Buchteil. Ein Journal je Kapitel; Abschnitte mit mindestens drei benannten
+ * Einträgen (Götter, Magiergilden, Verletzungen …) werden ein eigenes Journal mit einer Seite je
+ * Eintrag, auf das der Abschnitt im Kapitel verweist.
+ */
 async function regelnSchreiben(zeilen, buch) {
   const pack = game.packs.get(`world.${REGEL_PACK}`);
   if (!pack || !REGELBEREICHE[buch]) return { kategorie: "regeln", angelegt: 0, geschrieben: 0, behalten: [], nichtZugeordnet: [], ohne: [] };
   const kapitel = regelnAusBuch(zeilen, REGELBEREICHE[buch]);
-  const alt = (await pack.getDocuments()).filter((j) => j.getFlag(SYSTEM_ID, "buch") === buch).map((j) => j.id);
-  const neu = kapitel.map((k, nr) => ({
-    _id: stabileId(`${buch}|${k.titel}`),
-    name: k.titel,
-    sort: nr * 100,
-    flags: { [SYSTEM_ID]: { buch, seite: k.seite } },
-    pages: k.seiten.map((s, i) => ({
-      _id: stabileId(`${buch}|${k.titel}|${s.titel}|${i}`),
-      name: s.titel,
-      type: "text",
-      sort: i * 100,
-      title: { show: true, level: Math.min(3, s.ebene) },
-      text: { format: 1, content: alsHtml(s.absaetze, `${buch}, S. ${s.seite}`) },
-      flags: { [SYSTEM_ID]: { seite: s.seite } },
-    })),
-  }));
   const gesperrt = pack.locked;
   if (gesperrt) await pack.configure({ locked: false });
+  let journale = 0, seitenZahl = 0;
   try {
+    const alt = (await pack.getDocuments()).filter((j) => j.getFlag(SYSTEM_ID, "buch") === buch).map((j) => j.id);
     if (alt.length) await JournalEntry.deleteDocuments(alt, { pack: pack.collection });
+    const altOrdner = [...(pack.folders ?? [])].filter((f) => f.getFlag?.(SYSTEM_ID, "buch") === buch || f.flags?.[SYSTEM_ID]?.buch === buch).map((f) => f.id);
+    if (altOrdner.length) await Folder.deleteDocuments(altOrdner, { pack: pack.collection });
+    const seiteDaten = (buchKap, s, i, level = Math.min(3, s.ebene)) => ({
+      _id: stabileId(`${buch}|${buchKap}|${s.titel}|${i}`), name: s.titel, type: "text", sort: i * 100,
+      title: { show: true, level },
+      text: { format: 1, content: alsHtml(s.absaetze, `${buch}, S. ${s.seite}`) },
+      flags: { [SYSTEM_ID]: { seite: s.seite, ebene: s.ebene } },
+    });
+    const neu = [];
+    let nr = 0;
+    for (const k of kapitel) {
+      const ordner = await ordnerPfad(pack, [buch, k.teil], "JournalEntry", { buch });
+      const kapId = stabileId(`${buch}|${k.titel}`);
+      const seiten = [];
+      // Einträge unter ihrem Abschnitt gruppieren
+      for (let i = 0; i < k.seiten.length; i++) {
+        const s = k.seiten[i];
+        if (s.ebene === 4) continue;
+        const kinder = [];
+        for (let j = i + 1; j < k.seiten.length && k.seiten[j].ebene === 4; j++) kinder.push(k.seiten[j]);
+        if (kinder.length >= 3) {
+          const listeId = stabileId(`${buch}|${k.titel}|Liste|${s.titel}`);
+          const listenSeiten = kinder.map((c, n) => seiteDaten(s.titel, c, n, 1));
+          neu.push({ _id: listeId, name: s.titel, folder: ordner, sort: (nr++) * 100, flags: { [SYSTEM_ID]: { buch, seite: s.seite } }, pages: listenSeiten });
+          // im Kapitel: Abschnitt mit Verweisen auf die Einzelseiten
+          const verweise = `<ul class="midgard-verweise">${listenSeiten.map((p) => `<li>@UUID[Compendium.${pack.collection}.JournalEntry.${listeId}.JournalEntryPage.${p._id}]{${p.name}}</li>`).join("")}</ul>`;
+          const d = seiteDaten(k.titel, s, seiten.length);
+          d.text.content = d.text.content.replace(/(<p class="midgard-fundstelle">)/, `${verweise}$1`);
+          seiten.push(d);
+        } else {
+          seiten.push(seiteDaten(k.titel, s, seiten.length));
+          for (const c of kinder) seiten.push(seiteDaten(k.titel, c, seiten.length));
+        }
+      }
+      neu.push({ _id: kapId, name: k.titel, folder: ordner, sort: (nr++) * 100, flags: { [SYSTEM_ID]: { buch, seite: k.seite } }, pages: seiten });
+    }
     if (neu.length) await JournalEntry.createDocuments(neu, { pack: pack.collection, keepId: true });
+    journale = neu.length;
+    seitenZahl = neu.reduce((n, j) => n + j.pages.length, 0);
   } finally { if (gesperrt) await pack.configure({ locked: true }); }
-  const seiten = neu.reduce((n, j) => n + j.pages.length, 0);
-  return { kategorie: "regeln", angelegt: seiten, geschrieben: seiten, behalten: [], nichtZugeordnet: [], ohne: [], kapitel: neu.length };
+  return { kategorie: "regeln", angelegt: seitenZahl, geschrieben: seitenZahl, behalten: [], nichtZugeordnet: [], ohne: [], kapitel: journale };
 }
 
 function berichtZeigen(b) {

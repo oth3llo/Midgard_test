@@ -18,6 +18,10 @@ export async function textzeilen(doc, von = 1, bis = doc.numPages) {
       schrift: i.fontName, breite: i.width,
     }));
     const mitte = breite / 2;
+    // Grundschrift der Seite: die Schrift mit dem meisten Text
+    const menge = new Map();
+    for (const st of stuecke) menge.set(st.schrift, (menge.get(st.schrift) || 0) + st.text.length);
+    const grundschrift = [...menge].sort((a, b) => b[1] - a[1])[0]?.[0];
     for (const spalte of [0, 1]) {
       const teil = stuecke.filter((s) => s.text.trim() && (spalte === 0 ? s.x < mitte - 5 : s.x >= mitte - 5));
       // Zeilen: gleiche Grundlinie (Toleranz 2 pt)
@@ -28,6 +32,18 @@ export async function textzeilen(doc, von = 1, bis = doc.numPages) {
         if (z) z.teile.push(s); else zeilen.push({ y: s.y, teile: [s] });
       }
       zeilen.sort((a, b) => b.y - a.y);
+      // Initiale (großer Anfangsbuchstabe über mehrere Zeilen): der obersten Zeile rechts daneben voranstellen
+      for (const ini of zeilen.filter((l) => l.teile.length === 1 && l.teile[0].groesse >= 30 && l.teile[0].text.trim().length <= 2)) {
+        const t = ini.teile[0];
+        const daneben = zeilen.filter((l) => l !== ini && l.y >= t.y - 8 && l.y <= t.y + t.groesse * 1.1 && l.teile[0].x > t.x);
+        if (!daneben.length) continue;
+        const oben = daneben.reduce((a, b) => (b.y > a.y ? b : a));
+        oben.teile.sort((a, b) => a.x - b.x);
+        oben.teile[0] = { ...oben.teile[0], text: t.text.trim() + oben.teile[0].text.trimStart() };
+        for (const l of daneben) l.nebenInitiale = true;
+        ini.weg = true;
+      }
+      for (let k = zeilen.length - 1; k >= 0; k--) if (zeilen[k].weg) zeilen.splice(k, 1);
       let vorher = null;
       for (const z of zeilen) {
         z.teile.sort((a, b) => a.x - b.x);
@@ -38,15 +54,50 @@ export async function textzeilen(doc, von = 1, bis = doc.numPages) {
           text += t.text;
           ende = t.x + t.breite;
         }
-        text = text.replace(/\s+/g, " ").trim();
+        text = text.replace(/\s+/g, " ").replace(/^[\uE000-\uF8FF]\s*/, "").trim();
         if (!text) continue;
         const kopf = z.teile.reduce((a, b) => (b.groesse > a.groesse ? b : a));
-        alle.push({ text, x: z.teile[0].x, y: z.y, groesse: kopf.groesse, schrift: kopf.schrift, seite: n, spalte, hoehe, abstand: vorher === null ? null : vorher - z.y });
+        // Tabellenspalten: Stücke, zwischen denen eine deutliche Lücke liegt
+        const spalten = [];
+        let sEnde = null;
+        for (const t of z.teile) {
+          const tt = t.text.replace(/\s+/g, " ");
+          if (sEnde !== null && t.x - sEnde > Math.max(t.groesse * 1.5, 12)) spalten.push({ x: t.x, text: tt.trim() });
+          else if (spalten.length) spalten.at(-1).text = (spalten.at(-1).text + (sEnde !== null && t.x - sEnde > t.groesse * 0.15 ? " " : "") + tt).replace(/\s+/g, " ");
+          else spalten.push({ x: t.x, text: tt.trim() });
+          sEnde = t.x + t.breite;
+        }
+        // Aufzählung (Sonderzeichen aus dem privaten Unicode-Bereich am Zeilenanfang) und fetter Einstieg:
+        // erste zusammenhängende Folge von Stücken in einer anderen Schrift als der Grundschrift
+        const aufzaehlung = /^[\uE000-\uF8FF•▪■◆]/.test(z.teile[0].text.trim());
+        let fett = "", imFett = false, gelesen = 0;
+        for (const t of z.teile) {
+          const tt = t.text.trim();
+          if (!tt || /^[\uE000-\uF8FF•▪■◆]+$/.test(tt)) continue;
+          if (t.schrift !== grundschrift) { fett += (fett ? " " : "") + tt; imFett = true; }
+          else if (imFett || (gelesen += tt.length) > 60) break;
+        }
+        alle.push({ text, x: z.teile[0].x, ende: z.teile.at(-1).x + z.teile.at(-1).breite, y: z.y, aufzaehlung, fett: fett.replace(/[:*\s]+$/, "").replace(/\*/g, "").trim(), groesse: kopf.groesse, schrift: kopf.schrift, seite: n, spalte, hoehe, abstand: vorher === null ? null : vorher - z.y,
+          spalten: spalten.map((x) => ({ ...x, text: x.text.trim() })).filter((x) => x.text), nebenInitiale: !!z.nebenInitiale });
         vorher = z.y;
       }
     }
   }
   ligaturenReparieren(alle);
+  // Einzug je Seite und Spalte: Abstand zum linken Rand des Fließtexts (Kästen sind eingerückt)
+  const rand = new Map();
+  for (const z of alle) {
+    if (z.text.length < 40) continue;
+    const k = `${z.seite}/${z.spalte}`, x = Math.round(z.x);
+    const m = rand.get(k) ?? new Map();
+    m.set(x, (m.get(x) || 0) + 1);
+    rand.set(k, m);
+  }
+  for (const z of alle) {
+    const m = rand.get(`${z.seite}/${z.spalte}`);
+    const basis = m ? [...m].sort((a, b) => b[1] - a[1])[0][0] : z.x;
+    z.einzug = z.nebenInitiale ? 0 : Math.round(z.x - basis);
+  }
   return alle;
 }
 
@@ -67,7 +118,13 @@ export function ligaturenReparieren(zeilen) {
   }
   // kurze Bruchstücke wie „s“, „e“, „en“ sind Wortenden, außer echten Kurzwörtern
   const KURZ = new Set(["in", "an", "am", "um", "zu", "so", "da", "ob", "es", "er", "im", "ab", "je", "ja", "wo", "du", "wir", "ihr", "sie"]);
+  const reparieren = (text) => text.replace(LIG, (ganz, lig, rest) => {
+      const wort = rest.replace(/-$/, "");
+      const eigenes = wort.length <= 2 ? KURZ.has(wort) : woerter.has(wort);
+      return eigenes ? ganz : lig + rest;
+    });
   for (const z of zeilen) {
+    for (const sp of z.spalten ?? []) sp.text = reparieren(sp.text);
     z.text = z.text.replace(LIG, (ganz, lig, rest) => {
       const wort = rest.replace(/-$/, "");
       const eigenes = wort.length <= 2 ? KURZ.has(wort) : woerter.has(wort);
@@ -76,20 +133,90 @@ export function ligaturenReparieren(zeilen) {
   }
 }
 
-/** Fügt Zeilen zu Absätzen zusammen und löst Silbentrennung am Zeilenende auf. */
+const verbinden = (akt, text) => {
+  if (!akt) return text;
+  if (/[a-zäöüß]-$/.test(akt) && /^[a-zäöüß]/.test(text) && !/^(und|oder|bzw\.|sowie)\b/.test(text)) return akt.slice(0, -1) + text;
+  return `${akt} ${text}`;
+};
+
+/**
+ * Fügt Zeilen zu Blöcken zusammen: Absätze (Text), Tabellen ({tabelle: [[Zelle, …], …]}) und
+ * eingerückte Kästen ({kasten: [Zeile, …]}). Silbentrennung am Zeilenende wird aufgelöst.
+ */
 export function absaetze(zeilen, zeilenabstand) {
   const out = [];
   let akt = "";
-  for (const z of zeilen) {
+  const absatzEnde = () => { if (akt) out.push(akt); akt = ""; };
+  for (let i = 0; i < zeilen.length; i++) {
+    const z = zeilen[i];
+    // Tabelle: mindestens zwei aufeinanderfolgende Zeilen mit zwei oder mehr Spalten
+    if ((z.spalten?.length ?? 0) >= 2 && (zeilen[i + 1]?.spalten?.length ?? 0) >= 2) {
+      absatzEnde();
+      const tab = [];
+      let j = i;
+      for (; j < zeilen.length; j++) {
+        const r = zeilen[j];
+        const n = r.spalten?.length ?? 0;
+        if (n >= 2) { tab.push(r); continue; }
+        // einspaltige Zeile innerhalb der Tabelle: Fortsetzung einer Zelle oder Zwischenüberschrift
+        const naechste = zeilen[j + 1];
+        if (n === 1 && tab.length && (naechste?.spalten?.length ?? 0) >= 2 && (r.abstand ?? 99) < zeilenabstand * 1.6) { tab.push(r); continue; }
+        if (n === 1 && tab.length && (r.abstand ?? 99) < zeilenabstand * 1.3 && r.x > tab[0].x + 20) { tab.push(r); continue; }
+        break;
+      }
+      out.push({ tabelle: tabelleBauen(tab) });
+      i = j - 1;
+      continue;
+    }
+    // eingerückter Kasten: Zeilen einzeln behalten, Stufen wie „sehr leicht (+4)“ als eigene Zeile
+    if ((z.einzug ?? 0) >= 8) {
+      absatzEnde();
+      const kasten = [];
+      let j = i;
+      let k = i;
+      while (k < zeilen.length && (zeilen[k].einzug ?? 0) >= 8 && (zeilen[k].spalten?.length ?? 1) < 2) k++;
+      const rechts = Math.max(...zeilen.slice(i, k).map((x) => x.ende ?? 0));
+      for (; j < k; j++) {
+        const t = zeilen[j].text, letzte = kasten.at(-1), vorige = zeilen[j - 1];
+        // neuer Eintrag nach einer Stufe „(+4)“ oder wenn die vorige Zeile nicht bis zum rechten Rand reichte
+        const kurz = vorige && (vorige.ende ?? rechts) < rechts - 15;
+        const neueZeile = !letzte || /\([+–-]\d+\)$/.test(t) || /\([+–-]\d+\)$/.test(letzte) || (kurz && /^[A-ZÄÖÜ„(]/.test(t));
+        if (neueZeile) kasten.push(t); else kasten[kasten.length - 1] = verbinden(letzte, t);
+      }
+      if (kasten.length > 1) { out.push({ kasten }); i = j - 1; continue; }
+      // einzelne eingerückte Zeile: normaler Text
+    }
     // Großer Abstand beginnt einen Absatz, außer der Satz läuft erkennbar weiter (Kasten oder
     // Beispiel mitten in der Spalte): voriger Text ohne Satzende und Zeile beginnt klein.
     const satzLaeuft = !/[.!?:“")]$/.test(akt) && /^[a-zäöüß]/.test(z.text);
-    const neuerAbsatz = akt && z.abstand !== null && (z.abstand > zeilenabstand * 1.45 || z.abstand < 0) && !satzLaeuft;
-    if (neuerAbsatz) { out.push(akt); akt = ""; }
-    if (!akt) { akt = z.text; continue; }
-    if (/[a-zäöüß]-$/.test(akt) && /^[a-zäöüß]/.test(z.text) && !/^(und|oder|bzw\.|sowie)\b/.test(z.text)) akt = akt.slice(0, -1) + z.text;
-    else akt += " " + z.text;
+    if (akt && z.abstand !== null && (z.abstand > zeilenabstand * 1.45 || z.abstand < 0) && !satzLaeuft) absatzEnde();
+    akt = verbinden(akt, z.text);
   }
-  if (akt) out.push(akt);
-  return out;
+  absatzEnde();
+  return out.filter((b) => (typeof b === "string" ? b.length > 1 : true));
+}
+
+/** Spalten über alle Zeilen ausrichten und Zellen zuordnen. */
+function tabelleBauen(zeilen) {
+  const xs = [];
+  for (const z of zeilen) for (const s of z.spalten ?? []) {
+    const nah = xs.find((x) => Math.abs(x.x - s.x) <= 8);
+    if (nah) { nah.n++; } else xs.push({ x: s.x, n: 1 });
+  }
+  const spalten = xs.filter((x) => x.n >= 2 || zeilen.length < 3).map((x) => x.x).sort((a, b) => a - b);
+  const index = (x) => { let best = 0; for (let k = 0; k < spalten.length; k++) if (Math.abs(spalten[k] - x) < Math.abs(spalten[best] - x)) best = k; return best; };
+  const reihen = [];
+  for (const z of zeilen) {
+    const zellen = Array(spalten.length).fill("");
+    for (const s of z.spalten ?? [{ x: z.x, text: z.text }]) { const k = index(s.x); zellen[k] = zellen[k] ? verbinden(zellen[k], s.text) : s.text; }
+    const belegt = zellen.filter(Boolean).length;
+    // einspaltige Fortsetzungszeile an die vorige Zelle derselben Spalte anhängen
+    if (belegt === 1 && reihen.length && !zellen[0] && (z.abstand ?? 99) < 16) {
+      const k = zellen.findIndex(Boolean);
+      reihen.at(-1)[k] = verbinden(reihen.at(-1)[k], zellen[k]);
+      continue;
+    }
+    reihen.push(zellen);
+  }
+  return reihen;
 }

@@ -28,7 +28,7 @@ export function fertigkeitenAusKodex(zeilen, namen) {
   let waffe = null;
   const waffeAbschliessen = () => {
     if (!waffe) return;
-    waffe.absaetze = absaetze(waffe.text, abstand).filter((a) => a.length > 1);
+    waffe.absaetze = absaetze(waffe.text, abstand);
     delete waffe.text;
     if (waffe.absaetze.length) akt.waffen.push(waffe);
     waffe = null;
@@ -36,7 +36,7 @@ export function fertigkeitenAusKodex(zeilen, namen) {
   const abschliessen = () => {
     if (!akt) return;
     waffeAbschliessen();
-    akt.absaetze = absaetze(akt.text, abstand).filter((a) => a.length > 1);
+    akt.absaetze = absaetze(akt.text, abstand);
     delete akt.text;
     if (akt.absaetze.length || akt.waffen.length) ergebnis.push(akt);
     akt = null;
@@ -101,7 +101,7 @@ export function typenUndRassenAusKodex(zeilen) {
       if (!m) { akt = null; return; }
       akt.name = m[1]; akt.kuerzel = [m[2], m[4]].filter(Boolean);
     }
-    akt.absaetze = absaetze(akt.text, abstand).filter((a) => a.length > 1);
+    akt.absaetze = absaetze(akt.text, abstand);
     delete akt.text;
     (akt.rasse ? rassen : typen).push(akt);
     akt = null;
@@ -142,7 +142,7 @@ export function ruestungenAusKodex(zeilen) {
   let akt = null, aktiv = false;
   const abschliessen = () => {
     if (!akt) return;
-    akt.absaetze = absaetze(akt.text, abstand).filter((a) => a.length > 1);
+    akt.absaetze = absaetze(akt.text, abstand);
     delete akt.text;
     ergebnis.push(akt);
     akt = null;

@@ -570,3 +570,12 @@
 .midgard-bericht details { margin: 4px 0; }
 .midgard-bericht summary { cursor: pointer; }
 .midgard-bericht .hinweis { font-size: .9em; opacity: .8; }
+
+/* ---------------------------------------------------------------- Importierte Tabellen und Kästen (Journale, Bögen, Browser) */
+table.midgard-tabelle { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: .95em; }
+table.midgard-tabelle td, table.midgard-tabelle th { border: 1px solid rgba(127, 127, 127, .45); padding: 2px 6px; vertical-align: top; text-align: left; }
+table.midgard-tabelle tr:nth-child(even) td { background: rgba(127, 127, 127, .08); }
+table.midgard-tabelle td.kurz { white-space: nowrap; }
+table.midgard-tabelle th { background: rgba(127, 127, 127, .18); font-weight: bold; }
+div.midgard-kasten { border-left: 4px solid rgba(127, 127, 127, .55); background: rgba(127, 127, 127, .08); padding: 4px 10px; margin: 6px 0 10px; }
+div.midgard-kasten p { margin: 2px 0; }

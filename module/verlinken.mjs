@@ -35,7 +35,9 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const wort = (muster) => `(?<![\\p{L}\\p{N}])(?:${muster})(?![\\p{L}\\p{N}])`;
 
 /** Links in einem Text entfernen (nur die Beschriftung bleibt). */
-export const entlinken = (html) => String(html ?? "").replace(LINK, "$2");
+// Verweislisten auf Einzelseiten (<ul class="midgard-verweise">) bleiben erhalten
+const SCHUTZ = /(<ul class="midgard-verweise">[\s\S]*?<\/ul>)/;
+export const entlinken = (html) => String(html ?? "").split(SCHUTZ).map((t) => (t.startsWith('<ul class="midgard-verweise">') ? t : t.replace(LINK, "$2"))).join("");
 
 /** Begriffsliste: [{muster (RegExp-Quelle), uuid, laenge}] */
 async function begriffe() {
@@ -47,7 +49,8 @@ async function begriffe() {
     for (const j of await regeln.getDocuments()) {
       for (const p of j.pages) {
         const titel = p.name.trim();
-        if (titel.length < 5 || ALLGEMEIN.has(titel)) continue;
+        // Einzeleinträge (Länder, Gottheiten, Gilden …) sind keine Linkziele für allgemeine Wörter wie „Alba“
+        if (titel.length < 5 || ALLGEMEIN.has(titel) || (p.flags?.[SYSTEM_ID]?.ebene ?? 0) >= 4) continue;
         const formen = new Set([titel, titel.replace(ARTIKEL, ""), ...(ALIASE[titel] ?? [])]);
         for (const f of formen) {
           if (f.startsWith("re:")) { add(wort(f.slice(3)), p.uuid, 12); continue; }
@@ -85,6 +88,11 @@ async function begriffe() {
 /** Verlinkt einen HTML-Text. Text innerhalb von Tags und bestehende Links bleiben unberührt. */
 export function verlinkeText(html, liste, selbst) {
   const benutzt = new Set([selbst]);
+  const geschuetzt = String(html).split(SCHUTZ);
+  if (geschuetzt.length > 1) {
+    // Verweislisten nicht anfassen, den übrigen Text normal verlinken
+    return geschuetzt.map((t) => (t.startsWith('<ul class="midgard-verweise">') ? t : verlinkeText(t, liste, selbst))).join("");
+  }
   const teile = String(html).split(/(<[^>]+>)/);
   for (const b of liste) {
     if (benutzt.has(b.uuid)) continue;

@@ -26,7 +26,7 @@ export function zauberAusArkanum(zeilen) {
   const abstand = median(fliess.map((z) => z.abstand).filter((a) => a > 5 && a < 20)) || 12;
   const abschliessen = () => {
     if (!akt) return;
-    akt.absaetze = absaetze(akt.text, abstand).filter((a) => a.length > 1);
+    akt.absaetze = absaetze(akt.text, abstand);
     delete akt.text;
     delete akt.datenX;
     ergebnis.push(akt);
@@ -95,7 +95,7 @@ export function zaubermittelAusArkanum(zeilen, namen) {
   let aktiv = false, akt = null;
   const abschliessen = () => {
     if (!akt) return;
-    akt.absaetze = absaetze(akt.text, abstand).filter((a) => a.length > 1);
+    akt.absaetze = absaetze(akt.text, abstand);
     delete akt.text;
     if (akt.absaetze.length) ergebnis.push(akt);
     akt = null;
