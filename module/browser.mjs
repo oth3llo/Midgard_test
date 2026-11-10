@@ -185,7 +185,13 @@ export class KompendiumBrowser extends ApplicationV2 {
       el("h3", {}, el("img", { src: e.img, alt: "" }), e.name),
       e.system.kurzwirkung ? el("p", { class: "mb-kurz", text: e.system.kurzwirkung }) : null,
       el("dl", {}, zeilen.map(([k, v]) => [el("dt", { text: FELDNAMEN[k] ?? k }), el("dd", { text: detailText(k, v) })])),
-      e.system.beschreibung ? (() => { const d = el("div", { class: "mb-beschreibung" }); d.innerHTML = e.system.beschreibung; return d; })() : null,
+      e.system.beschreibung ? (() => {
+        // Verweise (@UUID) als anklickbare Links darstellen
+        const d = el("div", { class: "mb-beschreibung" });
+        const TE = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
+        Promise.resolve(TE?.enrichHTML ? TE.enrichHTML(e.system.beschreibung) : e.system.beschreibung).then((h) => { d.innerHTML = h; });
+        return d;
+      })() : null,
       e.uuid ? el("button", { type: "button", text: "Öffnen", onclick: () => this.#oeffnen(e) }) : null,
     ].filter(Boolean));
   }

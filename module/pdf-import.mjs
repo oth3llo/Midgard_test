@@ -9,6 +9,8 @@ import { istArkanum, zauberAusArkanum, zaubermittelAusArkanum } from "./pdf/arka
 import { istKodex, fertigkeitenAusKodex, typenUndRassenAusKodex, ruestungenAusKodex } from "./pdf/kodex.mjs";
 import KOMPENDIUM from "../daten/kompendium.js";
 import { zuordnen, alsHtml } from "./pdf/zuordnen.mjs";
+import { regelnAusBuch, REGELBEREICHE } from "./pdf/regeln.mjs";
+import { allesVerlinken, REGEL_PACK } from "./verlinken.mjs";
 import { esc } from "./wuerfe.mjs";
 
 const PFAD = `systems/${SYSTEM_ID}/vendor/pdfjs`;
@@ -49,6 +51,8 @@ export async function pdfImportieren(daten, { dateiname = "PDF", ueberschreiben 
       ui.notifications.warn(`${dateiname}: kein unterstütztes Regelwerk erkannt (unterstützt: Der Kodex, Das Arkanum).`);
       return null;
     }
+    bericht.teile.push(await regelnSchreiben(zeilen, bericht.buch));
+    bericht.links = await allesVerlinken();
     bericht.dateiname = dateiname;
     Hooks.callAll("midgardKompendienGeaendert");
     if (!stumm) berichtZeigen(bericht);
@@ -145,12 +149,54 @@ async function schreiben(kat, gelesen, { aliase, gruppeVon, nameVon, buch, ueber
   };
 }
 
+/** Feste ID aus einem Schlüssel (16 Zeichen, base62), damit Verweise bei erneutem Import gültig bleiben. */
+export function stabileId(schluessel) {
+  let h = 0xcbf29ce484222325n;
+  for (const c of new TextEncoder().encode(schluessel)) h = BigInt.asUintN(64, (h ^ BigInt(c)) * 0x100000001b3n);
+  const Z = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let out = "", x = h;
+  for (let i = 0; i < 16; i++) { out += Z[Number(x % 62n)]; x = x / 62n || BigInt.asUintN(64, h * BigInt(i + 7)); }
+  return out;
+}
+
+/** Regelkapitel eines Buches als Journale anlegen (vorherige Fassung desselben Buches ersetzen). */
+async function regelnSchreiben(zeilen, buch) {
+  const pack = game.packs.get(`world.${REGEL_PACK}`);
+  if (!pack || !REGELBEREICHE[buch]) return { kategorie: "regeln", angelegt: 0, geschrieben: 0, behalten: [], nichtZugeordnet: [], ohne: [] };
+  const kapitel = regelnAusBuch(zeilen, REGELBEREICHE[buch]);
+  const alt = (await pack.getDocuments()).filter((j) => j.getFlag(SYSTEM_ID, "buch") === buch).map((j) => j.id);
+  const neu = kapitel.map((k, nr) => ({
+    _id: stabileId(`${buch}|${k.titel}`),
+    name: k.titel,
+    sort: nr * 100,
+    flags: { [SYSTEM_ID]: { buch, seite: k.seite } },
+    pages: k.seiten.map((s, i) => ({
+      _id: stabileId(`${buch}|${k.titel}|${s.titel}|${i}`),
+      name: s.titel,
+      type: "text",
+      sort: i * 100,
+      title: { show: true, level: Math.min(3, s.ebene) },
+      text: { format: 1, content: alsHtml(s.absaetze, `${buch}, S. ${s.seite}`) },
+      flags: { [SYSTEM_ID]: { seite: s.seite } },
+    })),
+  }));
+  const gesperrt = pack.locked;
+  if (gesperrt) await pack.configure({ locked: false });
+  try {
+    if (alt.length) await JournalEntry.deleteDocuments(alt, { pack: pack.collection });
+    if (neu.length) await JournalEntry.createDocuments(neu, { pack: pack.collection, keepId: true });
+  } finally { if (gesperrt) await pack.configure({ locked: true }); }
+  const seiten = neu.reduce((n, j) => n + j.pages.length, 0);
+  return { kategorie: "regeln", angelegt: seiten, geschrieben: seiten, behalten: [], nichtZugeordnet: [], ohne: [], kapitel: neu.length };
+}
+
 function berichtZeigen(b) {
   const D = foundry.applications?.api?.DialogV2;
   const liste = (titel, l) => (l.length ? `<details><summary>${esc(titel)} (${l.length})</summary><p>${l.map(esc).join(", ")}</p></details>` : "");
   const inhalt = `<div class="midgard-bericht">
     <p>Aus <strong>${esc(b.dateiname)}</strong> (${esc(b.buch)}) übernommen:</p>
-    <ul>${b.teile.map((t) => `<li>${esc(t.kategorie)}: ${t.angelegt} neu angelegt, ${t.geschrieben} mit Beschreibung</li>`).join("")}</ul>
+    <ul>${b.teile.map((t) => t.kategorie === "regeln" ? `<li>Regeln: ${t.kapitel ?? 0} Kapitel mit ${t.angelegt} Seiten</li>` : `<li>${esc(t.kategorie)}: ${t.angelegt} neu angelegt, ${t.geschrieben} mit Beschreibung</li>`).join("")}</ul>
+    <p>${b.links ?? 0} Texte mit Verweisen auf Regeln, Zauber, Fertigkeiten und Gegenstände versehen.</p>
     ${b.teile.map((t) => liste(`${t.kategorie}: vorhandener Text behalten`, t.behalten) + liste(`${t.kategorie}: in der PDF gefunden, aber nicht zugeordnet`, t.nichtZugeordnet) + liste(`${t.kategorie}: ohne Beschreibung aus diesem Buch`, t.ohne)).join("")}
     <p class="hinweis">Die Texte stehen nur in den Kompendien dieser Welt. Tabellen aus dem Buch erscheinen als Fließtext. Bereits auf Charakterbögen liegende Gegenstände behalten ihren alten Stand.</p>
   </div>`;

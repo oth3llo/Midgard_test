@@ -42,6 +42,16 @@ async function packHolen(kat, ziel) {
   return pack;
 }
 
+/** Journal-Kompendium für die Regeltexte (gefüllt durch den PDF-Import). */
+async function regelPackHolen() {
+  let pack = game.packs.get("world.midgard-regeln");
+  if (!pack) pack = await Sammlung().createCompendium({ name: "midgard-regeln", label: "Midgard: Regeln", type: "JournalEntry" });
+  const ziel = await ordner();
+  if (ziel && pack.folder?.id !== ziel.id && typeof pack.setFolder === "function") await pack.setFolder(ziel).catch(() => {});
+  if (!pack.locked) await pack.configure({ locked: true });
+  return pack;
+}
+
 /** Gleicht ein Kompendium mit den Solldaten ab. Gibt die Zahl der Änderungen zurück. */
 async function abgleichen(pack, soll) {
   const vorhanden = new Map((await pack.getDocuments()).map((d) => [d.id, d]));
@@ -76,11 +86,12 @@ async function abgleichen(pack, soll) {
 export async function kompendienAufbauen(erzwingen = false) {
   const gm = game.users.activeGM ?? game.users.find((u) => u.isGM && u.active);
   if (!game.user.isGM || (gm && gm.id !== game.user.id)) return false;
-  const fehlt = Object.keys(KATEGORIEN).some((k) => !game.packs.get(packId(k)));
+  const fehlt = Object.keys(KATEGORIEN).some((k) => !game.packs.get(packId(k))) || !game.packs.get("world.midgard-regeln");
   const stand = game.settings.get(SYSTEM_ID, "kompendiumStand");
   const modell = game.settings.get(SYSTEM_ID, "kompendiumModell");
   if (!erzwingen && !fehlt && stand === KOMPENDIUM.stand && modell === 2) return false;
 
+  await regelPackHolen();
   if (fehlt) ui.notifications.info("Midgard: Kompendien werden angelegt. Gefüllt werden sie über „Regelwerk-PDF importieren“ im Kompendium-Reiter.");
   const ziel = await ordner();
   for (const [kat, soll] of Object.entries(KOMPENDIUM.kategorien)) {
