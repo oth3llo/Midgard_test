@@ -14,6 +14,7 @@ import { GegenstandBogen } from "./module/gegenstand-bogen.mjs";
 import { AbenteurerDaten } from "./module/akteur.mjs";
 import { AbenteurerBogen } from "./module/abenteurer-bogen.mjs";
 import { pdfImportStarten, pdfImportieren } from "./module/pdf-import.mjs";
+import { updatePruefen } from "./module/update.mjs";
 import { einstellungenRegistrieren as wurfEinstellungen } from "./module/wuerfe.mjs";
 import { einstellungenRegistrieren as kampfEinstellungen, socketEinrichten, karteEinrichten, angreifen } from "./module/kampf.mjs";
 
@@ -35,12 +36,13 @@ Hooks.once("init", () => {
   einstellungenRegistrieren();
   wurfEinstellungen();
   kampfEinstellungen();
-  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, angreifen, pdfImport: pdfImportStarten, pdfImportieren, stand: KOMPENDIUM_STAND };
+  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, angreifen, pdfImport: pdfImportStarten, pdfImportieren, updatePruefen, stand: KOMPENDIUM_STAND };
   console.log(`${SYSTEM_ID} | Midgard-CMT ${game.system.version} geladen`);
 });
 
 Hooks.once("ready", async () => {
   socketEinrichten();
+  updatePruefen();
   try {
     await kompendienAufbauen();
   } catch (fehler) {
