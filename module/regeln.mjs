@@ -7,6 +7,10 @@ export const EIGENSCHAFTEN = ["St", "Gs", "Gw", "Ko", "In", "Zt", "Au", "pA", "W
 export const EIGENSCHAFT_NAMEN = { St: "Stärke", Gs: "Geschicklichkeit", Gw: "Gewandtheit", Ko: "Konstitution", In: "Intelligenz", Zt: "Zaubertalent", Au: "Aussehen", pA: "persönliche Ausstrahlung", Wk: "Willenskraft" };
 export const ZAUBERGRUPPEN = ["Beherrschen", "Bewegen", "Erkennen", "Erschaffen", "Formen", "Verändern", "Zerstören", "Wundertaten", "Dweomer", "Zauberlieder"];
 export const SINNE = ["Sehen", "Nachtsicht", "Hören", "Riechen", "Sechster Sinn"];
+/** Metallrüstungen (Kodex S. 73): Mindeststärke, Verlust an Gw und B, Verlust des Angriffsbonus. */
+export const METALLRUESTUNG = { KR: { st: 31, gw: 0, b: 4, anb: 0 }, PR: { st: 61, gw: 25, b: 8, anb: 0 }, VR: { st: 61, gw: 40, b: 12, anb: 1 } };
+/** Positive Boni sinken um n, negative bleiben (Kodex S. 73: „verringert sich um“). */
+const mindern = (wert, n) => (n === "alle" ? Math.min(wert, 0) : Math.max(Math.min(wert, 0), wert - n));
 
 /** Bonus einer Eigenschaft (Kodex S. 30). */
 export const bonus = (w) => (w === null || w === undefined ? null : w <= 5 ? -2 : w <= 20 ? -1 : w <= 80 ? 0 : w <= 95 ? 1 : 2);
@@ -51,24 +55,34 @@ export function ableiten(s, items) {
   // Rüstung: die getragene mit dem höchsten Rüstungsschutz zählt
   const ruestung = items.filter((i) => i.type === "ruestung" && i.system.getragen).sort((a, b) => b.system.rs - a.system.rs)[0] ?? null;
   const verlust = ruestung ? ruestung.system.abwehrbonusVerlust : "0";
-  let abB = r.boni.AbB ?? 0;
-  if (verlust === "alle") abB = Math.min(abB, 0);
-  else if (Number(verlust) > 0) abB = Math.max(Math.min(abB, 0), abB - Number(verlust));
-  r.ruestung = ruestung ? { name: ruestung.name, kuerzel: ruestung.system.kuerzel, rs: ruestung.system.rs, verlust } : { name: "keine", kuerzel: "–", rs: 0, verlust: "0" };
+  const metall = ruestung ? METALLRUESTUNG[ruestung.system.kuerzel] : null;
+  const abB = mindern(r.boni.AbB ?? 0, verlust === "alle" ? "alle" : Number(verlust) || 0);
+  r.ruestung = ruestung
+    ? { id: ruestung.id, name: ruestung.name, kuerzel: ruestung.system.kuerzel, rs: ruestung.system.rs, verlust, metall }
+    : { id: null, name: "keine", kuerzel: "OR", rs: 0, verlust: "0", metall: null };
   r.abwehrBonusMitRuestung = abB;
+  r.angriffsBonus = metall?.anb ? mindern(r.boni.AnB ?? 0, metall.anb) : (r.boni.AnB ?? 0);
+  r.bEffektiv = s.b === null || s.b === undefined ? null : Math.max(0, s.b - (metall?.b ?? 0));
+  r.gwEffektiv = e.Gw === null || e.Gw === undefined ? null : Math.max(1, e.Gw - (metall?.gw ?? 0));
+  // Abzüge auf EW:Angriff und WW:Abwehr
+  r.kampfAbzuege = [];
+  if (metall && (e.St ?? 0) < metall.st) r.kampfAbzuege.push({ wert: -2, grund: `zu schwach für ${r.ruestung.kuerzel} (St ${metall.st})`, nurNah: false });
+  if (r.ruestung.kuerzel === "VR" && !items.some((i) => i.type === "fertigkeit" && i.name === "Kampf in Vollrüstung")) r.kampfAbzuege.push({ wert: -2, grund: "Vollrüstung ohne Kampf in Vollrüstung", nurNah: true });
+  if ((s.ap?.wert ?? 1) <= 0 && (s.ap?.max ?? 0) > 0) r.kampfAbzuege.push({ wert: -4, grund: "erschöpft (0 AP)", nurNah: false });
+  r.erschoepft = (s.ap?.wert ?? 1) <= 0 && (s.ap?.max ?? 0) > 0;
   r.abwehr = r.gradAbwehr + abB;
 
   // Verteidigungswaffe: höchster Wert unter den Verteidigungs-Waffenfertigkeiten, wenn eine passende Waffe bereitliegt
   const vertFert = items.filter((i) => i.type === "waffenfertigkeit" && i.system.verteidigung);
   const vertWaffen = items.filter((i) => i.type === "waffe" && i.system.art === "verteidigung" && i.system.ausgeruestet);
   const passend = vertFert.filter((f) => vertWaffen.some((w) => w.system.fertigkeit === f.name));
-  r.verteidigungswaffe = passend.length ? Math.max(...passend.map((f) => f.system.wert)) : null;
+  r.verteidigungswaffe = passend.length && !r.erschoepft ? Math.max(...passend.map((f) => f.system.wert)) : null;
 
   r.resistenzGeist = r.gradAbwehr + (r.boni.ResG ?? 0);
   r.resistenzKoerper = r.gradAbwehr + (r.boni.ResK ?? 0);
   r.kannZaubern = kannZaubern;
   r.zaubern = kannZaubern ? r.gradZaubern + (r.boni.ZauB ?? 0) : null;
-  r.raufen = e.St === null || e.Gw === null ? null : fl((e.St + e.Gw) / 20) + (r.boni.AnB ?? 0) + (s.rasse === "Zwerg" ? 1 : 0);
+  r.raufen = e.St === null || e.Gw === null ? null : fl((e.St + e.Gw) / 20) + r.angriffsBonus + (s.rasse === "Zwerg" ? 1 : 0);
 
   // Waffen: Erfolgswert aus der passenden Waffenfertigkeit + AnB (+2 Spezialwaffe), Schaden + SchB
   const fertNachName = new Map(items.filter((i) => i.type === "waffenfertigkeit").map((i) => [i.name, i]));
@@ -76,11 +90,12 @@ export function ableiten(s, items) {
     const fert = fertNachName.get(w.system.fertigkeit);
     const vert = w.system.art === "verteidigung";
     const spezial = (s.spezialwaffen ?? []).some((x) => x.fertigkeit === w.system.fertigkeit && x.name === (w.system.grundname || w.name));
-    const ew = fert ? fert.system.wert + (vert ? 0 : (r.boni.AnB ?? 0) + (spezial ? 2 : 0)) : null;
+    const ew = fert ? fert.system.wert + (vert ? 0 : r.angriffsBonus + (spezial ? 2 : 0)) : null;
     const mangel = Object.entries(w.system.mindest ?? {}).filter(([k, v]) => v && (e[k] ?? 0) < v).map(([k, v]) => `${k} ${v}`);
     const schB = r.boni.SchB ?? 0;
-    const schaden = w.system.schaden ? (vert ? w.system.schaden : `${w.system.schaden}${schB ? vz(schB) : ""}`) : "";
-    return { id: w.id, name: w.name, img: w.img, ew, vert, schaden, art: w.system.art, ausgeruestet: w.system.ausgeruestet, ohneFertigkeit: !fert, mangel, spezialwaffe: spezial };
+    // Schadensbonus nur im Nahkampf und Handgemenge (Kodex S. 69)
+    const schaden = w.system.schaden ? (vert || w.system.art === "fernkampf" ? w.system.schaden : `${w.system.schaden}${schB ? vz(schB) : ""}`) : "";
+    return { id: w.id, name: w.name, img: w.img, ew, vert, schaden, formel: schadensFormel(w.system.schaden, vert || w.system.art === "fernkampf" ? 0 : schB), grundname: w.system.grundname || w.name, fertigkeit: w.system.fertigkeit, art: w.system.art, ausgeruestet: w.system.ausgeruestet, ohneFertigkeit: !fert, mangel, spezialwaffe: spezial };
   });
 
   // Fertigkeiten: Erfolgswert = Fertigkeitswert + Bonus der Leiteigenschaft
@@ -102,4 +117,11 @@ export function ableiten(s, items) {
   // Last
   r.gewicht = items.reduce((summe, i) => summe + (Number(i.system.gewicht) || 0) * (i.type === "gegenstand" ? i.system.anzahl ?? 1 : 1), 0);
   return r;
+}
+
+/** Schadensangabe wie "1W6–1" (bei zwei Angaben die erste) als Würfelformel, ggf. mit Bonus. */
+export function schadensFormel(text, bonus = 0) {
+  const t = String(text ?? "").split("/")[0].trim().replace(/[–−]/g, "-").replace(/W/gi, "d").replace(/\s+/g, "");
+  if (!/^\d*d\d+([+-]\d+)?$/.test(t)) return null;
+  return bonus ? `${t}${bonus > 0 ? "+" : ""}${bonus}` : t;
 }

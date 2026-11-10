@@ -6,6 +6,8 @@ import { EIGENSCHAFTEN, EIGENSCHAFT_NAMEN, ZAUBERGRUPPEN, bonus, vz, gradAus, ab
 import { ausWerkzeug } from "./akteur.mjs";
 import { SYSTEM_ID } from "./kategorien.mjs";
 import { KompendiumBrowser } from "./browser.mjs";
+import { erfolgswurf, pruefwurf } from "./wuerfe.mjs";
+import { angreifen } from "./kampf.mjs";
 
 const { ActorSheetV2 } = foundry.applications.sheets;
 const SPEICHER_VERZOEGERUNG = 400;
@@ -59,6 +61,11 @@ export class AbenteurerBogen extends ActorSheetV2 {
   // ---------------------------------------------------------------- Aufbau
   async _renderHTML() {
     const actor = this.actor, s = actor.system, items = [...actor.items];
+    // Zustand von außen geändert (z. B. PP aus einem Würfelwurf): Werkzeug mit dem neuen Stand neu starten
+    if (this.#werkzeug && !this.#ausstehend && s.zustand && s.zustand !== JSON.stringify(this.#werkzeug.zustand())) {
+      this.#werkzeug = null;
+      this.#werkzeugWurzel = null;
+    }
     const reiter = REITER.filter((r) => !r.nur || r.nur(s, items));
     if (!reiter.some((r) => r.id === this.#reiter)) this.#reiter = "uebersicht";
     const wurzel = el("div", { class: ["ma-wurzel", "midgard-cmt", this.#verwaltet && "verwaltet"] });
@@ -92,6 +99,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
       w.addEventListener("change", (ev) => this.#feldGeaendert(ev));
       w.addEventListener("dragover", (ev) => ev.preventDefault());
       w.addEventListener("drop", (ev) => this.#ablegen(ev));
+      w.addEventListener("click", (ev) => this.#wurfKlick(ev));
     }
     // Ältere Charaktere (nur Werkzeug-Zustand) einmal je Öffnen in die Bogenwerte übernehmen
     if (!this.#abgeglichen && this.#verwaltet && this.isEditable && this.#werkzeug) {
@@ -140,6 +148,46 @@ export class AbenteurerBogen extends ActorSheetV2 {
     return this.actor.update({ [pfad]: neu });
   }
 
+  // ---------------------------------------------------------------- Würfe
+  async #wurfKlick(ev) {
+    const z = ev.target.closest("[data-wurf]");
+    if (!z || z.closest(".ma-werkzeug")) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (!this.actor.isOwner) return ui.notifications.warn("Nur wer diese Figur führt, kann für sie würfeln.");
+    const a = this.actor, s = a.system, d = s.abgeleitet, ohneDialog = ev.shiftKey;
+    const item = z.dataset.item ? a.items.get(z.dataset.item) : null;
+    switch (z.dataset.wurf) {
+      case "pw": return pruefwurf(a, { titel: EIGENSCHAFT_NAMEN[z.dataset.eig], wert: s.eigenschaften[z.dataset.eig], ohneDialog });
+      case "abwehr": {
+        let mod = 0; const h = [];
+        for (const x of d.kampfAbzuege) { mod += x.wert; h.push(`${vz(x.wert)} ${x.grund}`); }
+        if (d.verteidigungswaffe !== null) h.push(`Verteidigungswaffe ${vz(d.verteidigungswaffe)} hier nicht eingerechnet; bei Angriffen aus dem Chat automatisch.`);
+        return erfolgswurf(a, { art: "WW", titel: "Abwehr", wert: d.abwehr, mod, hinweise: h, gegnerFragen: true, ohneDialog });
+      }
+      case "resG": return erfolgswurf(a, { art: "WW", titel: "Resistenz (Geist)", wert: d.resistenzGeist, gegnerFragen: true, ohneDialog });
+      case "resK": return erfolgswurf(a, { art: "WW", titel: "Resistenz (Körper)", wert: d.resistenzKoerper, gegnerFragen: true, ohneDialog });
+      case "zaubern": return erfolgswurf(a, { titel: "Zaubern", wert: d.zaubern, ohneDialog, hinweise: ["Praxispunkte gibt es beim Zaubern eines bestimmten Spruchs (Reiter Zauber)."] });
+      case "raufen": return erfolgswurf(a, { titel: "Raufen", wert: d.raufen, ohneDialog });
+      case "ungelernt": return erfolgswurf(a, { titel: `${z.dataset.name} (ungelernt)`, wert: Number(z.dataset.wert), ohneDialog });
+      case "fertigkeit": {
+        if (!item) return;
+        const f = d.fertigkeiten.find((x) => x.id === item.id);
+        const schwelle = ["Beidhändiger Kampf", "Fechten"].includes(item.name) ? 20 : 16;
+        return erfolgswurf(a, { titel: f.name, wert: f.ew, ohneDialog, pp: { schwelle, ziel: { typ: "item", id: item.id }, name: item.name } });
+      }
+      case "angriff": return angreifen(a, z.dataset.item, { ohneDialog });
+      case "zauber": {
+        if (!item) return;
+        const spezial = s.spezialisierung && s.spezialisierung === item.system.gruppe ? 2 : 0;
+        const ap = Number.parseInt(item.system.ap, 10);
+        const zusatz = item.system.ap ? `<p class="mk-klein">AP-Verbrauch: ${item.system.ap}${Number.isFinite(ap) && String(ap) === item.system.ap.trim() ? ` <button type="button" data-midgard-aktion="ap" data-ap="${ap}">${ap} AP abziehen</button>` : ""}</p>` : "";
+        return erfolgswurf(a, { titel: `Zaubern · ${item.name}`, wert: d.zaubern + spezial, ohneDialog, zusatz,
+          hinweise: spezial ? ["+2 Spezialgebiet"] : [], pp: { schwelle: 20, ziel: { typ: "zauber", gruppe: item.system.gruppe }, name: `Zaubern: ${item.system.gruppe}` } });
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- Ziehen und Ablegen
   async #ablegen(ev) {
     if (ev.target.closest(".ma-werkzeug")) return;
@@ -152,8 +200,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const grund = this.#ablehnung(item);
     if (grund) return ui.notifications.warn(grund);
     const s = this.actor.system;
-    if (item.type === "rasse") return this.actor.update({ "system.rasse": item.name });
-    if (item.type === "typ") return this.actor.update({ "system.typ": item.system.kuerzel, "system.typName": item.name, "system.typArt": item.system.art });
+    if (item.type === "rasse" || item.type === "typ") return this.#rasseOderTyp(item);
     const vorhanden = this.actor.items.find((i) => i.type === item.type && i.name === item.name);
     if (vorhanden && item.type === "gegenstand") return vorhanden.update({ "system.anzahl": (vorhanden.system.anzahl || 0) + 1 });
     const neu = item.toObject();
@@ -165,18 +212,59 @@ export class AbenteurerBogen extends ActorSheetV2 {
     await this.actor.createEmbeddedDocuments("Item", [neu]);
   }
 
+  /**
+   * Rasse oder Typ aus dem Kompendium festlegen. Verwaltet das Werkzeug den Charakter, wird die
+   * Änderung dort eingetragen, mit denselben Folgen wie bei der Auswahl im Werkzeug: Ein für die
+   * neue Rasse unzulässiger Typ entfällt, ein neuer Typ setzt die nach Typ gekauften Fertigkeiten,
+   * Waffen und Zauber zurück. Nach Abschluss der Erschaffung geht beides nicht mehr.
+   */
+  async #rasseOderTyp(item) {
+    const a = this.actor;
+    if (!this.#verwaltet) {
+      const aenderung = item.type === "rasse" ? { "system.rasse": item.name } : { "system.typ": item.system.kuerzel, "system.typName": item.name, "system.typArt": item.system.art };
+      // ein schon gestartetes, aber unbenutztes Werkzeug mit den neuen Werten neu vorbelegen
+      this.#werkzeug = null; this.#werkzeugWurzel = null;
+      return a.update(aenderung);
+    }
+    if (!this.#werkzeug) this.#werkzeugStarten();
+    if (this.#werkzeug.auswertung().fertig) return ui.notifications.warn(`${a.name} ist fertig erschaffen; Rasse und Typ lassen sich nicht mehr ändern.`);
+    const z = JSON.parse(JSON.stringify(this.#werkzeug.zustand()));
+    const K = window.KODEX;
+    const D = foundry.applications?.api?.DialogV2;
+    const fragen = async (text) => (D ? D.confirm({ window: { title: item.name }, content: `<p>${text}</p>` }) : true);
+    if (item.type === "rasse") {
+      if (z.rasse === item.name) return;
+      if (z.klasse && !K.klassenFuerRasse[item.name].includes(z.klasse)) {
+        if (!(await fragen(`${K.klassen[z.klasse].name} ist für ${item.name} nicht erlaubt. Typ und Typauswahl zurücksetzen?`))) return;
+        Object.assign(z, { klasse: null, typischWahl: {}, typischSpez: {}, kaeufe: [], waffen: [], zauber: [], typischerZauber: null, spezialwaffen: [], magierSpezial: null });
+      }
+      z.rasse = item.name;
+    } else {
+      const k = item.system.kuerzel;
+      if (z.klasse === k) return;
+      if ((z.kaeufe?.length || z.waffen?.length || z.zauber?.length) && !(await fragen("Ein neuer Typ verwirft die bereits gekauften Fertigkeiten, Waffen und Zauber. Fortfahren?"))) return;
+      Object.assign(z, { klasse: k, typischWahl: {}, typischSpez: {}, kaeufe: [], waffen: [], zauber: [], typischerZauber: null, spezialwaffen: [], magierSpezial: null });
+    }
+    // Werkzeug mit dem geänderten Stand neu starten und die Bogenwerte daraus abgleichen
+    await a.update({ "system.zustand": JSON.stringify(z) }, { render: false });
+    this.#werkzeug = null; this.#werkzeugWurzel = null;
+    this.#werkzeugStarten();
+    await ausWerkzeug(a, this.#werkzeug.auswertung(), this.#werkzeug.zustand());
+    this.render();
+  }
+
   /** Regelprüfung beim Ablegen. Gibt einen Grund zurück, wenn der Gegenstand nicht passt. */
   #ablehnung(item) {
     const s = this.actor.system;
     const klein = ["Gnom", "Halbling"].includes(s.rasse);
-    if (this.#verwaltet && ["fertigkeit", "waffenfertigkeit", "zauber", "rasse", "typ"].includes(item.type)) {
-      return `${item.name}: Fertigkeiten, Zauber, Rasse und Typ werden im Reiter „Erschaffung & Lernen“ gelernt bzw. festgelegt.`;
+    if (this.#verwaltet && ["fertigkeit", "waffenfertigkeit", "zauber"].includes(item.type)) {
+      return `${item.name}: Fertigkeiten und Zauber werden im Reiter „Erschaffung & Lernen“ gelernt.`;
     }
     if (["fertigkeit", "waffenfertigkeit", "zauber", "waffe", "ruestung"].includes(item.type) && this.actor.items.some((i) => i.type === item.type && i.name === item.name)) {
       return `${item.name} ist schon vorhanden.`;
     }
     if (item.type === "zauber" && s.typArt && !s.abgeleitet.kannZaubern) return `${s.typName || "Dieser Typ"} kann nicht zaubern.`;
-    if (item.type === "rasse" && s.typ && !item.system.typen.includes(s.typ)) return `${s.typName} ist für ${item.name} nicht erlaubt.`;
+    if (!this.#verwaltet && item.type === "rasse" && s.typ && !item.system.typen.includes(s.typ)) return `${s.typName} ist für ${item.name} nicht erlaubt.`;
     if (item.type === "typ" && s.rasse && !(window.KODEX.klassenFuerRasse[s.rasse] ?? []).includes(item.system.kuerzel)) return `${item.name} ist für ${s.rasse} nicht erlaubt.`;
     if (item.type === "waffe" && klein && item.system.kleineVerboten) return `${item.name} ist für ${s.rasse} nicht verwendbar (Kodex).`;
     if (item.type === "waffenfertigkeit" && klein && item.system.kleineVerboten) return `${item.name} ist für ${s.rasse} nicht erlernbar (Kodex).`;
@@ -220,22 +308,26 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const e = s.eigenschaften;
     return el("div", { class: "ma-eigenschaften" },
       EIGENSCHAFTEN.map((k) => el("div", { class: "ma-eig", title: EIGENSCHAFT_NAMEN[k] },
-        el("span", { class: "ma-eig-name", text: k }),
+        el("a", { class: "ma-eig-name ma-wurf", "data-wurf": "pw", "data-eig": k, title: `PW:${EIGENSCHAFT_NAMEN[k]}`, text: k }),
         this.#feld(`system.eigenschaften.${k}`, e[k], { typ: "number", werkzeug: true, klasse: "ma-eig-wert" }),
         el("span", { class: "ma-eig-bonus", text: k === "Au" ? "" : vz(bonus(e[k])) }))),
       el("div", { class: "ma-eig", title: "Bewegungsweite" }, el("span", { class: "ma-eig-name", text: "B" }),
-        this.#feld("system.b", s.b, { typ: "number", werkzeug: true, klasse: "ma-eig-wert" }), el("span", { class: "ma-eig-bonus" })));
+        this.#feld("system.b", s.b, { typ: "number", werkzeug: true, klasse: "ma-eig-wert" }),
+        el("span", { class: "ma-eig-bonus", text: s.abgeleitet.bEffektiv !== null && s.abgeleitet.bEffektiv !== s.b ? `${s.abgeleitet.bEffektiv} in Rüstung` : "" })));
   }
 
   #kampfwerte(s) {
     const d = s.abgeleitet, b = d.boni;
-    const gross = (name, wert, zusatz) => el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: name }), el("span", { class: "ma-gross-wert", text: wert }), zusatz ? el("small", { text: zusatz }) : null);
+    const gross = (name, wert, zusatz, wurf) => el(wurf ? "a" : "div", { class: ["ma-gross", wurf && "ma-wurf"], "data-wurf": wurf, title: wurf ? `${name} würfeln` : null }, el("span", { class: "ma-gross-name", text: name }), el("span", { class: "ma-gross-wert", text: wert }), zusatz ? el("small", { text: zusatz }) : null);
     return el("div", {},
       el("div", { class: "ma-grosswerte" },
-        gross("Abwehr", vz(d.abwehr), d.verteidigungswaffe !== null ? `${vz(d.verteidigungswaffe)} mit Verteidigungswaffe` : null),
-        gross("Resistenz", `${vz(d.resistenzGeist)} / ${vz(d.resistenzKoerper)}`, "Geist / Körper"),
-        gross("Zaubern", d.kannZaubern ? vz(d.zaubern) : "–", d.kannZaubern ? null : "kein Zauberkundiger"),
-        gross("Raufen", vz(d.raufen))),
+        gross("Abwehr", vz(d.abwehr), d.verteidigungswaffe !== null ? `${vz(d.verteidigungswaffe)} mit Verteidigungswaffe` : null, "abwehr"),
+        el("div", { class: "ma-gross ma-resistenz" }, el("span", { class: "ma-gross-name", text: "Resistenz" }),
+          el("span", { class: "ma-gross-wert" }, el("a", { class: "ma-wurf", "data-wurf": "resG", title: "WW:Resistenz gegen Geistesmagie", text: vz(d.resistenzGeist) }), " / ", el("a", { class: "ma-wurf", "data-wurf": "resK", title: "WW:Resistenz gegen Körpermagie", text: vz(d.resistenzKoerper) })),
+          el("small", { text: "Geist / Körper" })),
+        gross("Zaubern", d.kannZaubern ? vz(d.zaubern) : "–", d.kannZaubern ? null : "kein Zauberkundiger", d.kannZaubern ? "zaubern" : null),
+        gross("Raufen", vz(d.raufen), null, d.raufen !== null ? "raufen" : null)),
+      d.kampfAbzuege.length ? el("p", { class: "ma-warnung", text: "Abzüge auf EW:Angriff und WW:Abwehr: " + d.kampfAbzuege.map((a) => `${vz(a.wert)} ${a.grund}`).join("; ") }) : null,
       el("table", { class: "ma-boni" },
         el("thead", {}, el("tr", {}, ["Ausdauer", "Schaden", "Angriff", "Abwehr", "Resistenz", "Zaubern"].map((t) => el("th", { text: t })))),
         el("tbody", {}, el("tr", {}, [vz(b.AusB), vz(b.SchB), vz(b.AnB), vz(b.AbB) + (d.abwehrBonusMitRuestung !== (b.AbB ?? 0) ? ` (${vz(d.abwehrBonusMitRuestung)})` : ""), `${vz(b.ResG)} / ${vz(b.ResK)}`, vz(b.ZauB)].map((t) => el("td", { text: t }))))),
@@ -246,7 +338,10 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const r = s.abgeleitet.ruestung;
     return el("div", { class: "ma-ruestung" },
       el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "RK" }), el("span", { class: "ma-gross-wert", text: r.kuerzel })),
-      el("div", {}, el("strong", { text: r.name }), el("p", { class: "info", text: r.rs ? `Rüstungsschutz ${r.rs}` + (r.verlust === "alle" ? ", kein positiver Abwehrbonus" : Number(r.verlust) ? `, Abwehrbonus −${r.verlust}` : "") : "Keine Rüstung getragen. Rüstungen im Reiter „Kampf“ anlegen." })));
+      el("div", {}, el("strong", { text: r.name }), el("p", { class: "info", text: r.rs
+        ? [`Rüstungsschutz ${r.rs} (−${r.rs} LP bei schweren Treffern)`, r.verlust === "alle" ? "kein positiver Abwehrbonus" : Number(r.verlust) ? `Abwehrbonus −${r.verlust}` : null,
+          r.metall?.anb ? `Angriffsbonus −${r.metall.anb}` : null, r.metall?.b ? `B −${r.metall.b}` : null, r.metall?.gw ? `Gw −${r.metall.gw}` : null].filter(Boolean).join(", ") + " (Kodex S. 71-73)."
+        : "Keine Rüstung getragen. Rüstungen im Reiter „Kampf“ anlegen." })));
   }
 
   #waffenTabelle(s, nurAusgeruestet) {
@@ -254,13 +349,14 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const liste = d.waffen.filter((w) => !nurAusgeruestet || w.ausgeruestet);
     const zeilen = liste.map((w) => el("tr", { "data-item-id": w.id },
       el("td", {}, this.#itemName(w)),
-      el("td", { class: "zahl", text: w.ew === null ? "–" : vz(w.ew), title: w.ohneFertigkeit ? "Waffenfertigkeit fehlt" : w.spezialwaffe ? "Spezialwaffe: +2" : null }),
+      el("td", { class: "zahl" }, w.ew === null || w.vert ? el("span", { text: w.ew === null ? "–" : vz(w.ew) })
+        : el("a", { class: "ma-wurf ma-angriff", "data-wurf": "angriff", "data-item": w.id, title: `Angriff mit ${w.name} (Ziel anvisieren)${w.spezialwaffe ? ", Spezialwaffe +2" : ""}`, text: vz(w.ew) })),
       el("td", { text: w.schaden }),
       el("td", { text: w.vert ? "Abwehr" : w.art === "fernkampf" ? "Fern" : "Nah" }),
       nurAusgeruestet ? null : el("td", {}, this.#schalter(w.id, "system.ausgeruestet", w.ausgeruestet, "bereit")),
       nurAusgeruestet ? null : el("td", {}, this.#loeschKnopf(w.id)),
       w.mangel.length || w.ohneFertigkeit ? el("td", { class: "ma-warnung", text: [w.ohneFertigkeit ? "Fertigkeit fehlt" : null, w.mangel.length ? `Mindestwerte: ${w.mangel.join(", ")}` : null].filter(Boolean).join("; ") }) : el("td")));
-    if (nurAusgeruestet && d.raufen !== null) zeilen.push(el("tr", {}, el("td", { text: "Raufen" }), el("td", { class: "zahl", text: vz(d.raufen) }), el("td", { text: "1W6−4" + (d.boni.SchB ? vz(d.boni.SchB) : "") }), el("td", { text: "Nah" }), el("td")));
+    if (nurAusgeruestet && d.raufen !== null) zeilen.push(el("tr", {}, el("td", { text: "Raufen" }), el("td", { class: "zahl" }, el("a", { class: "ma-wurf", "data-wurf": "raufen", title: "EW:Raufen", text: vz(d.raufen) })), el("td", { text: "" }), el("td", { text: "Handgemenge" }), el("td")));
     return el("table", { class: "ma-tabelle" },
       el("thead", {}, el("tr", {}, ["Waffe", "EW", "Schaden", "Art", ...(nurAusgeruestet ? [] : ["", ""]), ""].map((t) => el("th", { text: t })))),
       el("tbody", {}, zeilen.length ? zeilen : el("tr", {}, el("td", { colspan: "7", class: "info", text: nurAusgeruestet ? "Keine Waffe bereit. Im Reiter „Kampf“ Waffen bereitlegen." : "Noch keine Waffen. Aus dem Kompendium hierher ziehen." }))));
@@ -305,7 +401,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
       el("div", { class: "ma-raster-uebersicht" },
         el("div", { class: "ma-spalte" },
           karte("Eigenschaften", "ma-k-eig", this.#eigenschaften(s)),
-          karte("Fertigkeiten", "ma-k-fert", fert.length ? el("ul", { class: "ma-fert-kurz" }, fert.map((f) => el("li", {}, this.#itemName(f), el("span", { class: "zahl", text: vz(f.ew) })))) : el("p", { class: "info", text: "Noch keine Fertigkeiten." }))),
+          karte("Fertigkeiten", "ma-k-fert", fert.length ? el("ul", { class: "ma-fert-kurz" }, fert.map((f) => el("li", {}, this.#itemName(f), el("a", { class: "zahl ma-wurf", "data-wurf": "fertigkeit", "data-item": f.id, title: `EW:${f.name}`, text: vz(f.ew) })))) : el("p", { class: "info", text: "Noch keine Fertigkeiten." }))),
         el("div", { class: "ma-spalte" },
           karte("Kampfwerte", "ma-k-kampf", this.#kampfwerte(s)),
           karte("Rüstung", "ma-k-ruestung", this.#ruestung(s)),
@@ -323,14 +419,14 @@ export class AbenteurerBogen extends ActorSheetV2 {
         el("tbody", {}, d.fertigkeiten.length ? d.fertigkeiten.map((f) => el("tr", {},
           el("td", {}, this.#itemName(f)), el("td", { text: f.le }),
           el("td", {}, this.#itemWert(items.get(f.id), "system.wert", f.wert)),
-          el("td", { class: "zahl", text: vz(f.bonus) }), el("td", { class: "zahl stark", text: vz(f.ew) }),
+          el("td", { class: "zahl", text: vz(f.bonus) }), el("td", { class: "zahl stark" }, el("a", { class: "ma-wurf", "data-wurf": "fertigkeit", "data-item": f.id, title: `EW:${f.name}`, text: vz(f.ew) })),
           el("td", {}, this.#itemWert(items.get(f.id), "system.pp", f.pp)), el("td", {}, this.#loeschKnopf(f.id))))
           : el("tr", {}, el("td", { colspan: "7", class: "info", text: this.#verwaltet ? "Fertigkeiten entstehen im Reiter „Erschaffung & Lernen“." : "Fertigkeiten aus dem Kompendium hierher ziehen." })))),
       el("p", { class: "info", text: "EW = Fertigkeitswert + Bonus der Leiteigenschaft. PP = Praxispunkte." }),
       this.#verwaltet ? null : el("button", { type: "button", onclick: () => KompendiumBrowser.oeffnen("fertigkeiten"), text: "Kompendium: Fertigkeiten" })),
       karte("Ungelernte Fertigkeiten", "ma-k-ungelernt",
         el("p", { class: "info", text: "Erfolgswert ohne Bonus der Leiteigenschaft (Kodex S. 44). Alle übrigen ungelernt +(0), außer Musizieren, Schreiben, Sprache und Lesen von Zauberschrift." }),
-        el("ul", { class: "ma-spalten" }, d.ungelernt.map(([n, w]) => el("li", { text: `${n} +(${w})` })))),
+        el("ul", { class: "ma-spalten" }, d.ungelernt.map(([n, w]) => el("li", {}, el("a", { class: "ma-wurf", "data-wurf": "ungelernt", "data-name": n, "data-wert": w, title: `EW:${n} ungelernt`, text: `${n} +(${w})` }))))),
       karte("Sinne und angeborene Fähigkeiten", "ma-k-sinne", this.#sinne(s)),
     ];
   }
@@ -346,7 +442,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
         el("tbody", {}, wf.length ? wf.map((w) => el("tr", {},
           el("td", {}, this.#itemName({ id: w.id, img: w.img, name: w.name })),
           el("td", {}, this.#itemWert(w, "system.wert", w.system.wert)),
-          el("td", { class: "zahl stark", text: w.system.verteidigung ? "zur Abwehr" : vz(w.system.wert + (d.boni.AnB ?? 0)) }),
+          el("td", { class: "zahl stark", text: w.system.verteidigung ? "zur Abwehr" : vz(w.system.wert + d.angriffsBonus) }),
           el("td", {}, this.#itemWert(w, "system.pp", w.system.pp)), el("td", {}, this.#loeschKnopf(w.id))))
           : el("tr", {}, el("td", { colspan: "5", class: "info", text: "Keine Waffenfertigkeiten." }))))),
       karte("Waffen", "ma-k-waffen", this.#waffenTabelle(s, false),
@@ -380,7 +476,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
       gruppen.map(([g, l]) => el("tbody", {},
         el("tr", { class: "ma-gruppe" }, el("th", { colspan: "11", text: g })),
         l.map((z) => el("tr", {},
-          el("td", {}, this.#itemName({ id: z.id, img: z.img, name: z.name })), el("td", { class: "zahl", text: z.system.stufe }),
+          el("td", {}, this.#itemName({ id: z.id, img: z.img, name: z.name }), d.kannZaubern ? el("a", { class: "ma-wurf ma-zauberwurf", "data-wurf": "zauber", "data-item": z.id, title: `EW:Zaubern ${z.name}`, text: "⚄" }) : null), el("td", { class: "zahl", text: z.system.stufe }),
           el("td", { text: z.system.ap }), el("td", { text: z.system.art }), el("td", { text: z.system.zauberdauer }), el("td", { text: z.system.reichweite }),
           el("td", { text: z.system.wirkungsziel }), el("td", { text: z.system.wirkungsbereich }), el("td", { text: z.system.wirkungsdauer }),
           el("td", { class: "ma-wirkung", text: z.system.kurzwirkung || "" }), el("td", {}, this.#loeschKnopf(z.id)))))));
@@ -520,7 +616,9 @@ export class AbenteurerBogen extends ActorSheetV2 {
   #vormerken(zustand, auswertung) {
     if (!this.isEditable) return;
     // unveränderten Anfangsstand nicht speichern: Öffnen allein macht den Charakter nicht „verwaltet“
-    if (!this.#verwaltet && (this.#startZustand === "startet" || JSON.stringify(zustand) === this.#startZustand)) return;
+    // Speicherung während des Starts ignorieren (der Abgleich in _onRender übernimmt verwaltete Werte)
+    if (this.#startZustand === "startet") return;
+    if (!this.#verwaltet && JSON.stringify(zustand) === this.#startZustand) return;
     this.#ausstehend = [JSON.parse(JSON.stringify(zustand)), auswertung];
     clearTimeout(this.#timer);
     this.#timer = setTimeout(() => this.#schreiben(), SPEICHER_VERZOEGERUNG);

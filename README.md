@@ -1,8 +1,10 @@
 # Midgard 5 für Foundry VTT
 
-Inoffizielles Foundry-System (Foundry VTT 14) für Midgard 5: Charakterbogen mit Reitern, Regeldaten (Fertigkeiten, Waffen, Rüstungen, Zauber, Rassen, Typen) als Kompendien mit Kompendium-Browser, Charaktererschaffung nach dem Kodex und Lernen im Spielverlauf mit EP, Praxispunkten und Gold. Würfe und Kampf folgen. Für den privaten Gebrauch einer Spielrunde.
+Inoffizielles Foundry-System (Foundry VTT 14) für Midgard 5: Charakterbogen mit Reitern, Würfe und Kampf mit Abwehraufforderung, Regeldaten (Fertigkeiten, Waffen, Rüstungen, Zauber, Rassen, Typen) als Kompendien mit Kompendium-Browser, Charaktererschaffung nach dem Kodex und Lernen im Spielverlauf mit EP, Praxispunkten und Gold. Für den privaten Gebrauch einer Spielrunde.
 
-Die Kompendien legt das System beim ersten Start einer Welt durch den Spielleiter selbst an (Ordner „Midgard 5“). Sie enthalten nur mechanische Spielwerte mit Fundstelle, keine Regeltexte.
+Die Kompendien legt das System beim ersten Start einer Welt durch den Spielleiter selbst an (Ordner „Midgard 5“). Sie enthalten nur mechanische Spielwerte mit Fundstelle, keine Regeltexte. Beschreibungen kann der Spielleiter aus seinen eigenen PDFs (Der Kodex, Das Arkanum) per Knopf „Regelwerk-PDF importieren“ übernehmen; sie landen nur in seiner Welt.
+
+Enthält pdf.js (Mozilla, Apache License 2.0, `vendor/pdfjs/LICENSE`).
 
 ## Installation in Foundry
 

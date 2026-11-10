@@ -1,6 +1,7 @@
 // Kompendium-Browser: alle Regeldaten des Systems mit Reitern, Suche, Filtern und Detailansicht.
 // Einträge lassen sich auf Bögen und in die Seitenleiste ziehen (Foundry-Format {type, uuid}).
 import KOMPENDIUM from "../daten/kompendium.js";
+import { pdfImportStarten } from "./pdf-import.mjs";
 import { KATEGORIEN, FELDNAMEN, SYSTEM_ID, packId, feld, anzeige, detailText } from "./kategorien.mjs";
 
 const { ApplicationV2 } = foundry.applications.api;
@@ -59,6 +60,9 @@ export class KompendiumBrowser extends ApplicationV2 {
     }
     return this.#daten[kat];
   }
+
+  /** Nach Import oder Abgleich: zwischengespeicherte Einträge verwerfen. */
+  static zuruecksetzen() { this.#instanz?.zuruecksetzen(); }
 
   /** Nach einem Abgleich der Kompendien neu laden. */
   zuruecksetzen() {
@@ -134,6 +138,7 @@ export class KompendiumBrowser extends ApplicationV2 {
       type: "button", class: "mb-zuruecksetzen", text: "Filter leeren",
       onclick: () => { this.#suche = ""; this.#filter[this.#kat] = {}; this.render(); },
     }));
+    if (game.user.isGM) leiste.append(el("button", { type: "button", class: "mb-pdf", title: "Beschreibungen aus Kodex oder Arkanum (eigene PDF) in die Kompendien dieser Welt übernehmen", text: "Regelwerk-PDF importieren", onclick: () => pdfImportStarten() }));
     return leiste;
   }
 
@@ -177,7 +182,7 @@ export class KompendiumBrowser extends ApplicationV2 {
       el("h3", {}, el("img", { src: e.img, alt: "" }), e.name),
       e.system.kurzwirkung ? el("p", { class: "mb-kurz", text: e.system.kurzwirkung }) : null,
       el("dl", {}, zeilen.map(([k, v]) => [el("dt", { text: FELDNAMEN[k] ?? k }), el("dd", { text: detailText(k, v) })])),
-      e.system.beschreibung ? el("div", { class: "mb-beschreibung", text: "Beschreibung vorhanden: Eintrag öffnen." }) : null,
+      e.system.beschreibung ? (() => { const d = el("div", { class: "mb-beschreibung" }); d.innerHTML = e.system.beschreibung; return d; })() : null,
       e.uuid ? el("button", { type: "button", text: "Öffnen", onclick: () => this.#oeffnen(e) }) : null,
     ].filter(Boolean));
   }
@@ -198,6 +203,11 @@ export function knopfEinbauen(_app, html) {
   knopf.addEventListener("click", () => KompendiumBrowser.oeffnen());
   const ort = wurzel.querySelector(".header-actions") ?? wurzel.querySelector(".directory-header") ?? wurzel;
   ort.append(knopf);
+  if (game.user.isGM) {
+    const pdf = el("button", { type: "button", class: "midgard-browser-knopf midgard-pdf-knopf", title: "Beschreibungen aus Kodex oder Arkanum (eigene PDF) übernehmen" }, el("i", { class: "fa-solid fa-file-pdf" }), " Regelwerk-PDF importieren");
+    pdf.addEventListener("click", () => pdfImportStarten());
+    ort.append(pdf);
+  }
 }
 
 export { SYSTEM_ID };

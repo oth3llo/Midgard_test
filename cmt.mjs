@@ -13,6 +13,9 @@ import { KompendiumBrowser, knopfEinbauen } from "./module/browser.mjs";
 import { GegenstandBogen } from "./module/gegenstand-bogen.mjs";
 import { AbenteurerDaten } from "./module/akteur.mjs";
 import { AbenteurerBogen } from "./module/abenteurer-bogen.mjs";
+import { pdfImportStarten, pdfImportieren } from "./module/pdf-import.mjs";
+import { einstellungenRegistrieren as wurfEinstellungen } from "./module/wuerfe.mjs";
+import { einstellungenRegistrieren as kampfEinstellungen, socketEinrichten, karteEinrichten, angreifen } from "./module/kampf.mjs";
 
 const SYSTEM_ID = "midgard5-cmt";
 
@@ -30,11 +33,14 @@ Hooks.once("init", () => {
     label: "MIDGARD.GegenstandBogen",
   });
   einstellungenRegistrieren();
-  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, stand: KOMPENDIUM_STAND };
+  wurfEinstellungen();
+  kampfEinstellungen();
+  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, angreifen, pdfImport: pdfImportStarten, pdfImportieren, stand: KOMPENDIUM_STAND };
   console.log(`${SYSTEM_ID} | Midgard-CMT ${game.system.version} geladen`);
 });
 
 Hooks.once("ready", async () => {
+  socketEinrichten();
   try {
     await kompendienAufbauen();
   } catch (fehler) {
@@ -44,3 +50,5 @@ Hooks.once("ready", async () => {
 });
 
 Hooks.on("renderCompendiumDirectory", knopfEinbauen);
+Hooks.on("midgardKompendienGeaendert", () => KompendiumBrowser.zuruecksetzen());
+Hooks.on("renderChatMessageHTML", karteEinrichten);
