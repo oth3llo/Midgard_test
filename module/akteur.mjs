@@ -1,6 +1,7 @@
 // Datenmodell des Abenteurers und Übernahme der Werte aus dem Erschaffungs- und Lernwerkzeug.
 import { EIGENSCHAFTEN, ableiten } from "./regeln.mjs";
 import { SYSTEM_ID, packId } from "./kategorien.mjs";
+import KOMPENDIUM from "../daten/kompendium.js";
 
 const F = () => foundry.data.fields;
 const text = () => new (F().StringField)({ required: true, blank: true, initial: "" });
@@ -49,19 +50,26 @@ export class AbenteurerDaten extends foundry.abstract.TypeDataModel {
 
 /** Index aller Kompendien nach Name, für das Anlegen eingebetteter Gegenstände. */
 async function kompendiumNachName(kat) {
-  const pack = game.packs.get(packId(kat));
-  if (!pack) return new Map();
-  const index = await pack.getIndex({ fields: ["system.gruppe"] });
   const karte = new Map();
+  // Datensatz als Rückfall, falls das Kompendium (noch) nicht importiert ist
+  for (const e of KOMPENDIUM.kategorien[kat] ?? []) {
+    const ziel = { daten: e };
+    if (e.system.gruppe) karte.set(`${e.name}|${e.system.gruppe}`, ziel);
+    if (!karte.has(e.name)) karte.set(e.name, ziel);
+  }
+  const pack = game.packs.get(packId(kat));
+  if (!pack) return karte;
+  const index = await pack.getIndex({ fields: ["system.gruppe"] });
   for (const e of index) {
     const ziel = { pack, id: e._id };
     if (e.system?.gruppe) karte.set(`${e.name}|${e.system.gruppe}`, ziel);
-    if (!karte.has(e.name)) karte.set(e.name, ziel);
+    karte.set(e.name, ziel);
   }
   return karte;
 }
 
 async function vorlage(eintrag) {
+  if (eintrag.daten) { const d = foundry.utils.deepClone(eintrag.daten); delete d._id; return d; }
   const doc = await eintrag.pack.getDocument(eintrag.id);
   const daten = doc.toObject();
   delete daten._id;

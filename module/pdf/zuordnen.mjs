@@ -37,7 +37,7 @@ export function zuordnen(gelesen, ziele, { aliase = {}, gruppeVon = () => null }
       kandidaten = [...nachName.entries()].filter(([k]) => Math.abs(k.length - n.length) <= grenze && distanz(k, n) <= grenze).flatMap(([, v]) => v);
     }
     if (kandidaten.length > 1 && g.gruppe) {
-      const passend = kandidaten.filter((z) => gruppeVon(z) === g.gruppe);
+      const passend = kandidaten.filter((z) => normName(gruppeVon(z) ?? "") === normName(g.gruppe));
       if (passend.length) kandidaten = passend;
     }
     kandidaten = kandidaten.filter((z) => !vergeben.has(z._id));

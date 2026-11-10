@@ -8,7 +8,7 @@ import "./daten/lernkosten.js";
 import "./daten/zauber.js";
 import "./app.js";
 import { GEGENSTAND_MODELLE } from "./module/datenmodelle.mjs";
-import { einstellungenRegistrieren, kompendienAufbauen, KOMPENDIUM_STAND } from "./module/kompendien.mjs";
+import { einstellungenRegistrieren, kompendienAufbauen, kompendienOhnePdf, KOMPENDIUM_STAND } from "./module/kompendien.mjs";
 import { KompendiumBrowser, knopfEinbauen } from "./module/browser.mjs";
 import { GegenstandBogen } from "./module/gegenstand-bogen.mjs";
 import { AbenteurerDaten } from "./module/akteur.mjs";
@@ -36,7 +36,7 @@ Hooks.once("init", () => {
   einstellungenRegistrieren();
   wurfEinstellungen();
   kampfEinstellungen();
-  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, angreifen, pdfImport: pdfImportStarten, pdfImportieren, updatePruefen, stand: KOMPENDIUM_STAND };
+  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, kompendienOhnePdf, angreifen, pdfImport: pdfImportStarten, pdfImportieren, updatePruefen, stand: KOMPENDIUM_STAND };
   console.log(`${SYSTEM_ID} | Midgard-CMT ${game.system.version} geladen`);
 });
 

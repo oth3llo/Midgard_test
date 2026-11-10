@@ -1,6 +1,5 @@
 // Kompendium-Browser: alle Regeldaten des Systems mit Reitern, Suche, Filtern und Detailansicht.
 // Einträge lassen sich auf Bögen und in die Seitenleiste ziehen (Foundry-Format {type, uuid}).
-import KOMPENDIUM from "../daten/kompendium.js";
 import { pdfImportStarten } from "./pdf-import.mjs";
 import { KATEGORIEN, FELDNAMEN, SYSTEM_ID, packId, feld, anzeige, detailText } from "./kategorien.mjs";
 
@@ -55,7 +54,7 @@ export class KompendiumBrowser extends ApplicationV2 {
       this.#ausKompendium[kat] = true;
     } else {
       // noch nicht eingerichtet (Spielleiter war nicht da): Anzeige aus den mitgelieferten Daten, ohne Ziehen
-      this.#daten[kat] = KOMPENDIUM.kategorien[kat].map((e) => ({ ...e, uuid: null }));
+      this.#daten[kat] = []; // Kompendium noch nicht angelegt: nichts anzeigen
       this.#ausKompendium[kat] = false;
     }
     return this.#daten[kat];
@@ -99,8 +98,12 @@ export class KompendiumBrowser extends ApplicationV2 {
     const eintraege = await this.#laden(this.#kat);
     const wurzel = el("div", { class: "mb-wurzel" });
     wurzel.append(this.#reiter(), this.#werkzeugleiste(eintraege), el("div", { class: "mb-haupt" }, el("div", { class: "mb-liste" }), el("aside", { class: "mb-detail" })));
+    if (this.#ausKompendium[this.#kat] && !eintraege.length) {
+      wurzel.insertBefore(el("p", { class: "mb-hinweis" }, "Dieses Kompendium ist noch leer. Es wird durch den Import der eigenen Regelwerk-PDF gefüllt (Der Kodex, Das Arkanum)",
+        game.user.isGM ? [": ", el("button", { type: "button", text: "Regelwerk-PDF importieren", onclick: () => pdfImportStarten() })] : ", das macht der Spielleiter."), wurzel.children[2]);
+    }
     if (!this.#ausKompendium[this.#kat]) {
-      wurzel.insertBefore(el("p", { class: "mb-hinweis", text: "Die Kompendien sind in dieser Welt noch nicht eingerichtet. Das geschieht, sobald ein Spielleiter die Welt öffnet. Bis dahin können Einträge nur angesehen, nicht gezogen werden." }), wurzel.children[2]);
+      wurzel.insertBefore(el("p", { class: "mb-hinweis", text: "Die Kompendien sind in dieser Welt noch nicht angelegt. Das geschieht, sobald ein Spielleiter die Welt öffnet; gefüllt werden sie durch den Import der Regelwerk-PDFs." }), wurzel.children[2]);
     }
     this.#listeZeichnen(wurzel, eintraege);
     return wurzel;
@@ -113,7 +116,7 @@ export class KompendiumBrowser extends ApplicationV2 {
   #reiter() {
     return el("nav", { class: "mb-reiter" }, Object.entries(KATEGORIEN).map(([kat, def]) =>
       el("button", {
-        type: "button", class: kat === this.#kat ? "aktiv" : null, "data-kat": kat, text: `${def.label} (${KOMPENDIUM.kategorien[kat].length})`,
+        type: "button", class: kat === this.#kat ? "aktiv" : null, "data-kat": kat, text: def.label,
         onclick: () => { this.#kat = kat; this.#auswahl = null; this.render(); },
       })));
   }

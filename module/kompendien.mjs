@@ -1,8 +1,9 @@
-// Legt die Kompendien des Systems in der Welt an und hält sie auf dem Stand der geprüften Daten.
-// Die Inhalte stehen in daten/kompendium.js (erzeugt mit foundry/kompendium_erzeugen.mjs). Ändert
-// sich dort der Stand, gleicht der Spielleiter beim nächsten Start ab: Einträge mit festen IDs
-// werden aktualisiert, neue angelegt, entfallene gelöscht. Selbst angelegte Einträge ohne
-// Systemschlüssel bleiben, ebenso Beschreibungen, die in der Welt nachgetragen wurden.
+// Legt die (zunächst leeren) Kompendien des Systems in der Welt an. Gefüllt werden sie erst durch
+// den Import der eigenen Regelwerk-PDFs (module/pdf-import.mjs): Spielwerte aus dem geprüften
+// Datensatz daten/kompendium.js, Texte aus der PDF. Ändert sich der Datensatz, gleicht der
+// Spielleiter beim nächsten Start die vorhandenen Einträge ab (feste IDs); entfallene werden
+// gelöscht. Selbst angelegte Einträge und nachgetragene Texte bleiben.
+// Einträge früherer Versionen, die ohne Import angelegt wurden, werden entfernt.
 import KOMPENDIUM from "../daten/kompendium.js";
 import { KATEGORIEN, SYSTEM_ID, packName, packId } from "./kategorien.mjs";
 
@@ -13,6 +14,8 @@ export function einstellungenRegistrieren() {
   game.settings.register(SYSTEM_ID, "kompendiumStand", {
     scope: "world", config: false, type: String, default: "",
   });
+  // 2 = Kompendien werden nur noch durch den PDF-Import gefüllt
+  game.settings.register(SYSTEM_ID, "kompendiumModell", { scope: "world", config: false, type: Number, default: 1 });
 }
 
 const Sammlung = () => foundry.documents?.collections?.CompendiumCollection ?? globalThis.CompendiumCollection;
@@ -46,7 +49,9 @@ async function abgleichen(pack, soll) {
   const neu = [], aendern = [], loeschen = [];
   for (const eintrag of soll) {
     const alt = vorhanden.get(eintrag._id);
-    if (!alt) { neu.push(eintrag); continue; }
+    if (!alt) continue; // angelegt wird nur durch den Import
+    // aus früheren Versionen: ohne Import angelegt und ohne nachgetragenen Text
+    if (!alt.getFlag?.(SYSTEM_ID, "pdfImport") && !alt.system.beschreibung && !alt.system.kurzwirkung) { loeschen.push(alt.id); continue; }
     const daten = foundry.utils.deepClone(eintrag);
     for (const k of BEHALTEN) if (!daten.system[k] && alt.system[k]) daten.system[k] = alt.system[k];
     daten.flags = foundry.utils.mergeObject(alt.toObject().flags ?? {}, daten.flags, { inplace: false });
@@ -73,9 +78,10 @@ export async function kompendienAufbauen(erzwingen = false) {
   if (!game.user.isGM || (gm && gm.id !== game.user.id)) return false;
   const fehlt = Object.keys(KATEGORIEN).some((k) => !game.packs.get(packId(k)));
   const stand = game.settings.get(SYSTEM_ID, "kompendiumStand");
-  if (!erzwingen && !fehlt && stand === KOMPENDIUM.stand) return false;
+  const modell = game.settings.get(SYSTEM_ID, "kompendiumModell");
+  if (!erzwingen && !fehlt && stand === KOMPENDIUM.stand && modell === 2) return false;
 
-  ui.notifications.info("Midgard: Kompendien werden eingerichtet …");
+  if (fehlt) ui.notifications.info("Midgard: Kompendien werden angelegt. Gefüllt werden sie über „Regelwerk-PDF importieren“ im Kompendium-Reiter.");
   const ziel = await ordner();
   for (const [kat, soll] of Object.entries(KOMPENDIUM.kategorien)) {
     const pack = await packHolen(kat, ziel);
@@ -89,8 +95,32 @@ export async function kompendienAufbauen(erzwingen = false) {
     }
   }
   await game.settings.set(SYSTEM_ID, "kompendiumStand", KOMPENDIUM.stand);
-  ui.notifications.info(`Midgard: Kompendien auf Stand ${KOMPENDIUM.stand}.`);
+  await game.settings.set(SYSTEM_ID, "kompendiumModell", 2);
+  console.log(`${SYSTEM_ID} | Kompendien auf Stand ${KOMPENDIUM.stand}`);
   return true;
 }
 
 export const KOMPENDIUM_STAND = KOMPENDIUM.stand;
+
+/**
+ * Notbehelf ohne PDF: legt alle Einträge mit Spielwerten, aber ohne Beschreibung an
+ * (Konsole: game.midgard.kompendienOhnePdf()). Ein späterer PDF-Import ergänzt die Texte.
+ */
+export async function kompendienOhnePdf() {
+  if (!game.user.isGM) return;
+  for (const [kat, soll] of Object.entries(KOMPENDIUM.kategorien)) {
+    const pack = await packHolen(kat, null);
+    const vorhanden = new Set((await pack.getIndex()).map((e) => e._id));
+    const neu = soll.filter((e) => !vorhanden.has(e._id)).map((e) => {
+      const d = foundry.utils.deepClone(e);
+      d.flags[SYSTEM_ID].pdfImport = { buch: null, seite: null };
+      return d;
+    });
+    if (!neu.length) continue;
+    const gesperrt = pack.locked;
+    if (gesperrt) await pack.configure({ locked: false });
+    try { await Item.createDocuments(neu, { pack: pack.collection, keepId: true }); }
+    finally { if (gesperrt) await pack.configure({ locked: true }); }
+  }
+  Hooks.callAll("midgardKompendienGeaendert");
+}

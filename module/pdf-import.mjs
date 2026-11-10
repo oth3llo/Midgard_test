@@ -1,11 +1,13 @@
 // Ein-Klick-Import der Beschreibungstexte aus den eigenen Regelwerk-PDFs in die Welt-Kompendien.
 // Die PDF wird nur im Browser des Spielleiters gelesen (pdf.js); die Texte landen ausschließlich
 // in den Kompendien dieser Welt, nicht im System. Erkannt werden „Das Arkanum“ (Zauber) und
-// „Der Kodex“ (Fertigkeiten und Waffenfertigkeiten).
+// „Der Kodex“ (Fertigkeiten, Waffenfertigkeiten, Waffen, Rüstungen, Abenteurertypen, Rassen).
+// Die Kompendien sind bis zum Import leer; der Import legt die Einträge an.
 import { SYSTEM_ID, packId } from "./kategorien.mjs";
 import { textzeilen } from "./pdf/textzeilen.mjs";
 import { istArkanum, zauberAusArkanum } from "./pdf/arkanum.mjs";
-import { istKodex, fertigkeitenAusKodex } from "./pdf/kodex.mjs";
+import { istKodex, fertigkeitenAusKodex, typenUndRassenAusKodex, ruestungenAusKodex } from "./pdf/kodex.mjs";
+import KOMPENDIUM from "../daten/kompendium.js";
 import { zuordnen, alsHtml } from "./pdf/zuordnen.mjs";
 import { esc } from "./wuerfe.mjs";
 
@@ -69,42 +71,72 @@ async function arkanumImportieren(zeilen, ueberschreiben) {
 async function kodexImportieren(zeilen, ueberschreiben) {
   const K = window.KODEX;
   const aliase = { ...K.lernName };
-  const ziele = [];
-  for (const kat of ["fertigkeiten", "waffenfertigkeiten"]) {
-    const pack = game.packs.get(packId(kat));
-    if (pack) ziele.push(...(await pack.getIndex()).map((e) => e.name));
-  }
-  const gelesen = fertigkeitenAusKodex(zeilen, [...ziele, ...Object.keys(aliase)]);
+  const D = KOMPENDIUM.kategorien;
+  const namen = [...D.fertigkeiten, ...D.waffenfertigkeiten].map((e) => e.name);
+  const fert = fertigkeitenAusKodex(zeilen, [...namen, ...Object.keys(aliase)]);
+  const { typen, rassen } = typenUndRassenAusKodex(zeilen);
+  const ruestungen = ruestungenAusKodex(zeilen);
+  const buch = "Der Kodex", o = { buch, ueberschreiben, nurPassende: true };
   const teile = [];
-  for (const kat of ["fertigkeiten", "waffenfertigkeiten"]) teile.push(await schreiben(kat, gelesen, { aliase, buch: "Der Kodex", ueberschreiben, nurPassende: true }));
-  return { buch: "Der Kodex", teile };
+  teile.push(await schreiben("fertigkeiten", fert, { ...o, aliase }));
+  teile.push(await schreiben("waffenfertigkeiten", fert, { ...o, aliase }));
+  // einzelne Waffen: Grundname innerhalb ihrer Waffenfertigkeit (Kodex-Schreibweisen wie „Armbrust, leichte“ unscharf)
+  teile.push(await schreiben("waffen", fert.flatMap((f) => f.waffen.map((w) => ({ ...w, gruppe: w.fertigkeit }))), {
+    ...o, nurPassende: false, nameVon: (z) => z.system.grundname || z.name, gruppeVon: (z) => z.system.fertigkeit, aliase: { Kampfgabeln: "Kampfgabeln, Paar" },
+  }));
+  teile.push(await schreiben("ruestungen", ruestungen.map((r) => ({ ...r, name: r.kuerzel })), { ...o, nurPassende: false, nameVon: (z) => z.system.kuerzel }));
+  teile.push(await schreiben("typen", typen.flatMap((t) => t.kuerzel.map((k) => ({ ...t, name: k }))), { ...o, nurPassende: false, nameVon: (z) => z.system.kuerzel }));
+  teile.push(await schreiben("rassen", rassen, { ...o, nurPassende: false }));
+  return { buch, teile };
 }
 
-/** Schreibt zugeordnete Beschreibungen in ein Kompendium (entsperrt es dafür kurz). */
-async function schreiben(kat, gelesen, { aliase, gruppeVon, buch, ueberschreiben, nurPassende = false }) {
+/**
+ * Legt die Einträge einer Kategorie im Welt-Kompendium an bzw. ergänzt sie: Spielwerte aus dem
+ * geprüften Datensatz (daten/kompendium.js), Beschreibung aus der PDF. Einträge des Datensatzes,
+ * zu denen das Buch keinen Text hat, werden ohne Beschreibung angelegt, damit die Kategorie
+ * vollständig ist (z. B. Mensch, Schilde).
+ */
+async function schreiben(kat, gelesen, { aliase, gruppeVon, nameVon, buch, ueberschreiben, nurPassende = false }) {
   const pack = game.packs.get(packId(kat));
   if (!pack) throw new Error(`Kompendium ${kat} fehlt; zuerst die Welt als Spielleiter laden.`);
-  const docs = await pack.getDocuments();
-  const ziele = docs.map((d) => ({ _id: d.id, name: d.name, system: d.system, doc: d }));
-  const { paare, nichtZugeordnet, ohne } = zuordnen(gelesen, ziele, { aliase, gruppeVon });
-  const aenderungen = [], behalten = [];
-  for (const [g, z] of paare) {
-    const vorher = z.doc.system.beschreibung;
-    const importiert = z.doc.getFlag(SYSTEM_ID, "pdfImport");
-    if (vorher && !importiert && !ueberschreiben) { behalten.push(z.name); continue; }
-    aenderungen.push({ _id: z._id, "system.beschreibung": alsHtml(g.absaetze, `${buch}, S. ${g.seite}`), [`flags.${SYSTEM_ID}.pdfImport`]: { buch, seite: g.seite } });
+  const vorhanden = new Map((await pack.getDocuments()).map((d) => [d.id, d]));
+  const satz = KOMPENDIUM.kategorien[kat];
+  const ziele = satz.map((e) => ({ _id: e._id, name: nameVon ? nameVon(e) : e.name, system: e.system, eintrag: e }));
+  const gv = gruppeVon && ((z) => gruppeVon(z.eintrag));
+  const { paare, nichtZugeordnet } = zuordnen(gelesen, ziele, { aliase, gruppeVon: gv });
+  const text = new Map(paare.map(([g, z]) => [z._id, g]));
+  const neu = [], aenderungen = [], behalten = [], ohne = [];
+  for (const e of satz) {
+    const g = text.get(e._id);
+    const html = g ? alsHtml(g.absaetze, `${buch}, S. ${g.seite}`) : "";
+    const flag = g ? { buch, seite: g.seite } : { buch, seite: null };
+    if (!g) ohne.push(e.name);
+    const doc = vorhanden.get(e._id);
+    if (!doc) {
+      const d = foundry.utils.deepClone(e);
+      d.system.beschreibung = html;
+      d.flags[SYSTEM_ID].pdfImport = flag;
+      neu.push(d);
+      continue;
+    }
+    if (!g) continue;
+    // selbst geschriebener Text (Eintrag ohne Importmarke) bleibt, außer auf ausdrücklichen Wunsch
+    if (doc.system.beschreibung && !doc.getFlag(SYSTEM_ID, "pdfImport") && !ueberschreiben) { behalten.push(e.name); continue; }
+    aenderungen.push({ _id: e._id, "system.beschreibung": html, [`flags.${SYSTEM_ID}.pdfImport`]: flag });
   }
-  if (aenderungen.length) {
+  if (neu.length || aenderungen.length) {
     const gesperrt = pack.locked;
     if (gesperrt) await pack.configure({ locked: false });
-    try { await Item.updateDocuments(aenderungen, { pack: pack.collection }); }
-    finally { if (gesperrt) await pack.configure({ locked: true }); }
+    try {
+      if (neu.length) await Item.createDocuments(neu, { pack: pack.collection, keepId: true });
+      if (aenderungen.length) await Item.updateDocuments(aenderungen, { pack: pack.collection });
+    } finally { if (gesperrt) await pack.configure({ locked: true }); }
   }
   return {
-    kategorie: kat, gelesen: gelesen.length, geschrieben: aenderungen.length, behalten,
+    kategorie: kat, gelesen: gelesen.length, angelegt: neu.length, geschrieben: paare.length - behalten.length, behalten,
     // beim Kodex gehören nicht zugeordnete Einträge meist in die andere Kategorie
     nichtZugeordnet: nurPassende ? [] : nichtZugeordnet.map((g) => g.name),
-    ohne: ohne.map((z) => z.name),
+    ohne,
   };
 }
 
@@ -113,7 +145,7 @@ function berichtZeigen(b) {
   const liste = (titel, l) => (l.length ? `<details><summary>${esc(titel)} (${l.length})</summary><p>${l.map(esc).join(", ")}</p></details>` : "");
   const inhalt = `<div class="midgard-bericht">
     <p>Aus <strong>${esc(b.dateiname)}</strong> (${esc(b.buch)}) übernommen:</p>
-    <ul>${b.teile.map((t) => `<li>${esc(t.kategorie)}: ${t.geschrieben} Beschreibungen</li>`).join("")}</ul>
+    <ul>${b.teile.map((t) => `<li>${esc(t.kategorie)}: ${t.angelegt} neu angelegt, ${t.geschrieben} mit Beschreibung</li>`).join("")}</ul>
     ${b.teile.map((t) => liste(`${t.kategorie}: vorhandener Text behalten`, t.behalten) + liste(`${t.kategorie}: in der PDF gefunden, aber nicht zugeordnet`, t.nichtZugeordnet) + liste(`${t.kategorie}: ohne Beschreibung aus diesem Buch`, t.ohne)).join("")}
     <p class="hinweis">Die Texte stehen nur in den Kompendien dieser Welt. Tabellen aus dem Buch erscheinen als Fließtext. Bereits auf Charakterbögen liegende Gegenstände behalten ihren alten Stand.</p>
   </div>`;
