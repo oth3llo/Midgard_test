@@ -21,6 +21,8 @@ export class AbenteurerDaten extends foundry.abstract.TypeDataModel {
       eigenschaften: new f.SchemaField(Object.fromEntries(EIGENSCHAFTEN.map((e) => [e, zahlOderLeer()]))),
       lp: vorrat(), ap: vorrat(), b: zahlOderLeer(),
       sg: vorrat(), gg: zahl(0),
+      // schaltbare Zustände im Kampf (Kodex S. 71, 77); erschöpft und belastet ergeben sich von selbst
+      zustaende: new f.SchemaField(Object.fromEntries(["liegend", "geblendet", "ueberrascht", "wehrlos"].map((k) => [k, new f.BooleanField({ required: true, initial: false })]))),
       es: zahl(0), ep: zahl(0), gold: new f.NumberField({ required: true, nullable: false, initial: 0 }),
       faehigkeiten: new f.ArrayField(new f.ObjectField(), { required: true, initial: [] }),
       zauberPP: new f.ObjectField({ required: true, initial: {} }),

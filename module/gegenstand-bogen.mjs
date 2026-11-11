@@ -15,6 +15,18 @@ const el = (tag, attrs = {}, ...kinder) => {
   return e;
 };
 
+/** Schlagwörter im Kopf je Typ (wie die Merkmalsleiste in PF2e). */
+const SCHLAGWORTE = {
+  zauber: ["gruppe", "stufe", "art", "ursprung", "agens"],
+  waffe: ["fertigkeit", "art"],
+  ruestung: ["kuerzel"],
+  fertigkeit: ["leiteigenschaft", "lerngruppe"],
+  waffenfertigkeit: ["schwierigkeit", "lerngruppe"],
+  gegenstand: ["kategorie", "unterkategorie"],
+  typ: ["kuerzel", "artName"],
+};
+const leer = (v) => v === "" || v === null || v === undefined || (Array.isArray(v) && !v.length) || (typeof v === "object" && !Array.isArray(v) && !Object.values(v).some((x) => x !== null && x !== "" && x !== 0));
+
 const TextEditorKlasse = () => foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
 
 export class GegenstandBogen extends ItemSheetV2 {
@@ -29,28 +41,35 @@ export class GegenstandBogen extends ItemSheetV2 {
     const item = this.item;
     const bearbeitbar = this.isEditable;
     const felder = item.system.schema?.fields ?? {};
-    const wurzel = el("div", { class: "mg-wurzel" });
+    // gleiche Gestaltung wie der Charakterbogen
+    const wurzel = el("div", { class: "mg-wurzel midgard-cmt" });
+    const schlagworte = (SCHLAGWORTE[item.type] ?? []).map((k) => [k, item.system[k]]).filter(([, v]) => !leer(v))
+      .map(([k, v]) => el("span", { class: "mg-schlagwort", title: FELDNAMEN[k] ?? k, text: k === "stufe" ? `Stufe ${v}` : detailText(k, v) }));
 
-    wurzel.append(el("header", { class: "mg-kopf" },
+    wurzel.append(el("header", { class: "mg-kopf karte" },
       el("img", { src: item.img, alt: "", class: "mg-bild" }),
-      el("div", {},
+      el("div", { class: "mg-kopf-text" },
         bearbeitbar ? el("input", { type: "text", name: "name", value: item.name, "aria-label": "Name" }) : el("h2", { text: item.name }),
-        el("p", { class: "mg-typ", text: game.i18n.localize(`TYPES.Item.${item.type}`) }))));
+        el("p", { class: "mg-schlagworte" }, el("span", { class: "mg-schlagwort mg-typ", text: game.i18n.localize(`TYPES.Item.${item.type}`) }), schlagworte))));
 
-    const dl = el("dl", { class: "mg-felder" });
-    // Reihenfolge und Umfang aus dem Datenmodell, nicht aus den Eigenschaften der Instanz
+    // Werte zweispaltig; Reihenfolge aus dem Datenmodell. Gesperrt ohne leere Felder und ohne die Schlagwörter.
+    const felderListe = el("dl", { class: "mg-felder" });
     for (const [schluessel, feld] of Object.entries(felder)) {
-      if (["beschreibung", "kurzwirkung"].includes(schluessel)) continue;
+      if (["beschreibung", "kurzwirkung", "quelle"].includes(schluessel)) continue;
       const wert = item.system[schluessel];
-      dl.append(el("dt", { text: FELDNAMEN[schluessel] ?? schluessel }), el("dd", {}, this.#eingabe(schluessel, wert, feld, bearbeitbar)));
+      if (!bearbeitbar && (leer(wert) || (SCHLAGWORTE[item.type] ?? []).includes(schluessel))) continue;
+      const lang = !bearbeitbar && String(detailText(schluessel, wert)).length > 40;
+      felderListe.append(el("div", { class: lang ? "mg-feld breit" : "mg-feld" }, el("dt", { text: FELDNAMEN[schluessel] ?? schluessel }), el("dd", {}, this.#eingabe(schluessel, wert, feld, bearbeitbar))));
     }
-    wurzel.append(dl);
+    if (bearbeitbar && felder.quelle) felderListe.append(el("div", { class: "mg-feld" }, el("dt", { text: FELDNAMEN.quelle ?? "Quelle" }), el("dd", {}, this.#eingabe("quelle", item.system.quelle, felder.quelle, true))));
+    if (felderListe.children.length) wurzel.append(el("section", { class: "karte mg-werte" }, felderListe));
 
-    wurzel.append(el("label", { class: "mg-kurz" }, el("span", { text: FELDNAMEN.kurzwirkung }),
+    const textKarte = el("section", { class: "karte mg-textkarte" });
+    if (bearbeitbar || item.system.kurzwirkung) textKarte.append(el("label", { class: "mg-kurz" }, el("span", { text: FELDNAMEN.kurzwirkung }),
       bearbeitbar ? el("input", { type: "text", name: "system.kurzwirkung", value: item.system.kurzwirkung ?? "", placeholder: "ein Satz in eigenen Worten" })
-        : el("p", { text: item.system.kurzwirkung || "–" })));
+        : el("p", { text: item.system.kurzwirkung })));
 
-    const beschreibung = el("section", { class: "mg-beschreibung" }, el("h3", { text: FELDNAMEN.beschreibung }));
+    const beschreibung = el("div", { class: "mg-beschreibung" }, el("h3", { text: FELDNAMEN.beschreibung }));
     if (bearbeitbar) {
       const ta = el("textarea", { name: "system.beschreibung", rows: "8" });
       ta.value = item.system.beschreibung ?? "";
@@ -62,9 +81,11 @@ export class GegenstandBogen extends ItemSheetV2 {
     } else {
       beschreibung.append(el("p", { class: "mg-leer", text: "Keine Beschreibung hinterlegt." }));
     }
-    wurzel.append(beschreibung);
-    const fundstelle = item.getFlag(SYSTEM_ID, "quelle");
-    if (fundstelle) wurzel.append(el("p", { class: "mg-fundstelle", text: `Fundstelle: ${fundstelle}` }));
+    textKarte.append(beschreibung);
+    // eine einzige Fundstelle: steht sie schon im importierten Text, keine zweite Zeile
+    const fundstelle = item.getFlag(SYSTEM_ID, "quelle") || item.system.quelle;
+    if (fundstelle && !beschreibung.querySelector(".midgard-fundstelle")) textKarte.append(el("p", { class: "mg-fundstelle", text: `Fundstelle: ${fundstelle}` }));
+    wurzel.append(textKarte);
     return wurzel;
   }
 

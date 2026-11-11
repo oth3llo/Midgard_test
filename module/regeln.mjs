@@ -9,6 +9,22 @@ export const ZAUBERGRUPPEN = ["Beherrschen", "Bewegen", "Erkennen", "Erschaffen"
 export const SINNE = ["Sehen", "Nachtsicht", "Hören", "Riechen", "Sechster Sinn"];
 /** Metallrüstungen (Kodex S. 73): Mindeststärke, Verlust an Gw und B, Verlust des Angriffsbonus. */
 export const METALLRUESTUNG = { KR: { st: 31, gw: 0, b: 4, anb: 0 }, PR: { st: 61, gw: 25, b: 8, anb: 0 }, VR: { st: 61, gw: 40, b: 12, anb: 1 } };
+/** Lasten nach Stärke (Kodex S. 58, Tabelle 1): [bis St, Normallast, schwere Last, Höchstlast] in kg. */
+export const LASTEN = [[10, 5, 20, 40], [30, 10, 25, 50], [60, 15, 30, 60], [80, 20, 35, 70], [95, 25, 40, 75], [99, 30, 45, 80], [100, 35, 50, 90]];
+/**
+ * Schaltbare Zustände (Kodex S. 71, 77). angriff/abwehr: eigene Abzüge, gegner: Zuschlag für Angreifer.
+ * Die Abwehr Geblendeter folgt der Zeile „Abwehr in völliger Dunkelheit“ (–4).
+ */
+export const ZUSTAENDE = [
+  { id: "liegend", name: "liegend", icon: "fa-person-falling", angriff: -4, nurNah: true, gegnerNah: 4,
+    text: "EW:Angriff –4 im Nahkampf; stehende Nahkampfgegner +4. Keine Zweihand-, Wurf- und Schusswaffen außer Armbrüsten (Kodex S. 71, 77)." },
+  { id: "geblendet", name: "geblendet", icon: "fa-eye-slash", angriff: -6, abwehr: -4,
+    text: "EW:Angriff –6, WW:Abwehr –4 wie in völliger Dunkelheit (Kodex S. 77)." },
+  { id: "ueberrascht", name: "überrascht", icon: "fa-bolt", abwehr: -4,
+    text: "WW:Abwehr –4 (Kodex S. 77)." },
+  { id: "wehrlos", name: "wehrlos", icon: "fa-hand", gegner: 4, keineAbwehr: true,
+    text: "Kein WW:Abwehr, jeder Treffer ist schwer; Angreifer +4 (Kodex S. 71, 77)." },
+];
 /** Positive Boni sinken um n, negative bleiben (Kodex S. 73: „verringert sich um“). */
 const mindern = (wert, n) => (n === "alle" ? Math.min(wert, 0) : Math.max(Math.min(wert, 0), wert - n));
 
@@ -31,6 +47,7 @@ export const vz = (w) => (w === null || w === undefined || Number.isNaN(w) ? "�
  * @param {Item[]} items   eingebettete Gegenstände
  */
 export function ableiten(s, items) {
+  items = items ?? [];
   const e = s.eigenschaften;
   const art = s.typArt;                                   // K, ZK, Z oder leer
   const kannZaubern = art === "Z" || art === "ZK";
@@ -70,13 +87,40 @@ export function ableiten(s, items) {
   if (r.ruestung.kuerzel === "VR" && !items.some((i) => i.type === "fertigkeit" && i.name === "Kampf in Vollrüstung")) r.kampfAbzuege.push({ wert: -2, grund: "Vollrüstung ohne Kampf in Vollrüstung", nurNah: true });
   if ((s.ap?.wert ?? 1) <= 0 && (s.ap?.max ?? 0) > 0) r.kampfAbzuege.push({ wert: -4, grund: "erschöpft (0 AP)", nurNah: false });
   r.erschoepft = (s.ap?.wert ?? 1) <= 0 && (s.ap?.max ?? 0) > 0;
+
+  // Last (Kodex S. 58): Rüstung und Kleidung zählen nicht mit; über der Normallast ist man belastet
+  const zaehlt = (i) => !(i.type === "ruestung" && i.system.getragen);
+  const kg = items.filter(zaehlt).reduce((summe, i) => summe + (Number(i.system.gewicht) || 0) * (i.type === "gegenstand" ? i.system.anzahl ?? 1 : 1), 0);
+  const zeile = e.St === null || e.St === undefined ? null : LASTEN.find(([bis]) => e.St <= bis) ?? LASTEN.at(-1);
+  r.last = { kg: Math.round(kg * 100) / 100, normal: zeile?.[1] ?? null, schwer: zeile?.[2] ?? null, hoechst: zeile?.[3] ?? null };
+  r.last.stufe = zeile === null ? "unbekannt" : kg > r.last.hoechst ? "zu schwer" : kg > r.last.normal ? "belastet" : "frei";
+  r.belastet = r.last.stufe === "belastet" || r.last.stufe === "zu schwer";
+  if (r.belastet) r.kampfAbzuege.push({ wert: -4, grund: "schwer belastet", nurNah: false });
+  if (r.belastet && r.bEffektiv !== null) r.bEffektiv = Math.floor(r.bEffektiv / 2);
+
+  // schaltbare Zustände
+  r.zustaende = Object.fromEntries(ZUSTAENDE.map((z) => [z.id, !!s.zustaende?.[z.id]]));
+  for (const z of ZUSTAENDE) {
+    if (!r.zustaende[z.id]) continue;
+    if (z.angriff) r.kampfAbzuege.push({ wert: z.angriff, grund: z.name, nurNah: !!z.nurNah, nur: "angriff" });
+    if (z.abwehr) r.kampfAbzuege.push({ wert: z.abwehr, grund: z.name, nurNah: false, nur: "abwehr" });
+  }
+  r.wehrlos = r.zustaende.wehrlos;
+  // Zuschläge für Angreifer gegen diesen Abenteurer (höchstens einmal +4 aus „sehr leicht“)
+  r.gegnerZuschlag = (nah, angreiferLiegt) => {
+    const gruende = [];
+    if (r.erschoepft) gruende.push("erschöpft");
+    if (r.wehrlos) gruende.push("wehrlos");
+    if (r.zustaende.liegend && nah && !angreiferLiegt) gruende.push("liegt am Boden");
+    return gruende.length ? { wert: 4, grund: `Ziel ${gruende.join(", ")}` } : null;
+  };
   r.abwehr = r.gradAbwehr + abB;
 
   // Verteidigungswaffe: höchster Wert unter den Verteidigungs-Waffenfertigkeiten, wenn eine passende Waffe bereitliegt
   const vertFert = items.filter((i) => i.type === "waffenfertigkeit" && i.system.verteidigung);
   const vertWaffen = items.filter((i) => i.type === "waffe" && i.system.art === "verteidigung" && i.system.ausgeruestet);
   const passend = vertFert.filter((f) => vertWaffen.some((w) => w.system.fertigkeit === f.name));
-  r.verteidigungswaffe = passend.length && !r.erschoepft ? Math.max(...passend.map((f) => f.system.wert)) : null;
+  r.verteidigungswaffe = passend.length && !r.erschoepft && !r.wehrlos ? Math.max(...passend.map((f) => f.system.wert)) : null;
 
   r.resistenzGeist = r.gradAbwehr + (r.boni.ResG ?? 0);
   r.resistenzKoerper = r.gradAbwehr + (r.boni.ResK ?? 0);
@@ -125,3 +169,6 @@ export function schadensFormel(text, bonus = 0) {
   if (!/^\d*d\d+([+-]\d+)?$/.test(t)) return null;
   return bonus ? `${t}${bonus > 0 ? "+" : ""}${bonus}` : t;
 }
+
+/** Würfelformel in Midgard-Schreibweise: „1d6-1+3“ → „1W6–1+3“. */
+export const wNotation = (f) => String(f ?? "").replace(/(\d*)d(\d+)/g, "$1W$2").replace(/-/g, "–");

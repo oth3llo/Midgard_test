@@ -3,7 +3,7 @@
 // Der Angreifer würfelt; jedes anvisierte Ziel erhält in der Chatkarte eine Aufforderung zur
 // Abwehr. Ob der Verteidiger selbst würfelt oder automatisch abgewehrt wird, ist einstellbar.
 import { SYSTEM_ID } from "./kategorien.mjs";
-import { vz } from "./regeln.mjs";
+import { vz, wNotation } from "./regeln.mjs";
 import { w20, wurfZeile, nachricht, kritHinweis, zuschlagAbfragen, esc, ppGutschreiben } from "./wuerfe.mjs";
 
 const SOCKET = `system.${SYSTEM_ID}`;
@@ -40,13 +40,19 @@ export async function angreifen(actor, waffeId, { ohneDialog = false } = {}) {
   const nah = w.art !== "fernkampf";
   const hinweise = [];
   let mod = 0;
-  for (const a of d.kampfAbzuege) if (!a.nurNah || nah) { mod += a.wert; hinweise.push(`${vz(a.wert)} ${a.grund}`); }
-  if (ziele.length === 1 && ziele[0].system.abgeleitet?.erschoepft) { mod += 4; hinweise.push(`+4 Ziel erschöpft`); }
+  // Zusammensetzung für die Chatkarte
+  const fertWert = actor.items.find((i) => i.type === "waffenfertigkeit" && i.name === w.fertigkeit)?.system.wert ?? 0;
+  const teile = [[w.fertigkeit, fertWert], ["Angriffsbonus", d.angriffsBonus], ...(w.spezialwaffe ? [["Spezialwaffe", 2]] : [])];
+  for (const a of d.kampfAbzuege) if ((!a.nurNah || nah) && a.nur !== "abwehr") { mod += a.wert; hinweise.push(`${vz(a.wert)} ${a.grund}`); teile.push([a.grund, a.wert]); }
+  const zuschlag = ziele.length === 1 ? ziele[0].system.abgeleitet?.gegnerZuschlag?.(nah, d.zustaende?.liegend) : null;
+  if (zuschlag) { mod += zuschlag.wert; hinweise.push(`${vz(zuschlag.wert)} ${zuschlag.grund}`); teile.push([zuschlag.grund, zuschlag.wert]); }
+  if (ziele.length > 1) hinweise.push("Mehrere Ziele: Zuschläge gegen erschöpfte, wehrlose oder liegende Ziele bitte von Hand eintragen.");
   if (!ziele.length) hinweise.push("Kein Ziel anvisiert: Abwehr wird nicht angefordert.");
   if (!ohneDialog) {
-    const a = await zuschlagAbfragen(`EW:Angriff mit ${w.name}`, { hinweise });
+    const a = await zuschlagAbfragen(`EW:Angriff mit ${w.name}`, { hinweise, wert: w.ew, basisMod: mod });
     if (!a) return;
     mod += a.mod;
+    teile.push(...(a.teile ?? []));
   }
   const angriff = await w20(w.ew, mod);
   const rolls = [angriff.roll];
@@ -66,9 +72,9 @@ export async function angreifen(actor, waffeId, { ohneDialog = false } = {}) {
   };
   const inhalt = `<div class="midgard-karte mk-angriff">
     <header>EW:Angriff · ${esc(w.name)}</header>
-    ${wurfZeile(angriff)}
+    ${wurfZeile(angriff, teile)}
     <p class="mk-ergebnis ${angriff.erfolg ? "gut" : "schlecht"}">${angriff.krit === "erfolg" ? "kritischer Treffer" : angriff.krit === "fehler" ? "kritischer Fehler" : angriff.erfolg ? "Treffer" : "verfehlt"}</p>
-    ${schaden ? `<p class="mk-schaden">Schaden ${esc(w.formel)}: <strong>${schaden.gesamt}</strong></p>` : ""}
+    ${schaden ? `<p class="mk-schaden">Schaden ${esc(wNotation(w.formel))}: <strong>${schaden.gesamt}</strong></p>` : ""}
     ${krit?.html ?? ""}
     ${angriff.krit === "erfolg" ? `<p class="mk-krit">Kritischer Treffer: nur ein kritisch erfolgreicher WW:Abwehr hebt ihn auf (Kodex S. 87).</p>` : ""}
     ${pp ? `<p class="mk-pp">Praxispunkt möglich für ${esc(pp.name)} <button type="button" data-midgard-aktion="pp">PP gutschreiben</button></p>` : ""}
@@ -136,16 +142,19 @@ export async function abwehren(message, zielUuid, { automatisch: auto = false } 
   const vw = verteidigungswaffe(ziel, angriff);
   let mod = 0;
   const hinweise = [`gegen ${angriff.gesamt} (${angriff.angreiferName}, ${angriff.waffe})`];
-  for (const a of d.kampfAbzuege) if (!a.nurNah || nah) { mod += a.wert; hinweise.push(`${vz(a.wert)} ${a.grund}`); }
+  const teile = [["Abwehr (Grad)", d.gradAbwehr], ["Abwehrbonus", d.abwehrBonusMitRuestung]];
+  for (const a of d.kampfAbzuege) if ((!a.nurNah || nah) && a.nur !== "angriff") { mod += a.wert; hinweise.push(`${vz(a.wert)} ${a.grund}`); teile.push([a.grund, a.wert]); }
+  if (d.wehrlos) return wehrlosGetroffen(message, ziel, angriff, zielUuid);
   let mitVW = !!vw;
   if (!auto) {
     const extra = vw ? `<label class="zeile"><input type="checkbox" name="vw" data-zusatz checked> ${esc(vw.name)} einsetzen (${vz(vw.wert)})</label>` : "";
-    const a = await zuschlagAbfragen(`WW:Abwehr · ${ziel.name}`, { hinweise, extra });
+    const a = await zuschlagAbfragen(`WW:Abwehr · ${ziel.name}`, { hinweise, extra, wert: d.abwehr, ziel: angriff.gesamt, basisMod: mod + (vw?.wert ?? 0) });
     if (!a) return;
     mod += a.mod;
+    teile.push(...(a.teile ?? []));
     mitVW = vw && a.vw !== false;
   }
-  if (mitVW) mod += vw.wert;
+  if (mitVW) { mod += vw.wert; teile.push([vw.name, vw.wert]); }
   const ww = await w20(d.abwehr, mod, angriff.gesamt);
   // Kritischer Treffer: nur ein kritischer WW:Abwehr hebt ihn auf (dann leichter Schaden)
   let gelungen = angriff.krit === "erfolg" ? ww.krit === "erfolg" : ww.erfolg;
@@ -162,7 +171,7 @@ export async function abwehren(message, zielUuid, { automatisch: auto = false } 
   const pp = mitVW && ww.krit === "erfolg" ? { actor: ziel.uuid, ziel: { typ: "item", id: vw.fertigkeitId }, name: vw.fertigkeit } : null;
   const inhalt = `<div class="midgard-karte mk-abwehr">
     <header>WW:Abwehr · ${esc(ziel.name)} <small>gegen ${angriff.gesamt}${auto ? ", automatisch" : ""}</small></header>
-    ${wurfZeile(ww)}${mitVW ? `<p class="mk-klein">mit ${esc(vw.name)} ${vz(vw.wert)}</p>` : ""}
+    ${wurfZeile(ww, teile)}${mitVW ? `<p class="mk-klein">mit ${esc(vw.name)} ${vz(vw.wert)}</p>` : ""}
     <p class="mk-ergebnis ${gelungen ? "gut" : "schlecht"}">${gelungen ? "abgewehrt: leichter Treffer" : "schwerer Treffer"}</p>
     <p class="mk-schaden">${ergebnis.text}</p>
     ${zusatz.join("")}
@@ -170,6 +179,23 @@ export async function abwehren(message, zielUuid, { automatisch: auto = false } 
   </div>`;
   await nachricht(ziel, inhalt, rolls, { abwehr: { angriff: message.id, ziel: zielUuid, gelungen, ...ergebnis }, pp });
   await zielErledigt(message, zielUuid, gelungen);
+}
+
+/** Wehrlose dürfen keinen WW:Abwehr würfeln, jeder Treffer ist schwer (Kodex S. 71). */
+async function wehrlosGetroffen(message, ziel, angriff, zielUuid) {
+  const ergebnis = schadenBerechnen(ziel, angriff, true);
+  await ziel.update({ "system.ap.wert": ergebnis.apNeu, "system.lp.wert": ergebnis.lpNeu });
+  const rolls = [];
+  const zusatz = [];
+  if (angriff.krit === "erfolg") { const k = await kritHinweis("erfolg", "schaden"); rolls.push(k.roll); zusatz.push(k.html); }
+  const inhalt = `<div class="midgard-karte mk-abwehr">
+    <header>WW:Abwehr · ${esc(ziel.name)} <small>gegen ${angriff.gesamt}</small></header>
+    <p class="mk-ergebnis schlecht">wehrlos: keine Abwehr möglich, schwerer Treffer</p>
+    <p class="mk-schaden">${ergebnis.text}</p>
+    ${zusatz.join("")}
+  </div>`;
+  await nachricht(ziel, inhalt, rolls, { abwehr: { angriff: message.id, ziel: zielUuid, gelungen: false, ...ergebnis } });
+  await zielErledigt(message, zielUuid, false);
 }
 
 /** Schaden nach Kodex S. 61-62, 69, 71: AP sinken höchstens auf 0, LP nur bei schwerem Treffer. */

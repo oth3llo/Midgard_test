@@ -38,7 +38,7 @@ export class KompendiumBrowser extends ApplicationV2 {
 
   #kat = "fertigkeiten";
   #suche = "";
-  #filter = {};          // kat -> {feld: wert}
+  #filter = {};          // kat -> {feld: Set der gewählten Werte | {von, bis} bei Zahlen}
   #sortierung = {};      // kat -> {feld, ab}
   #auswahl = null;       // _id des gewählten Eintrags
   #daten = {};           // kat -> [{_id, name, img, system, uuid}]
@@ -75,7 +75,15 @@ export class KompendiumBrowser extends ApplicationV2 {
     const filter = this.#filter[this.#kat] ?? {};
     const worte = normal(this.#suche).split(/\s+/).filter(Boolean);
     let liste = eintraege.filter((e) => {
-      for (const [f, w] of Object.entries(filter)) if (w !== "" && String(feld(e.system, f)) !== w) return false;
+      for (const [f, w] of Object.entries(filter)) {
+        const v = feld(e.system, f);
+        if (w instanceof Set) { if (w.size && !w.has(String(v))) return false; }
+        else if (w && (Number.isFinite(w.von) || Number.isFinite(w.bis))) {
+          if (typeof v !== "number") return false;
+          if (Number.isFinite(w.von) && v < w.von) return false;
+          if (Number.isFinite(w.bis) && v > w.bis) return false;
+        }
+      }
       if (!worte.length) return true;
       const heu = normal([e.name, ...def.spalten.map(([f]) => anzeige(feld(e.system, f))), e.system.kurzwirkung].join(" "));
       return worte.every((w) => heu.includes(w));
@@ -96,14 +104,15 @@ export class KompendiumBrowser extends ApplicationV2 {
 
   async _renderHTML() {
     const eintraege = await this.#laden(this.#kat);
-    const wurzel = el("div", { class: "mb-wurzel" });
-    wurzel.append(this.#reiter(), this.#werkzeugleiste(eintraege), el("div", { class: "mb-haupt" }, el("div", { class: "mb-liste" }), el("aside", { class: "mb-detail" })));
+    // gleiche Gestaltung wie der Charakterbogen (Farben, Schrift, Knöpfe)
+    const wurzel = el("div", { class: "mb-wurzel midgard-cmt" });
+    wurzel.append(this.#reiter(), el("div", { class: "mb-haupt" }, this.#filterleiste(eintraege), el("div", { class: "mb-liste" }), el("aside", { class: "mb-detail" })));
     if (this.#ausKompendium[this.#kat] && !eintraege.length) {
       wurzel.insertBefore(el("p", { class: "mb-hinweis" }, "Dieses Kompendium ist noch leer. Es wird durch den Import der eigenen Regelwerk-PDF gefüllt (Der Kodex, Das Arkanum)",
-        game.user.isGM ? [": ", el("button", { type: "button", text: "Regelwerk-PDF importieren", onclick: () => pdfImportStarten() })] : ", das macht der Spielleiter."), wurzel.children[2]);
+        game.user.isGM ? [": ", el("button", { type: "button", text: "Regelwerk-PDF importieren", onclick: () => pdfImportStarten() })] : ", das macht der Spielleiter."), wurzel.children[1]);
     }
     if (!this.#ausKompendium[this.#kat]) {
-      wurzel.insertBefore(el("p", { class: "mb-hinweis", text: "Die Kompendien sind in dieser Welt noch nicht angelegt. Das geschieht, sobald ein Spielleiter die Welt öffnet; gefüllt werden sie durch den Import der Regelwerk-PDFs." }), wurzel.children[2]);
+      wurzel.insertBefore(el("p", { class: "mb-hinweis", text: "Die Kompendien sind in dieser Welt noch nicht angelegt. Das geschieht, sobald ein Spielleiter die Welt öffnet; gefüllt werden sie durch den Import der Regelwerk-PDFs." }), wurzel.children[1]);
     }
     this.#listeZeichnen(wurzel, eintraege);
     return wurzel;
@@ -116,32 +125,55 @@ export class KompendiumBrowser extends ApplicationV2 {
   #reiter() {
     return el("nav", { class: "mb-reiter" }, Object.entries(KATEGORIEN).map(([kat, def]) =>
       el("button", {
-        type: "button", class: kat === this.#kat ? "aktiv" : null, "data-kat": kat, text: def.label,
+        type: "button", class: kat === this.#kat ? "aktiv" : null, "data-kat": kat, text: def.label, "aria-pressed": String(kat === this.#kat),
         onclick: () => { this.#kat = kat; this.#auswahl = null; this.render(); },
-      })));
+      })),
+      game.user.isGM ? el("button", { type: "button", class: "mb-pdf", title: "Beschreibungen aus Kodex oder Arkanum (eigene PDF) in die Kompendien dieser Welt übernehmen", onclick: () => pdfImportStarten() },
+        el("i", { class: "fa-solid fa-file-pdf", "aria-hidden": "true" }), " Regelwerk-PDF importieren") : null);
   }
 
-  #werkzeugleiste(eintraege) {
+  /** Filterleiste links: Suche, Schaltflächen je Wert (Mehrfachauswahl), Bereich für Zahlen. */
+  #filterleiste(eintraege) {
     const def = KATEGORIEN[this.#kat];
     const filter = (this.#filter[this.#kat] ??= {});
-    const leiste = el("div", { class: "mb-werkzeuge" });
+    const neu = () => this.#listeZeichnen(this.element, eintraege);
+    const leiste = el("aside", { class: "mb-filterleiste", "aria-label": "Filter" });
     leiste.append(el("input", {
       type: "search", class: "mb-suche", placeholder: "Suchen …", value: this.#suche, "aria-label": "Suchen",
-      oninput: (ev) => { this.#suche = ev.target.value; this.#listeZeichnen(this.element, eintraege); },
+      oninput: (ev) => { this.#suche = ev.target.value; neu(); },
     }));
     for (const [f, label, sort] of def.filter) {
       const werte = [...new Set(eintraege.map((e) => feld(e.system, f)).filter((w) => w !== "" && w !== null && w !== undefined))];
+      if (!werte.length) continue;
       werte.sort(sort ?? ((a, b) => anzeige(a).localeCompare(anzeige(b), "de")));
-      leiste.append(el("label", { class: "mb-filter" }, `${label} `, el("select", {
-        "data-feld": f,
-        onchange: (ev) => { filter[f] = ev.target.value; this.#listeZeichnen(this.element, eintraege); },
-      }, el("option", { value: "", text: "alle" }), werte.map((w) => el("option", { value: String(w), selected: filter[f] === String(w), text: anzeige(w) })))));
+      const gruppe = el("fieldset", { class: "mb-filter", "data-feld": f }, el("legend", { text: label }));
+      if (werte.every((w) => typeof w === "number")) {
+        // Zahlenbereich, z. B. Stufe 2 bis 4
+        const b = (filter[f] ??= { von: NaN, bis: NaN });
+        const zahl = (grenze, ph) => el("input", {
+          type: "number", "data-feld": f, "data-grenze": grenze, placeholder: String(ph), value: Number.isFinite(b[grenze]) ? String(b[grenze]) : "", "aria-label": `${label} ${grenze}`,
+          oninput: (ev) => { b[grenze] = ev.target.value === "" ? NaN : Number(ev.target.value); neu(); },
+        });
+        gruppe.append(el("div", { class: "mb-bereich" }, zahl("von", werte[0]), el("span", { text: "bis" }), zahl("bis", werte.at(-1))));
+      } else {
+        const gewaehlt = filter[f] instanceof Set ? filter[f] : (filter[f] = new Set());
+        gruppe.append(el("div", { class: "mb-chips" }, werte.map((w) => el("button", {
+          type: "button", class: gewaehlt.has(String(w)) ? "mb-chip an" : "mb-chip", "data-feld": f, "data-wert": String(w), "aria-pressed": String(gewaehlt.has(String(w))), text: anzeige(w),
+          onclick: (ev) => {
+            const an = !gewaehlt.has(String(w));
+            if (an) gewaehlt.add(String(w)); else gewaehlt.delete(String(w));
+            ev.currentTarget.classList.toggle("an", an);
+            ev.currentTarget.setAttribute("aria-pressed", String(an));
+            neu();
+          },
+        }))));
+      }
+      leiste.append(gruppe);
     }
     leiste.append(el("button", {
-      type: "button", class: "mb-zuruecksetzen", text: "Filter leeren",
+      type: "button", class: "mb-zuruecksetzen",
       onclick: () => { this.#suche = ""; this.#filter[this.#kat] = {}; this.render(); },
-    }));
-    if (game.user.isGM) leiste.append(el("button", { type: "button", class: "mb-pdf", title: "Beschreibungen aus Kodex oder Arkanum (eigene PDF) in die Kompendien dieser Welt übernehmen", text: "Regelwerk-PDF importieren", onclick: () => pdfImportStarten() }));
+    }, el("i", { class: "fa-solid fa-filter-circle-xmark", "aria-hidden": "true" }), " Filter leeren"));
     return leiste;
   }
 
@@ -160,7 +192,7 @@ export class KompendiumBrowser extends ApplicationV2 {
       },
     });
     const tabelle = el("table", { class: "mb-tabelle" },
-      el("thead", {}, el("tr", {}, kopf("name", "Name"), def.spalten.map(([f, t]) => kopf(f, t)))),
+      el("thead", {}, el("tr", {}, kopf("name", "Name"), def.spalten.map(([f, t]) => { const k = kopf(f, t); if (eintraege.some((e) => typeof feld(e.system, f) === "number")) k.classList.add("zahl"); return k; }))),
       el("tbody", {}, liste.map((e) => el("tr", {
         "data-id": e._id, class: e._id === this.#auswahl ? "gewaehlt" : null, draggable: e.uuid ? "true" : null, tabindex: "0",
         ondragstart: (ev) => ev.dataTransfer.setData("text/plain", JSON.stringify({ type: "Item", uuid: e.uuid })),
@@ -168,7 +200,7 @@ export class KompendiumBrowser extends ApplicationV2 {
         ondblclick: () => this.#oeffnen(e),
         onkeydown: (ev) => { if (ev.key === "Enter") this.#oeffnen(e); },
       }, el("td", {}, el("span", { class: "mb-name" }, el("img", { src: e.img, alt: "" }), e.name)),
-      def.spalten.map(([f, , fmt]) => el("td", { text: (fmt ?? anzeige)(feld(e.system, f)) }))))));
+      def.spalten.map(([f, , fmt]) => { const t = (fmt ?? anzeige)(feld(e.system, f)); return el("td", { text: t, title: String(t).length > 14 ? t : null, class: typeof feld(e.system, f) === "number" ? "zahl" : null }); })))));
     ziel.replaceChildren(el("p", { class: "mb-anzahl", text: `${liste.length} von ${eintraege.length} Einträgen` }), tabelle);
     this.#detailZeichnen(wurzel, eintraege.find((e) => e._id === this.#auswahl));
   }
@@ -183,6 +215,7 @@ export class KompendiumBrowser extends ApplicationV2 {
     const zeilen = Object.entries(e.system).filter(([k, v]) => !["beschreibung", "kurzwirkung"].includes(k) && v !== "" && v !== null && !(Array.isArray(v) && !v.length) && !(typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length));
     ziel.replaceChildren(...[
       el("h3", {}, el("img", { src: e.img, alt: "" }), e.name),
+      e.uuid ? el("button", { type: "button", class: "mb-oeffnen", onclick: () => this.#oeffnen(e) }, el("i", { class: "fa-solid fa-up-right-from-square", "aria-hidden": "true" }), " Öffnen") : null,
       e.system.kurzwirkung ? el("p", { class: "mb-kurz", text: e.system.kurzwirkung }) : null,
       el("dl", {}, zeilen.map(([k, v]) => [el("dt", { text: FELDNAMEN[k] ?? k }), el("dd", { text: detailText(k, v) })])),
       e.system.beschreibung ? (() => {
@@ -192,7 +225,6 @@ export class KompendiumBrowser extends ApplicationV2 {
         Promise.resolve(TE?.enrichHTML ? TE.enrichHTML(e.system.beschreibung) : e.system.beschreibung).then((h) => { d.innerHTML = h; });
         return d;
       })() : null,
-      e.uuid ? el("button", { type: "button", text: "Öffnen", onclick: () => this.#oeffnen(e) }) : null,
     ].filter(Boolean));
   }
 

@@ -18,25 +18,50 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 export { esc };
 
 /** Abfrage von Zuschlag/Abzug. Gibt null bei Abbruch zurück. */
-export async function zuschlagAbfragen(titel, { hinweise = [], extra = "" } = {}) {
+export async function zuschlagAbfragen(titel, { hinweise = [], extra = "", wert = null, ziel = 20, basisMod = 0 } = {}) {
   const D = foundry.applications?.api?.DialogV2;
-  if (!D) return { mod: 0 };
+  if (!D) return { mod: 0, teile: [] };
   const optionen = SCHWIERIGKEIT.map(([w, t]) => `<option value="${w}" ${w === 0 ? "selected" : ""}>${vz(w)} ${t}</option>`).join("");
-  const inhalt = `<div class="midgard-dialog">
+  const kennung = `midgard-dialog-${Math.random().toString(36).slice(2, 8)}`;
+  const inhalt = `<div class="midgard-dialog ${kennung}">
     ${hinweise.length ? `<ul class="hinweise">${hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>` : ""}
     <label>Schwierigkeit <select name="schwierigkeit">${optionen}</select></label>
     <label>weiterer Zuschlag <input type="number" name="frei" value="0" step="1"></label>
     ${extra}
+    ${wert !== null ? `<p class="vorschau" aria-live="polite"></p>` : ""}
   </div>`;
+  // Vorschau „Erfolg ab Wurf …“, aktualisiert bei jeder Änderung
+  const vorschau = (wurzel) => {
+    const box = wurzel?.querySelector?.(".vorschau");
+    if (!box) return;
+    const f = (n) => Number(wurzel.querySelector(`[name="${n}"]`)?.value || 0);
+    const gegen = wurzel.querySelector('[name="gegen"]');
+    const zielWert = gegen ? Number(gegen.value || 20) : ziel;
+    const noetig = zielWert - wert - basisMod - f("schwierigkeit") - f("frei");
+    box.innerHTML = noetig <= 2 ? "Gelingt bei jedem Wurf außer 1." : noetig >= 20 ? "Gelingt nur mit einer 20." : `Erfolg ab Wurf <strong>${noetig}</strong> auf dem W20.`;
+  };
+  const einrichten = () => {
+    const wurzel = document.querySelector(`.${kennung}`);
+    if (!wurzel || wurzel.dataset.eingerichtet) return;
+    wurzel.dataset.eingerichtet = "1";
+    vorschau(wurzel);
+    wurzel.addEventListener("input", () => vorschau(wurzel));
+    wurzel.addEventListener("change", () => vorschau(wurzel));
+  };
   try {
+    setTimeout(einrichten, 0);
     return await D.prompt({
       window: { title: titel },
       content: inhalt,
+      render: () => einrichten(),
       ok: {
         label: "Würfeln",
         callback: (_ev, knopf) => {
           const f = knopf.form.elements;
-          const daten = { mod: Number(f.schwierigkeit.value || 0) + Number(f.frei.value || 0) };
+          const schwierigkeit = Number(f.schwierigkeit.value || 0), frei = Number(f.frei.value || 0);
+          const daten = { mod: schwierigkeit + frei, teile: [] };
+          if (schwierigkeit) daten.teile.push([SCHWIERIGKEIT.find(([w]) => w === schwierigkeit)?.[1] ?? "Schwierigkeit", schwierigkeit]);
+          if (frei) daten.teile.push(["Zuschlag", frei]);
           for (const e of knopf.form.querySelectorAll("[data-zusatz]")) daten[e.name] = e.type === "checkbox" ? e.checked : e.value;
           return daten;
         },
@@ -81,8 +106,11 @@ export async function nachricht(actor, inhalt, rolls = [], flags = {}) {
   return ChatMessage.create(daten);
 }
 
-export function wurfZeile(w) {
-  return `<div class="mk-wurf"><span class="mk-w20 ${w.krit ?? ""}">${w.d20}</span> ${vz(w.wert)}${w.mod ? ` ${vz(w.mod)}` : ""} = <strong class="mk-gesamt">${w.gesamt}</strong></div>`;
+/** Wurfzeile mit aufklappbarer Zusammensetzung (z. B. Fertigkeitswert, Leiteigenschaft, Zuschläge). */
+export function wurfZeile(w, teile = []) {
+  const liste = teile.filter(([, v]) => v);
+  const details = liste.length ? `<details class="mk-teile"><summary>Zusammensetzung</summary><ul>${liste.map(([t, v]) => `<li><span>${esc(t)}</span> <strong>${vz(v)}</strong></li>`).join("")}<li class="mk-summe"><span>W20</span> <strong>${w.d20}</strong></li></ul></details>` : "";
+  return `<div class="mk-wurf"><span class="mk-w20 ${w.krit ?? ""}">${w.d20}</span> ${vz(w.wert)}${w.mod ? ` ${vz(w.mod)}` : ""} = <strong class="mk-gesamt">${w.gesamt}</strong></div>${details}`;
 }
 
 /**
@@ -92,11 +120,13 @@ export function wurfZeile(w) {
  */
 export async function erfolgswurf(actor, o) {
   let mod = o.mod ?? 0, ziel = o.ziel ?? 20;
+  const teile = [...(o.teile ?? []), ...(o.modTeile ?? [])];
   if (!o.ohneDialog) {
     const extra = o.gegnerFragen ? `<label>Ergebnis des gegnerischen EW <input type="number" name="gegen" data-zusatz value="20" step="1"></label>` : "";
-    const a = await zuschlagAbfragen(`${o.art ?? "EW"}:${o.titel}`, { hinweise: o.hinweise, extra });
+    const a = await zuschlagAbfragen(`${o.art ?? "EW"}:${o.titel}`, { hinweise: o.hinweise, extra, wert: o.wert, ziel, basisMod: mod });
     if (!a) return null;
     mod += a.mod;
+    teile.push(...(a.teile ?? []));
     if (o.gegnerFragen && a.gegen !== undefined && a.gegen !== "") ziel = Number(a.gegen);
   }
   const w = await w20(o.wert, mod, ziel);
@@ -108,7 +138,7 @@ export async function erfolgswurf(actor, o) {
   const krit = w.krit ? await kritHinweis(w.krit, o.art === "WW" ? "abwehr" : "fertigkeit") : null;
   const inhalt = `<div class="midgard-karte">
     <header>${esc(o.art ?? "EW")}:${esc(o.titel)}${ziel !== 20 || o.art === "WW" ? ` <small>gegen ${ziel}</small>` : ""}</header>
-    ${wurfZeile(w)}
+    ${wurfZeile(w, teile)}
     <p class="mk-ergebnis ${w.erfolg ? "gut" : "schlecht"}">${ergebnisText(w)}</p>
     ${o.zusatz ?? ""}${krit?.html ?? ""}${ppHtml}
   </div>`;

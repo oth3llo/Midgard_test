@@ -2,7 +2,7 @@
 // und Zauberblatt), aufgeteilt in Reiter. Die Übersicht entspricht dem Abenteurerblatt.
 // Solange das Erschaffungs- und Lernwerkzeug einen Charakter verwaltet, sind die von ihm
 // berechneten Werte hier schreibgeschützt; geändert werden sie im Reiter „Erschaffung & Lernen“.
-import { EIGENSCHAFTEN, EIGENSCHAFT_NAMEN, ZAUBERGRUPPEN, bonus, vz, gradAus, abTabelle } from "./regeln.mjs";
+import { EIGENSCHAFTEN, EIGENSCHAFT_NAMEN, ZAUBERGRUPPEN, ZUSTAENDE, bonus, vz, gradAus, abTabelle } from "./regeln.mjs";
 import { ausWerkzeug } from "./akteur.mjs";
 import { SYSTEM_ID } from "./kategorien.mjs";
 import { KompendiumBrowser } from "./browser.mjs";
@@ -14,6 +14,8 @@ const SPEICHER_VERZOEGERUNG = 400;
 
 const el = (tag, attrs = {}, ...kinder) => {
   const e = document.createElement(tag);
+  // Klickbare Links ohne Ziel (Würfe, Einträge) per Tastatur erreichbar machen
+  if (tag === "a" && !attrs?.href) { e.setAttribute("tabindex", "0"); e.setAttribute("role", "button"); }
   for (const [k, v] of Object.entries(attrs ?? {})) {
     if (v === undefined || v === null || v === false) continue;
     if (k === "text") e.textContent = v;
@@ -22,21 +24,24 @@ const el = (tag, attrs = {}, ...kinder) => {
     else e.setAttribute(k, v === true ? "" : v);
   }
   for (const k of kinder.flat(Infinity)) if (k !== null && k !== undefined && k !== false) e.append(k);
+  // Würfelbare Werte sichtbar kennzeichnen (kleines Würfelsymbol)
+  if (tag === "a" && String(attrs?.class ?? "").includes("ma-wurf") && !e.querySelector("i")) e.append(Object.assign(document.createElement("i"), { className: "fa-solid fa-dice-d20 ma-wuerfelsymbol", ariaHidden: "true" }));
   return e;
 };
 const karte = (titel, klasse, ...inhalt) => el("section", { class: ["karte", klasse] }, titel ? el("h3", { text: titel }) : null, ...inhalt);
 const zahlText = (w) => (w === null || w === undefined || w === "" ? "–" : String(w));
 const fmt = (n) => Number(n || 0).toLocaleString("de-DE");
+const icon = (name, klasse = "") => el("i", { class: `fa-solid ${name} ${klasse}`.trim(), "aria-hidden": "true" });
 
 export const REITER = [
-  { id: "uebersicht", titel: "Übersicht" },
-  { id: "fertigkeiten", titel: "Fertigkeiten" },
-  { id: "kampf", titel: "Kampf" },
-  { id: "zauber", titel: "Zauber", nur: (s, items) => s.abgeleitet.kannZaubern || items.some((i) => i.type === "zauber") },
-  { id: "ausruestung", titel: "Ausrüstung" },
-  { id: "persoenlich", titel: "Persönliches" },
-  { id: "entwicklung", titel: "Entwicklung" },
-  { id: "werkzeug", titel: "Erschaffung & Lernen" },
+  { id: "uebersicht", titel: "Übersicht", icon: "fa-user" },
+  { id: "fertigkeiten", titel: "Fertigkeiten", icon: "fa-list-check" },
+  { id: "kampf", titel: "Kampf", icon: "fa-shield-halved" },
+  { id: "zauber", titel: "Zauber", icon: "fa-wand-sparkles", nur: (s, items) => s.abgeleitet.kannZaubern || items.some((i) => i.type === "zauber") },
+  { id: "ausruestung", titel: "Ausrüstung", icon: "fa-box-open" },
+  { id: "persoenlich", titel: "Persönliches", icon: "fa-feather" },
+  { id: "entwicklung", titel: "Entwicklung", icon: "fa-chart-line" },
+  { id: "werkzeug", titel: "Erschaffung & Lernen", icon: "fa-hammer", werkzeug: true },
 ];
 
 export class AbenteurerBogen extends ActorSheetV2 {
@@ -55,6 +60,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
   #veraltet = false;       // Werkzeug hat geschrieben, übrige Reiter noch nicht neu gezeichnet
   #abgeglichen = false;
   #startZustand = null;
+  #leiste = null;           // Statusleiste über dem Werkzeug
 
   get #verwaltet() { return !!this.actor.system.zustand; }
 
@@ -69,15 +75,23 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const reiter = REITER.filter((r) => !r.nur || r.nur(s, items));
     if (!reiter.some((r) => r.id === this.#reiter)) this.#reiter = "uebersicht";
     const wurzel = el("div", { class: ["ma-wurzel", "midgard-cmt", this.#verwaltet && "verwaltet"] });
-    wurzel.append(this.#kopf(), el("nav", { class: "ma-reiter", role: "tablist" }, reiter.map((r) =>
-      el("button", { type: "button", role: "tab", "data-reiter": r.id, class: r.id === this.#reiter ? "aktiv" : null, "aria-selected": String(r.id === this.#reiter), text: r.titel, onclick: () => this.#wechseln(r.id) }))));
+    // Das Werkzeug ist kein gleichrangiger Reiter, sondern ein abgesetzter Knopf im Kopf
+    wurzel.append(this.#kopf(), el("nav", { class: "ma-reiter", role: "tablist" }, reiter.filter((r) => !r.werkzeug).map((r) =>
+      el("button", { type: "button", role: "tab", "data-reiter": r.id, class: r.id === this.#reiter ? "aktiv" : null, "aria-selected": String(r.id === this.#reiter), title: r.titel, onclick: () => this.#wechseln(r.id) },
+        icon(r.icon), el("span", { text: r.titel })))));
     const inhalt = el("div", { class: "ma-inhalt" });
     for (const r of reiter) {
       const panel = el("div", { class: ["ma-panel", r.id === this.#reiter && "aktiv"], "data-panel": r.id, role: "tabpanel" });
-      panel.append(...[].concat(await this[`_${r.id}`]?.(s, items) ?? []));
+      panel.append(...[].concat(await this[`_${r.id}`]?.(s, items) ?? []).filter((x) => x !== null && x !== undefined && x !== false));
       inhalt.append(panel);
     }
     wurzel.append(inhalt);
+    // Kopfzellen über Zahlenspalten ebenfalls rechtsbündig
+    for (const t of wurzel.querySelectorAll("table.ma-tabelle")) {
+      const zeile = [...t.querySelectorAll("tbody tr")].find((tr) => tr.children.length > 1);
+      const koepfe = t.querySelectorAll("thead th");
+      if (zeile) [...zeile.children].forEach((td, i) => { if (td.classList.contains("zahl")) koepfe[i]?.classList.add("zahl"); });
+    }
     return wurzel;
   }
 
@@ -100,6 +114,13 @@ export class AbenteurerBogen extends ActorSheetV2 {
       w.addEventListener("dragover", (ev) => ev.preventDefault());
       w.addEventListener("drop", (ev) => this.#ablegen(ev));
       w.addEventListener("click", (ev) => this.#wurfKlick(ev));
+      // Enter und Leertaste lösen Links mit Knopf-Rolle aus (Würfe, Einträge öffnen)
+      w.addEventListener("keydown", (ev) => {
+        const ziel = ev.target.closest?.('a[role="button"]');
+        if (!ziel || ziel.closest(".ma-werkzeug") || (ev.key !== "Enter" && ev.key !== " ")) return;
+        ev.preventDefault();
+        ziel.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: ev.shiftKey }));
+      });
     }
     // Ältere Charaktere (nur Werkzeug-Zustand) einmal je Öffnen in die Bogenwerte übernehmen
     if (!this.#abgeglichen && this.#verwaltet && this.isEditable && this.#werkzeug) {
@@ -114,7 +135,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
     this.#reiter = id;
     if (id === "werkzeug" && !this.#werkzeugWurzel) { this.render(); return; }
     if (this.#veraltet && id !== "werkzeug") { this.#veraltet = false; this.render(); return; }
-    for (const b of this.element.querySelectorAll(".ma-reiter button")) { const an = b.dataset.reiter === id; b.classList.toggle("aktiv", an); b.setAttribute("aria-selected", String(an)); }
+    for (const b of this.element.querySelectorAll("button[data-reiter]")) { const an = b.dataset.reiter === id; b.classList.toggle("aktiv", an); b.setAttribute("aria-selected", String(an)); }
     for (const p of this.element.querySelectorAll(".ma-panel")) p.classList.toggle("aktiv", p.dataset.panel === id);
   }
 
@@ -160,21 +181,25 @@ export class AbenteurerBogen extends ActorSheetV2 {
     switch (z.dataset.wurf) {
       case "pw": return pruefwurf(a, { titel: EIGENSCHAFT_NAMEN[z.dataset.eig], wert: s.eigenschaften[z.dataset.eig], ohneDialog });
       case "abwehr": {
+        if (d.wehrlos) return ui.notifications.warn(`${a.name} ist wehrlos und darf keinen WW:Abwehr würfeln (Kodex S. 71).`);
+        const abzuege = d.kampfAbzuege.filter((x) => x.nur !== "angriff");
         let mod = 0; const h = [];
-        for (const x of d.kampfAbzuege) { mod += x.wert; h.push(`${vz(x.wert)} ${x.grund}`); }
+        for (const x of abzuege) { mod += x.wert; h.push(`${vz(x.wert)} ${x.grund}`); }
         if (d.verteidigungswaffe !== null) h.push(`Verteidigungswaffe ${vz(d.verteidigungswaffe)} hier nicht eingerechnet; bei Angriffen aus dem Chat automatisch.`);
-        return erfolgswurf(a, { art: "WW", titel: "Abwehr", wert: d.abwehr, mod, hinweise: h, gegnerFragen: true, ohneDialog });
+        return erfolgswurf(a, { art: "WW", titel: "Abwehr", wert: d.abwehr, mod, hinweise: h, gegnerFragen: true, ohneDialog,
+          teile: [["Abwehr (Grad)", d.gradAbwehr], ["Abwehrbonus", d.abwehrBonusMitRuestung]], modTeile: abzuege.map((x) => [x.grund, x.wert]) });
       }
-      case "resG": return erfolgswurf(a, { art: "WW", titel: "Resistenz (Geist)", wert: d.resistenzGeist, gegnerFragen: true, ohneDialog });
-      case "resK": return erfolgswurf(a, { art: "WW", titel: "Resistenz (Körper)", wert: d.resistenzKoerper, gegnerFragen: true, ohneDialog });
-      case "zaubern": return erfolgswurf(a, { titel: "Zaubern", wert: d.zaubern, ohneDialog, hinweise: ["Praxispunkte gibt es beim Zaubern eines bestimmten Spruchs (Reiter Zauber)."] });
-      case "raufen": return erfolgswurf(a, { titel: "Raufen", wert: d.raufen, ohneDialog });
-      case "ungelernt": return erfolgswurf(a, { titel: `${z.dataset.name} (ungelernt)`, wert: Number(z.dataset.wert), ohneDialog });
+      case "resG": return erfolgswurf(a, { art: "WW", titel: "Resistenz (Geist)", wert: d.resistenzGeist, gegnerFragen: true, ohneDialog, teile: [["Resistenz (Grad)", d.gradAbwehr], ["Resistenzbonus Geist", d.boni.ResG]] });
+      case "resK": return erfolgswurf(a, { art: "WW", titel: "Resistenz (Körper)", wert: d.resistenzKoerper, gegnerFragen: true, ohneDialog, teile: [["Resistenz (Grad)", d.gradAbwehr], ["Resistenzbonus Körper", d.boni.ResK]] });
+      case "zaubern": return erfolgswurf(a, { titel: "Zaubern", wert: d.zaubern, ohneDialog, hinweise: ["Praxispunkte gibt es beim Zaubern eines bestimmten Spruchs (Reiter Zauber)."], teile: [["Zaubern (Grad)", d.gradZaubern], ["Zauberbonus", d.boni.ZauB]] });
+      case "raufen": return erfolgswurf(a, { titel: "Raufen", wert: d.raufen, ohneDialog, teile: [["Raufen", d.raufen]] });
+      case "ungelernt": return erfolgswurf(a, { titel: `${z.dataset.name} (ungelernt)`, wert: Number(z.dataset.wert), ohneDialog, teile: [["ungelernt", Number(z.dataset.wert)]] });
       case "fertigkeit": {
         if (!item) return;
         const f = d.fertigkeiten.find((x) => x.id === item.id);
         const schwelle = ["Beidhändiger Kampf", "Fechten"].includes(item.name) ? 20 : 16;
-        return erfolgswurf(a, { titel: f.name, wert: f.ew, ohneDialog, pp: { schwelle, ziel: { typ: "item", id: item.id }, name: item.name } });
+        return erfolgswurf(a, { titel: f.name, wert: f.ew, ohneDialog, pp: { schwelle, ziel: { typ: "item", id: item.id }, name: item.name },
+          teile: [["Fertigkeitswert", f.wert], [`Bonus ${f.le}`, f.bonus]] });
       }
       case "angriff": return angreifen(a, z.dataset.item, { ohneDialog });
       case "zauber": {
@@ -183,6 +208,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
         const ap = Number.parseInt(item.system.ap, 10);
         const zusatz = item.system.ap ? `<p class="mk-klein">AP-Verbrauch: ${item.system.ap}${Number.isFinite(ap) && String(ap) === item.system.ap.trim() ? ` <button type="button" data-midgard-aktion="ap" data-ap="${ap}">${ap} AP abziehen</button>` : ""}</p>` : "";
         return erfolgswurf(a, { titel: `Zaubern · ${item.name}`, wert: d.zaubern + spezial, ohneDialog, zusatz,
+          teile: [["Zaubern (Grad)", d.gradZaubern], ["Zauberbonus", d.boni.ZauB], ["Spezialgebiet", spezial]],
           hinweise: spezial ? ["+2 Spezialgebiet"] : [], pp: { schwelle: 20, ziel: { typ: "zauber", gruppe: item.system.gruppe }, name: `Zaubern: ${item.system.gruppe}` } });
       }
     }
@@ -290,11 +316,12 @@ export class AbenteurerBogen extends ActorSheetV2 {
         this.isEditable && !this.#verwaltet ? el("input", { type: "text", class: "ma-name", "data-pfad": "name", value: a.name, "aria-label": "Name" }) : el("h1", { class: "ma-name", text: a.name }),
         el("p", { class: "ma-unter", text: unter }),
         el("p", { class: "ma-konto" }, el("span", { text: `ES ${fmt(s.es)}` }), el("span", { text: `EP ${fmt(s.ep)}` }), el("span", { text: `Gold ${fmt(s.gold)} GS` }),
-          this.#verwaltet ? el("span", { class: "ma-marke", text: "verwaltet", title: "Eigenschaften, Fertigkeiten, Zauber und Konto werden im Reiter „Erschaffung & Lernen“ geändert." }) : null)),
+          this.#verwaltet ? el("span", { class: "ma-marke", title: "Eigenschaften, Fertigkeiten, Zauber und Konto werden mit „Erschaffung & Lernen“ geändert; hier sind sie gesperrt." }, icon("fa-lock"), " vom Werkzeug verwaltet") : null,
+          el("button", { type: "button", class: ["ma-werkzeug-knopf", this.#reiter === "werkzeug" && "aktiv"], "data-reiter": "werkzeug", "aria-pressed": String(this.#reiter === "werkzeug"), onclick: () => this.#wechseln("werkzeug") }, icon("fa-hammer"), " Erschaffung & Lernen"))),
       el("div", { class: "ma-vorraete" }, vorrat("LP", "system.lp.wert", s.lp), vorrat("AP", "system.ap.wert", s.ap),
         el("div", { class: "ma-glueck" },
-          el("label", {}, "SG ", this.#feld("system.sg.wert", s.sg.wert, { typ: "number", breite: "3.2em" }), el("small", { text: ` / ${s.sg.max}` })),
-          el("label", {}, "GG ", this.#feld("system.gg", s.gg, { typ: "number", breite: "3.2em" })))));
+          el("label", { title: "Schicksalsgunst: 1 SG opfern, um einen eigenen EW, WW oder einen Schadenswurf gegen sich zu wiederholen (Kodex S. 166)" }, el("abbr", { title: "Schicksalsgunst", text: "SG" }), " ", this.#feld("system.sg.wert", s.sg.wert, { typ: "number", breite: "3.2em" }), el("small", { text: ` / ${s.sg.max}` })),
+          el("label", { title: "Göttliche Gnade: Eingreifen einer übernatürlichen Macht in Notlagen (Das Arkanum)" }, el("abbr", { title: "Göttliche Gnade", text: "GG" }), " ", this.#feld("system.gg", s.gg, { typ: "number", breite: "3.2em" })))));
   }
 
   #bildWaehlen() {
@@ -317,8 +344,9 @@ export class AbenteurerBogen extends ActorSheetV2 {
         el("span", { class: "ma-eig-bonus", text: s.abgeleitet.bEffektiv !== null && s.abgeleitet.bEffektiv !== s.b ? `${s.abgeleitet.bEffektiv} in Rüstung` : "" })));
   }
 
-  #kampfwerte(s) {
+  #kampfwerte(s, { kompakt = false } = {}) {
     const d = s.abgeleitet, b = d.boni;
+    const abzugText = (art) => d.kampfAbzuege.filter((a) => a.nur !== (art === "angriff" ? "abwehr" : "angriff")).map((a) => `${vz(a.wert)} ${a.grund}${a.nurNah ? " (nah)" : ""}`).join("; ");
     const gross = (name, wert, zusatz, wurf) => el(wurf ? "a" : "div", { class: ["ma-gross", wurf && "ma-wurf"], "data-wurf": wurf, title: wurf ? `${name} würfeln` : null }, el("span", { class: "ma-gross-name", text: name }), el("span", { class: "ma-gross-wert", text: wert }), zusatz ? el("small", { text: zusatz }) : null);
     return el("div", {},
       el("div", { class: "ma-grosswerte" },
@@ -328,11 +356,29 @@ export class AbenteurerBogen extends ActorSheetV2 {
           el("small", { text: "Geist / Körper" })),
         gross("Zaubern", d.kannZaubern ? vz(d.zaubern) : "–", d.kannZaubern ? null : "kein Zauberkundiger", d.kannZaubern ? "zaubern" : null),
         gross("Raufen", vz(d.raufen), null, d.raufen !== null ? "raufen" : null)),
-      d.kampfAbzuege.length ? el("p", { class: "ma-warnung", text: "Abzüge auf EW:Angriff und WW:Abwehr: " + d.kampfAbzuege.map((a) => `${vz(a.wert)} ${a.grund}`).join("; ") }) : null,
-      el("table", { class: "ma-boni" },
+      d.wehrlos ? el("p", { class: "ma-warnung", text: "Wehrlos: kein WW:Abwehr möglich." }) : null,
+      abzugText("angriff") ? el("p", { class: "ma-warnung", text: `EW:Angriff: ${abzugText("angriff")}` }) : null,
+      abzugText("abwehr") ? el("p", { class: "ma-warnung", text: `WW:Abwehr: ${abzugText("abwehr")}` }) : null,
+      kompakt ? null : el("table", { class: "ma-boni" },
         el("thead", {}, el("tr", {}, ["Ausdauer", "Schaden", "Angriff", "Abwehr", "Resistenz", "Zaubern"].map((t) => el("th", { text: t })))),
         el("tbody", {}, el("tr", {}, [vz(b.AusB), vz(b.SchB), vz(b.AnB), vz(b.AbB) + (d.abwehrBonusMitRuestung !== (b.AbB ?? 0) ? ` (${vz(d.abwehrBonusMitRuestung)})` : ""), `${vz(b.ResG)} / ${vz(b.ResK)}`, vz(b.ZauB)].map((t) => el("td", { text: t }))))),
-      el("p", { class: "info", text: "Persönliche Boni (Kodex S. 30-33). In Klammern: Abwehrbonus mit der getragenen Rüstung." }));
+      kompakt ? null : el("p", { class: "info", text: "Persönliche Boni (Kodex S. 30-33). In Klammern: Abwehrbonus mit der getragenen Rüstung." }));
+  }
+
+  #zustaende(s) {
+    const d = s.abgeleitet;
+    const automatisch = [
+      d.erschoepft ? { name: "erschöpft", icon: "fa-battery-empty", text: "0 AP: EW:Angriff und WW:Abwehr –4, keine Verteidigungswaffe; Angreifer +4 (Kodex S. 71)." } : null,
+      d.belastet ? { name: d.last.stufe === "zu schwer" ? "über Höchstlast" : "schwer belastet", icon: "fa-weight-hanging", text: `${fmt(d.last.kg)} kg über der Normallast von ${d.last.normal} kg: B halbiert, –4 auf Kampf- und Bewegungsfertigkeiten (Kodex S. 58).` } : null,
+    ].filter(Boolean);
+    return el("div", { class: "ma-zustaende" },
+      el("div", { class: "ma-zustand-knoepfe" }, ZUSTAENDE.map((z) => {
+        const an = d.zustaende[z.id];
+        return el("button", { type: "button", class: ["ma-zustand", an && "an"], "data-zustand": z.id, "aria-pressed": String(an), title: z.text, disabled: !this.isEditable,
+          onclick: () => this.actor.update({ [`system.zustaende.${z.id}`]: !an }) }, icon(z.icon), el("span", { text: z.name }));
+      }),
+      automatisch.map((z) => el("span", { class: "ma-zustand an automatisch", title: `${z.text} Ergibt sich von selbst.` }, icon(z.icon), el("span", { text: z.name })))),
+      el("p", { class: "info", text: "Zustände wirken sich auf Angriffe und Abwehr aus. Wer gerade erschöpft oder belastet ist, sieht es hier von selbst. Beschreibung beim Darüberfahren." }));
   }
 
   #ruestung(s) {
@@ -351,7 +397,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const zeilen = liste.map((w) => el("tr", { "data-item-id": w.id },
       el("td", {}, this.#itemName(w)),
       el("td", { class: "zahl" }, w.ew === null || w.vert ? el("span", { text: w.ew === null ? "–" : vz(w.ew) })
-        : el("a", { class: "ma-wurf ma-angriff", "data-wurf": "angriff", "data-item": w.id, title: `Angriff mit ${w.name} (Ziel anvisieren)${w.spezialwaffe ? ", Spezialwaffe +2" : ""}`, text: vz(w.ew) })),
+        : el("a", { class: "ma-wurf ma-angriff", "data-wurf": "angriff", "data-item": w.id, title: `Angriff mit ${w.name} (Ziel anvisieren)${w.spezialwaffe ? ", Spezialwaffe +2" : ""}` },
+          el("i", { class: "fa-solid fa-dice-d20", "aria-hidden": "true" }), " ", vz(w.ew))),
       el("td", { text: w.schaden }),
       el("td", { text: w.vert ? "Abwehr" : w.art === "fernkampf" ? "Fern" : "Nah" }),
       nurAusgeruestet ? null : el("td", {}, this.#schalter(w.id, "system.ausgeruestet", w.ausgeruestet, "bereit")),
@@ -398,16 +445,18 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const d = s.abgeleitet;
     const fert = d.fertigkeiten;
     // zwei unabhängige Spalten, damit unterschiedlich hohe Karten keine Lücken reißen
+    // oben die Eigenschaften in einer Reihe, darunter links Kampf, rechts Zustände und Fertigkeiten
     return [
+      karte(null, "ma-k-eig ma-eig-reihe", this.#eigenschaften(s)),
       el("div", { class: "ma-raster-uebersicht" },
         el("div", { class: "ma-spalte" },
-          karte("Eigenschaften", "ma-k-eig", this.#eigenschaften(s)),
-          karte("Fertigkeiten", "ma-k-fert", fert.length ? el("ul", { class: "ma-fert-kurz" }, fert.map((f) => el("li", {}, this.#itemName(f), el("a", { class: "zahl ma-wurf", "data-wurf": "fertigkeit", "data-item": f.id, title: `EW:${f.name}`, text: vz(f.ew) })))) : el("p", { class: "info", text: "Noch keine Fertigkeiten." }))),
+          karte("Kampfwerte", "ma-k-kampf", this.#kampfwerte(s, { kompakt: true })),
+          karte("Bereite Waffen", "ma-k-waffen", this.#waffenTabelle(s, true)),
+          karte("Rüstung", "ma-k-ruestung", this.#ruestung(s))),
         el("div", { class: "ma-spalte" },
-          karte("Kampfwerte", "ma-k-kampf", this.#kampfwerte(s)),
-          karte("Rüstung", "ma-k-ruestung", this.#ruestung(s)),
-          karte("Bereite Waffen", "ma-k-waffen", this.#waffenTabelle(s, true)))),
-      karte("Sinne und angeborene Fähigkeiten", "ma-k-sinne", this.#sinne(s)),
+          karte("Zustände", "ma-k-zustaende", this.#zustaende(s)),
+          karte("Fertigkeiten", "ma-k-fert", fert.length ? el("ul", { class: "ma-fert-kurz" }, fert.map((f) => el("li", {}, this.#itemName(f), el("a", { class: "zahl ma-wurf", "data-wurf": "fertigkeit", "data-item": f.id, title: `EW:${f.name}`, text: vz(f.ew) })))) : el("p", { class: "info", text: "Noch keine Fertigkeiten." })),
+          karte("Sinne und angeborene Fähigkeiten", "ma-k-sinne", this.#sinne(s)))),
     ];
   }
 
@@ -419,12 +468,12 @@ export class AbenteurerBogen extends ActorSheetV2 {
         el("thead", {}, el("tr", {}, ["Fertigkeit", "Leiteig.", "Wert", "Bonus", "EW", "PP", ""].map((t) => el("th", { text: t })))),
         el("tbody", {}, d.fertigkeiten.length ? d.fertigkeiten.map((f) => el("tr", {},
           el("td", {}, this.#itemName(f)), el("td", { text: f.le }),
-          el("td", {}, this.#itemWert(items.get(f.id), "system.wert", f.wert)),
+          el("td", { class: "zahl" }, this.#itemWert(items.get(f.id), "system.wert", f.wert)),
           el("td", { class: "zahl", text: vz(f.bonus) }), el("td", { class: "zahl stark" }, el("a", { class: "ma-wurf", "data-wurf": "fertigkeit", "data-item": f.id, title: `EW:${f.name}`, text: vz(f.ew) })),
-          el("td", {}, this.#itemWert(items.get(f.id), "system.pp", f.pp)), el("td", {}, this.#loeschKnopf(f.id))))
+          el("td", { class: "zahl" }, this.#itemWert(items.get(f.id), "system.pp", f.pp)), el("td", {}, this.#loeschKnopf(f.id))))
           : el("tr", {}, el("td", { colspan: "7", class: "info", text: this.#verwaltet ? "Fertigkeiten entstehen im Reiter „Erschaffung & Lernen“." : "Fertigkeiten aus dem Kompendium hierher ziehen." })))),
       el("p", { class: "info", text: "EW = Fertigkeitswert + Bonus der Leiteigenschaft. PP = Praxispunkte." }),
-      this.#verwaltet ? null : el("button", { type: "button", onclick: () => KompendiumBrowser.oeffnen("fertigkeiten"), text: "Kompendium: Fertigkeiten" })),
+      this.#verwaltet ? null : el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("fertigkeiten") }, icon("fa-book-open"), " Kompendium: Fertigkeiten")),
       karte("Ungelernte Fertigkeiten", "ma-k-ungelernt",
         el("p", { class: "info", text: "Erfolgswert ohne Bonus der Leiteigenschaft (Kodex S. 44). Alle übrigen ungelernt +(0), außer Musizieren, Schreiben, Sprache und Lesen von Zauberschrift." }),
         el("ul", { class: "ma-spalten" }, d.ungelernt.map(([n, w]) => el("li", {}, el("a", { class: "ma-wurf", "data-wurf": "ungelernt", "data-name": n, "data-wert": w, title: `EW:${n} ungelernt`, text: `${n} +(${w})` }))))),
@@ -442,13 +491,13 @@ export class AbenteurerBogen extends ActorSheetV2 {
         el("thead", {}, el("tr", {}, ["Waffenfertigkeit", "Wert", "EW (mit AnB)", "PP", ""].map((t) => el("th", { text: t })))),
         el("tbody", {}, wf.length ? wf.map((w) => el("tr", {},
           el("td", {}, this.#itemName({ id: w.id, img: w.img, name: w.name })),
-          el("td", {}, this.#itemWert(w, "system.wert", w.system.wert)),
+          el("td", { class: "zahl" }, this.#itemWert(w, "system.wert", w.system.wert)),
           el("td", { class: "zahl stark", text: w.system.verteidigung ? "zur Abwehr" : vz(w.system.wert + d.angriffsBonus) }),
-          el("td", {}, this.#itemWert(w, "system.pp", w.system.pp)), el("td", {}, this.#loeschKnopf(w.id))))
+          el("td", { class: "zahl" }, this.#itemWert(w, "system.pp", w.system.pp)), el("td", {}, this.#loeschKnopf(w.id))))
           : el("tr", {}, el("td", { colspan: "5", class: "info", text: "Keine Waffenfertigkeiten." }))))),
       karte("Waffen", "ma-k-waffen", this.#waffenTabelle(s, false),
         el("p", { class: "info", text: "Spezialwaffen erhalten +2 auf EW:Angriff. Schaden einschließlich Schadensbonus." }),
-        el("button", { type: "button", onclick: () => KompendiumBrowser.oeffnen("waffen"), text: "Kompendium: Waffen" })),
+        el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("waffen") }, icon("fa-book-open"), " Kompendium: Waffen")),
       karte("Rüstungen", "ma-k-ruestung", el("table", { class: "ma-tabelle" },
         el("thead", {}, el("tr", {}, ["Rüstung", "RK", "RS", "AbB-Verlust", "getragen", ""].map((t) => el("th", { text: t })))),
         el("tbody", {}, ruestungen.length ? ruestungen.map((r) => el("tr", {},
@@ -456,7 +505,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
           el("td", { text: r.system.abwehrbonusVerlust === "alle" ? "alle" : r.system.abwehrbonusVerlust === "0" ? "–" : `−${r.system.abwehrbonusVerlust}` }),
           el("td", {}, this.#schalter(r.id, "system.getragen", r.system.getragen, "getragen")), el("td", {}, this.#loeschKnopf(r.id))))
           : el("tr", {}, el("td", { colspan: "6", class: "info", text: "Keine Rüstung." })))),
-        el("button", { type: "button", onclick: () => KompendiumBrowser.oeffnen("ruestungen"), text: "Kompendium: Rüstungen" })),
+        el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("ruestungen") }, icon("fa-book-open"), " Kompendium: Rüstungen")),
     ];
   }
 
@@ -472,19 +521,21 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const gruppen = ZAUBERGRUPPEN.map((g) => [g, zauber.filter((z) => z.system.gruppe === g).sort((a, b) => a.system.stufe - b.system.stufe || a.name.localeCompare(b.name, "de"))]).filter(([, l]) => l.length);
     const sonstige = zauber.filter((z) => !ZAUBERGRUPPEN.includes(z.system.gruppe));
     if (sonstige.length) gruppen.push(["Sonstige", sonstige]);
+    // Spalte „Wirkung“ nur, wenn mindestens ein Zauber eine Kurzwirkung hat
+    const mitWirkung = zauber.some((z) => z.system.kurzwirkung);
     const tabelle = el("table", { class: "ma-tabelle ma-zauberblatt" },
-      el("thead", {}, el("tr", {}, ["Zauber", "Stufe", "AP", "Art", "Zauberdauer", "Reichweite", "Wirkungsziel", "Wirkungsbereich", "Wirkungsdauer", "Wirkung", ""].map((t) => el("th", { text: t })))),
+      el("thead", {}, el("tr", {}, ["Zauber", "Stufe", "AP", "Art", "Zauberdauer", "Reichweite", "Wirkungsziel", "Wirkungsbereich", "Wirkungsdauer", ...(mitWirkung ? ["Wirkung"] : []), ""].map((t) => el("th", { text: t })))),
       gruppen.map(([g, l]) => el("tbody", {},
-        el("tr", { class: "ma-gruppe" }, el("th", { colspan: "11", text: g })),
+        el("tr", { class: "ma-gruppe" }, el("th", { colspan: mitWirkung ? "11" : "10", text: g })),
         l.map((z) => el("tr", {},
-          el("td", {}, this.#itemName({ id: z.id, img: z.img, name: z.name }), d.kannZaubern ? el("a", { class: "ma-wurf ma-zauberwurf", "data-wurf": "zauber", "data-item": z.id, title: `EW:Zaubern ${z.name}`, text: "⚄" }) : null), el("td", { class: "zahl", text: z.system.stufe }),
+          el("td", {}, this.#itemName({ id: z.id, img: z.img, name: z.name }), d.kannZaubern ? el("a", { class: "ma-wurf ma-zauberwurf", "data-wurf": "zauber", "data-item": z.id, title: `EW:Zaubern ${z.name}`, "aria-label": `EW:Zaubern ${z.name}` }, el("i", { class: "fa-solid fa-dice-d20", "aria-hidden": "true" })) : null), el("td", { class: "zahl", text: z.system.stufe }),
           el("td", { text: z.system.ap }), el("td", { text: z.system.art }), el("td", { text: z.system.zauberdauer }), el("td", { text: z.system.reichweite }),
           el("td", { text: z.system.wirkungsziel }), el("td", { text: z.system.wirkungsbereich }), el("td", { text: z.system.wirkungsdauer }),
-          el("td", { class: "ma-wirkung", text: z.system.kurzwirkung || "" }), el("td", {}, this.#loeschKnopf(z.id)))))));
+          mitWirkung ? el("td", { class: "ma-wirkung", text: z.system.kurzwirkung || "" }) : null, el("td", {}, this.#loeschKnopf(z.id)))))));
     return [
       karte("Zaubern", "ma-k-zaubern", kopf, el("h4", { text: "Praxispunkte je Gruppe" }), pp),
       karte("Zauberblatt", "ma-k-zauber", zauber.length ? tabelle : el("p", { class: "info", text: this.#verwaltet ? "Zauber entstehen im Reiter „Erschaffung & Lernen“." : "Zauber aus dem Kompendium hierher ziehen." }),
-        el("button", { type: "button", onclick: () => KompendiumBrowser.oeffnen("zauber"), text: "Kompendium: Zauber" })),
+        el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("zauber") }, icon("fa-book-open"), " Kompendium: Zauber")),
     ];
   }
 
@@ -501,13 +552,28 @@ export class AbenteurerBogen extends ActorSheetV2 {
         el("thead", {}, el("tr", {}, ["Gegenstand", "Anzahl", "kg", "Wirkung, Inhalt, Erläuterung", ""].map((t) => el("th", { text: t })))),
         el("tbody", {}, sachen.length ? sachen.map((g) => el("tr", {},
           el("td", {}, this.#itemName({ id: g.id, img: g.img, name: g.name })),
-          el("td", {}, this.#itemWert(g, "system.anzahl", g.system.anzahl)), el("td", { class: "zahl", text: zahlText(g.system.gewicht) }),
+          el("td", { class: "zahl" }, this.#itemWert(g, "system.anzahl", g.system.anzahl)), el("td", { class: "zahl", text: zahlText(g.system.gewicht) }),
           el("td", { text: g.system.kurzwirkung }), el("td", {}, this.#loeschKnopf(g.id))))
           : el("tr", {}, el("td", { colspan: "5", class: "info", text: "Keine Gegenstände." })))),
-        el("p", { class: "info", text: `Gesamtgewicht aller Gegenstände, Waffen und Rüstungen: ${s.abgeleitet.gewicht.toLocaleString("de-DE")} kg` }),
-        this.isEditable ? el("button", { type: "button", onclick: neu, text: "Gegenstand anlegen" }) : null),
+        this.#lastAnzeige(s),
+        this.isEditable ? el("button", { type: "button", class: "ma-knopf", onclick: neu }, icon("fa-plus"), " Gegenstand anlegen") : null),
       s.ausruestungText ? karte("Ausrüstung bei Spielbeginn", "ma-k-start", el("p", { class: "vorformatiert", text: s.ausruestungText })) : null,
     ].filter(Boolean);
+  }
+
+  #lastAnzeige(s) {
+    const l = s.abgeleitet.last;
+    if (l.normal === null) return el("p", { class: "info", text: `Getragen: ${fmt(l.kg)} kg. Lastgrenzen erscheinen, sobald die Stärke eingetragen ist.` });
+    const proz = (x) => Math.min(100, (x / l.hoechst) * 100);
+    const satz = l.stufe === "frei" ? `${fmt(l.kg)} von ${l.normal} kg Normallast`
+      : l.stufe === "belastet" ? `${fmt(l.kg)} kg: schwer belastet (B halbiert, –4 auf Kampf und Bewegung); Normallast ${l.normal} kg`
+      : `${fmt(l.kg)} kg: über der Höchstlast von ${l.hoechst} kg`;
+    return el("div", { class: ["ma-last", `ma-last-${l.stufe.replace(" ", "-")}`] },
+      el("div", { class: "ma-last-balken", role: "meter", "aria-valuemin": "0", "aria-valuemax": String(l.hoechst), "aria-valuenow": String(Math.min(l.kg, l.hoechst)), "aria-label": "Last" },
+        el("span", { class: "ma-last-fuell", style: `width:${proz(l.kg)}%` }),
+        el("span", { class: "ma-last-marke", style: `left:${proz(l.normal)}%`, title: `Normallast ${l.normal} kg` }),
+        el("span", { class: "ma-last-marke", style: `left:${proz(l.schwer)}%`, title: `schwere Last ${l.schwer} kg (nicht acht Stunden lang)` })),
+      el("p", { class: "info", text: `${satz}. Höchstlast ${l.hoechst} kg (–1 AP je 10 min). Getragene Rüstung zählt nicht mit (Kodex S. 58).` }));
   }
 
   async _persoenlich(s) {
@@ -554,7 +620,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const gradNachES = gradAus(s.es);
     const konto = el("div", { class: "ma-grosswerte" },
       el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Grad" }), el("span", { class: "ma-gross-wert", text: s.grad }), gradNachES > s.grad ? el("small", { class: "ma-hinweis", text: `Aufstieg auf Grad ${gradNachES} möglich` }) : null),
-      el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Erfahrungsschatz" }), el("span", { class: "ma-gross-wert", text: fmt(s.es) }), el("small", { text: `nächster Grad ab ${fmt(esNaechster)} ES` })),
+      el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Erfahrungsschatz" }), el("span", { class: "ma-gross-wert", text: fmt(s.es) }), el("small", { text: gradNachES > s.grad ? `Grad ${gradNachES} erreicht, Aufstieg noch nicht bestätigt` : `Grad ${naechster} ab ${fmt(esNaechster)} ES` })),
       el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Erfahrungspunkte" }), el("span", { class: "ma-gross-wert", text: fmt(s.ep) })),
       el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Gold" }), el("span", { class: "ma-gross-wert", text: fmt(s.gold) }), el("small", { text: "GS" })));
     const eingabe = this.#verwaltet ? null : el("div", { class: "ma-zeilen" },
@@ -570,7 +636,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
       : el("p", { class: "info", text: "Noch keine Buchungen." });
     return [
       karte("Erfahrung und Grad", "ma-k-konto", konto, eingabe,
-        this.#verwaltet ? el("p", { class: "info" }, "EP ausgeben, Gold zum Lernen nutzen und Grad bestätigen: ", el("a", { onclick: () => this.#wechseln("werkzeug"), text: "Erschaffung & Lernen" })) : null),
+        this.#verwaltet ? el("p", { class: "info" }, "EP ausgeben, Gold zum Lernen nutzen und Grad bestätigen: ", el("button", { type: "button", class: "ma-knopf", onclick: () => this.#wechseln("werkzeug") }, icon("fa-hammer"), " Erschaffung & Lernen")) : null),
       el("div", { class: "ma-raster-zwei" }, karte("Gradtabelle", "ma-k-grad", tabelle), karte("Protokoll", "ma-k-protokoll", protokoll)),
     ];
   }
@@ -581,10 +647,22 @@ export class AbenteurerBogen extends ActorSheetV2 {
     // Das Werkzeug startet erst, wenn der Reiter geöffnet wird oder es den Charakter schon verwaltet
     if (!this.#werkzeugWurzel && (this.#verwaltet || this.#reiter === "werkzeug")) this.#werkzeugStarten();
     if (!this.#werkzeugWurzel) return el("div", { class: "ma-werkzeug-platz" });
+    this.#leiste = el("div", { class: "ma-werkzeug-leiste", role: "status" }, icon("fa-hammer"), el("span", { class: "ma-werkzeug-stand" }),
+      el("button", { type: "button", class: "ma-knopf", onclick: () => this.#wechseln("uebersicht") }, icon("fa-arrow-left"), " Zurück zum Bogen"));
+    this.#leisteAktualisieren(this.#werkzeug.auswertung());
     return [
+      this.#leiste,
       this.#verwaltet ? null : el("p", { class: "info ma-werkzeug-hinweis", text: "Sobald du hier etwas einträgst, übernimmt das Werkzeug Eigenschaften, Fertigkeiten, Zauber und Konto dieses Charakters. Die übrigen Reiter zeigen dann das Ergebnis." }),
       this.#werkzeugWurzel,
     ];
+  }
+
+  #leisteAktualisieren(a) {
+    const ziel = this.#leiste?.querySelector(".ma-werkzeug-stand");
+    if (!ziel || !a) return;
+    ziel.textContent = a.fertig
+      ? `Lernen · Grad ${a.grad} · ${fmt(a.ep)} EP · ${fmt(a.gold)} GS verfügbar`
+      : `Erschaffung läuft: ${[a.rasse, a.typName].filter(Boolean).join(" · ") || "noch kein Typ gewählt"}. Fertig, sobald Typ, Eigenschaften, LP und AP feststehen.`;
   }
 
   #werkzeugGesperrt() {
@@ -629,6 +707,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
     // unveränderten Anfangsstand nicht speichern: Öffnen allein macht den Charakter nicht „verwaltet“
     // Speicherung während des Starts ignorieren (der Abgleich in _onRender übernimmt verwaltete Werte)
     if (this.#startZustand === "startet") return;
+    this.#leisteAktualisieren(auswertung);
     if (!this.#verwaltet && JSON.stringify(zustand) === this.#startZustand) return;
     this.#ausstehend = [JSON.parse(JSON.stringify(zustand)), auswertung];
     clearTimeout(this.#timer);
