@@ -14,6 +14,11 @@ export function einstellungenRegistrieren() {
   game.settings.register(SYSTEM_ID, "kompendiumStand", {
     scope: "world", config: false, type: String, default: "",
   });
+  // Freigabe des Erschaffungs- und Lernassistenten: erst nach dem Import des offiziellen Kodex
+  game.settings.register(SYSTEM_ID, "kodexImportiert", {
+    scope: "world", config: false, type: Boolean, default: false,
+    onChange: () => Hooks.callAll("midgardKodexStatus"),
+  });
   // 2 = Kompendien werden nur noch durch den PDF-Import gefüllt
   game.settings.register(SYSTEM_ID, "kompendiumModell", { scope: "world", config: false, type: Number, default: 1 });
 }
@@ -134,4 +139,15 @@ export async function kompendienOhnePdf() {
     finally { if (gesperrt) await pack.configure({ locked: true }); }
   }
   Hooks.callAll("midgardKompendienGeaendert");
+}
+
+/** Ist der Kodex aus der PDF importiert? (Fertigkeiten mit Importmarke „Der Kodex“ im Kompendium) */
+export async function kodexImportiertPruefen() {
+  const gm = game.users.activeGM ?? game.users.find((u) => u.isGM && u.active);
+  if (!game.user.isGM || (gm && gm.id !== game.user.id)) return game.settings.get(SYSTEM_ID, "kodexImportiert");
+  const pack = game.packs.get(packId("fertigkeiten"));
+  const docs = pack ? await pack.getDocuments() : [];
+  const da = docs.some((d) => d.getFlag?.(SYSTEM_ID, "pdfImport")?.buch === "Der Kodex" && d.getFlag(SYSTEM_ID, "pdfImport")?.seite);
+  if (da !== game.settings.get(SYSTEM_ID, "kodexImportiert")) await game.settings.set(SYSTEM_ID, "kodexImportiert", da);
+  return da;
 }

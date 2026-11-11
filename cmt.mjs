@@ -8,12 +8,12 @@ import "./daten/lernkosten.js";
 import "./daten/zauber.js";
 import "./app.js";
 import { GEGENSTAND_MODELLE } from "./module/datenmodelle.mjs";
-import { einstellungenRegistrieren, kompendienAufbauen, kompendienOhnePdf, KOMPENDIUM_STAND } from "./module/kompendien.mjs";
+import { einstellungenRegistrieren, kompendienAufbauen, kompendienOhnePdf, kodexImportiertPruefen, KOMPENDIUM_STAND } from "./module/kompendien.mjs";
 import { KompendiumBrowser, knopfEinbauen } from "./module/browser.mjs";
 import { GegenstandBogen } from "./module/gegenstand-bogen.mjs";
 import { AbenteurerDaten } from "./module/akteur.mjs";
 import { AbenteurerBogen } from "./module/abenteurer-bogen.mjs";
-import { pdfImportStarten, pdfImportieren } from "./module/pdf-import.mjs";
+import { pdfImportStarten, pdfImportieren, einstellungenRegistrieren as importEinstellungen } from "./module/pdf-import.mjs";
 import { updatePruefen } from "./module/update.mjs";
 import { einstellungenRegistrieren as wurfEinstellungen } from "./module/wuerfe.mjs";
 import { einstellungenRegistrieren as kampfEinstellungen, socketEinrichten, karteEinrichten, angreifen } from "./module/kampf.mjs";
@@ -35,6 +35,7 @@ Hooks.once("init", () => {
   });
   einstellungenRegistrieren();
   wurfEinstellungen();
+  importEinstellungen();
   kampfEinstellungen();
   game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, kompendienOhnePdf, angreifen, pdfImport: pdfImportStarten, pdfImportieren, updatePruefen, stand: KOMPENDIUM_STAND };
   console.log(`${SYSTEM_ID} | Midgard-CMT ${game.system.version} geladen`);
@@ -45,6 +46,7 @@ Hooks.once("ready", async () => {
   updatePruefen();
   try {
     await kompendienAufbauen();
+    await kodexImportiertPruefen();
   } catch (fehler) {
     console.error(`${SYSTEM_ID} | Kompendien konnten nicht eingerichtet werden`, fehler);
     ui.notifications.error("Midgard: Kompendien konnten nicht eingerichtet werden (Details in der Konsole).");
@@ -53,4 +55,9 @@ Hooks.once("ready", async () => {
 
 Hooks.on("renderCompendiumDirectory", knopfEinbauen);
 Hooks.on("midgardKompendienGeaendert", () => KompendiumBrowser.zuruecksetzen());
+// Kodex importiert oder entfernt: offene Abenteurerbögen neu zeichnen, damit die Sperre verschwindet bzw. erscheint
+Hooks.on("midgardKodexStatus", () => {
+  const offen = foundry.applications?.instances ? [...foundry.applications.instances.values()] : Object.values(ui.windows ?? {});
+  for (const app of offen) if (app instanceof AbenteurerBogen && app.rendered) app.render();
+});
 Hooks.on("renderChatMessageHTML", karteEinrichten);

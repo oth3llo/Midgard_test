@@ -226,6 +226,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
       this.#werkzeug = null; this.#werkzeugWurzel = null;
       return a.update(aenderung);
     }
+    if (!game.settings.get(SYSTEM_ID, "kodexImportiert")) return ui.notifications.warn("Bitte erst den Kodex im Kompendium importieren!");
     if (!this.#werkzeug) this.#werkzeugStarten();
     if (this.#werkzeug.auswertung().fertig) return ui.notifications.warn(`${a.name} ist fertig erschaffen; Rasse und Typ lassen sich nicht mehr ändern.`);
     const z = JSON.parse(JSON.stringify(this.#werkzeug.zustand()));
@@ -575,6 +576,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
   }
 
   async _werkzeug() {
+    // Gesperrt, bis der offizielle Kodex importiert ist: Erschaffung und Lernen beruhen auf seinen Regeln
+    if (!game.settings.get(SYSTEM_ID, "kodexImportiert")) return this.#werkzeugGesperrt();
     // Das Werkzeug startet erst, wenn der Reiter geöffnet wird oder es den Charakter schon verwaltet
     if (!this.#werkzeugWurzel && (this.#verwaltet || this.#reiter === "werkzeug")) this.#werkzeugStarten();
     if (!this.#werkzeugWurzel) return el("div", { class: "ma-werkzeug-platz" });
@@ -582,6 +585,14 @@ export class AbenteurerBogen extends ActorSheetV2 {
       this.#verwaltet ? null : el("p", { class: "info ma-werkzeug-hinweis", text: "Sobald du hier etwas einträgst, übernimmt das Werkzeug Eigenschaften, Fertigkeiten, Zauber und Konto dieses Charakters. Die übrigen Reiter zeigen dann das Ergebnis." }),
       this.#werkzeugWurzel,
     ];
+  }
+
+  #werkzeugGesperrt() {
+    return el("div", { class: "ma-sperre" },
+      el("div", { class: "ma-sperre-karte karte" },
+        el("h3", { text: "Bitte erst den Kodex im Kompendium importieren!" }),
+        el("p", { text: "Erschaffung und Lernen rechnen nach den Regeln des Kodex. Sie werden freigeschaltet, sobald der Spielleiter den eigenen Kodex (PDF) über „Regelwerk-PDF importieren“ eingelesen hat. Dieser Hinweis verschwindet dann von selbst." }),
+        game.user.isGM ? el("button", { type: "button", class: "haupt", text: "Regelwerk-PDF importieren", onclick: () => game.midgard.pdfImport() }) : el("p", { class: "info", text: "Das erledigt der Spielleiter." })));
   }
 
   #werkzeugStarten() {

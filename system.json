@@ -2,7 +2,7 @@
   "id": "midgard5-cmt",
   "title": "Midgard 5",
   "description": "Midgard 5 für Foundry VTT: Charakterbogen mit Reitern, Erfolgs-, Widerstands- und Prüfwürfe, Kampf mit Abwehraufforderung, Regeldaten als Kompendien mit Browser, Charaktererschaffung nach dem Kodex und Lernen im Spielverlauf. Inoffiziell, für den privaten Gebrauch.",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "compatibility": {
     "minimum": "14",
     "verified": "14.370",
@@ -87,5 +87,5 @@
   "secondaryTokenAttribute": "ap",
   "url": "https://github.com/oth3llo/Midgard_test",
   "manifest": "https://raw.githubusercontent.com/oth3llo/Midgard_test/main/system.json",
-  "download": "https://raw.githubusercontent.com/oth3llo/Midgard_test/main/pakete/midgard5-cmt-0.8.4.zip"
+  "download": "https://raw.githubusercontent.com/oth3llo/Midgard_test/main/pakete/midgard5-cmt-0.8.5.zip"
 }

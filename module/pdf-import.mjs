@@ -5,8 +5,9 @@
 // Die Kompendien sind bis zum Import leer; der Import legt die Einträge an.
 import { SYSTEM_ID, packId } from "./kategorien.mjs";
 import { textzeilen } from "./pdf/textzeilen.mjs";
-import { istArkanum, zauberAusArkanum, zaubermittelAusArkanum } from "./pdf/arkanum.mjs";
-import { istKodex, fertigkeitenAusKodex, typenUndRassenAusKodex, ruestungenAusKodex } from "./pdf/kodex.mjs";
+import { zauberAusArkanum, zaubermittelAusArkanum } from "./pdf/arkanum.mjs";
+import { fertigkeitenAusKodex, typenUndRassenAusKodex, ruestungenAusKodex } from "./pdf/kodex.mjs";
+import { buchErkennen, ausgabeFingerabdruck, GEPRUEFTE_AUSGABEN } from "./pdf/erkennung.mjs";
 import KOMPENDIUM from "../daten/kompendium.js";
 import { zuordnen, alsHtml } from "./pdf/zuordnen.mjs";
 import { regelnAusBuch, REGELBEREICHE } from "./pdf/regeln.mjs";
@@ -23,12 +24,45 @@ async function pdfjsLaden() {
   return pdfjs;
 }
 
-/** Dateiauswahl, dann Import. Nur für Spielleiter. */
+export function einstellungenRegistrieren() {
+  // Protokoll der Bestätigungen „rechtmäßig erworben“ (wer, wann, welche Datei, welches Buch)
+  game.settings.register(SYSTEM_ID, "importProtokoll", { scope: "world", config: false, type: Array, default: [] });
+}
+
+/**
+ * Bestätigung vor dem Import. Eine technische Prüfung, ob eine PDF rechtmäßig erworben wurde, ist
+ * nicht möglich; die Bestätigung macht die Verantwortung eindeutig und wird in der Welt protokolliert.
+ */
+export async function bestaetigungEinholen(dateinamen) {
+  const D = foundry.applications?.api?.DialogV2;
+  if (!D) return true;
+  const liste = dateinamen.map((n) => `<li>${esc(n)}</li>`).join("");
+  try {
+    return await D.confirm({
+      window: { title: "Regelwerk importieren" },
+      content: `<div class="midgard-dialog"><p>Folgende Datei(en) werden eingelesen:</p><ul>${liste}</ul>
+        <p><strong>Ich bestätige, dass ich diese PDF(s) rechtmäßig erworben habe und die Inhalte nur in meiner eigenen Spielrunde nutze.</strong></p>
+        <p class="hinweis">Die Texte werden nur in den Kompendien dieser Welt gespeichert. Die Bestätigung wird mit Datum und Benutzer in der Welt vermerkt.</p></div>`,
+      yes: { label: "Bestätigen und importieren" }, no: { label: "Abbrechen" },
+      rejectClose: false,
+    });
+  } catch { return false; }
+}
+
+async function protokollieren(eintrag) {
+  const alt = game.settings.get(SYSTEM_ID, "importProtokoll") ?? [];
+  await game.settings.set(SYSTEM_ID, "importProtokoll", [...alt, { zeit: new Date().toISOString(), benutzer: game.user.name, ...eintrag }].slice(-50));
+}
+
+/** Dateiauswahl, Bestätigung, dann Import. Nur für Spielleiter. */
 export async function pdfImportStarten() {
   if (!game.user.isGM) return ui.notifications.warn("Nur der Spielleiter kann Regelwerke importieren.");
   const eingabe = Object.assign(document.createElement("input"), { type: "file", accept: "application/pdf,.pdf", multiple: true });
   eingabe.addEventListener("change", async () => {
-    for (const datei of eingabe.files) await pdfImportieren(await datei.arrayBuffer(), { dateiname: datei.name });
+    const dateien = [...eingabe.files];
+    if (!dateien.length) return;
+    if (!(await bestaetigungEinholen(dateien.map((d) => d.name)))) return ui.notifications.info("Midgard: Import abgebrochen.");
+    for (const datei of dateien) await pdfImportieren(await datei.arrayBuffer(), { dateiname: datei.name, bestaetigt: true });
   });
   eingabe.click();
 }
@@ -38,19 +72,30 @@ export async function pdfImportStarten() {
  * @param {ArrayBuffer} daten
  * @param {object} o  dateiname, ueberschreiben (auch vorhandene, nicht importierte Texte ersetzen), stumm (kein Berichtsfenster)
  */
-export async function pdfImportieren(daten, { dateiname = "PDF", ueberschreiben = false, stumm = false } = {}) {
+export async function pdfImportieren(daten, { dateiname = "PDF", ueberschreiben = false, stumm = false, bestaetigt = false } = {}) {
+  if (!bestaetigt && !(await bestaetigungEinholen([dateiname]))) { ui.notifications.info("Midgard: Import abgebrochen."); return null; }
   const fortschritt = ui.notifications.info(`Midgard: ${dateiname} wird gelesen …`, { permanent: true });
   try {
     const lib = await pdfjsLaden();
     const doc = await lib.getDocument({ data: new Uint8Array(daten), verbosity: 0 }).promise;
     const zeilen = await textzeilen(doc);
-    let bericht;
-    if (istArkanum(zeilen)) bericht = await arkanumImportieren(zeilen, ueberschreiben);
-    else if (istKodex(zeilen)) bericht = await kodexImportieren(zeilen, ueberschreiben);
-    else {
-      ui.notifications.warn(`${dateiname}: kein unterstütztes Regelwerk erkannt (unterstützt: Der Kodex, Das Arkanum).`);
+    // Erkennung nur am Inhalt (Dateiname spielt keine Rolle)
+    const erkannt = buchErkennen(zeilen, doc.numPages);
+    if (!erkannt.buch) {
+      ui.notifications.warn(`${dateiname}: kein unterstütztes Regelwerk erkannt (unterstützt: Der Kodex, Das Arkanum; ${erkannt.treffer} von ${erkannt.gesamt} Merkmalen gefunden).`);
       return null;
     }
+    const fingerabdruck = ausgabeFingerabdruck(zeilen, doc.numPages);
+    const gepruefteAusgabe = (GEPRUEFTE_AUSGABEN[erkannt.buch] ?? []).includes(fingerabdruck);
+    let bericht;
+    if (erkannt.buch === "Das Arkanum") bericht = await arkanumImportieren(zeilen, ueberschreiben);
+    else {
+      bericht = await kodexImportieren(zeilen, ueberschreiben);
+      await game.settings.set(SYSTEM_ID, "kodexImportiert", true); // Assistent freigeben
+    }
+    bericht.fingerabdruck = fingerabdruck;
+    bericht.gepruefteAusgabe = gepruefteAusgabe;
+    await protokollieren({ datei: dateiname, buch: erkannt.buch, fingerabdruck, gepruefteAusgabe });
     bericht.teile.push(await regelnSchreiben(zeilen, bericht.buch));
     bericht.links = await allesVerlinken();
     bericht.dateiname = dateiname;
@@ -260,7 +305,10 @@ function berichtZeigen(b) {
   const D = foundry.applications?.api?.DialogV2;
   const liste = (titel, l) => (l.length ? `<details><summary>${esc(titel)} (${l.length})</summary><p>${l.map(esc).join(", ")}</p></details>` : "");
   const inhalt = `<div class="midgard-bericht">
-    <p>Aus <strong>${esc(b.dateiname)}</strong> (${esc(b.buch)}) übernommen:</p>
+    <p>Aus <strong>${esc(b.dateiname)}</strong> erkannt: <strong>${esc(b.buch)}</strong>.</p>
+    ${b.gepruefteAusgabe ? `<p class="hinweis">Ausgabe ${esc(b.fingerabdruck)}: gegen diese Ausgabe ist der Import geprüft.</p>`
+      : `<p class="warnung">Diese Ausgabe (${esc(b.fingerabdruck)}) weicht von der geprüften ab, etwa eine andere Auflage. Bitte die Listen unten prüfen; einzelne Einträge können fehlen oder falsch zugeordnet sein.</p>`}
+    <p>Übernommen:</p>
     <ul>${b.teile.map((t) => t.kategorie === "regeln" ? `<li>Regeln: ${t.kapitel ?? 0} Kapitel mit ${t.angelegt} Seiten</li>` : `<li>${esc(t.kategorie)}: ${t.angelegt} neu angelegt, ${t.geschrieben} mit Beschreibung</li>`).join("")}</ul>
     <p>${b.links ?? 0} Texte mit Verweisen auf Regeln, Zauber, Fertigkeiten und Gegenstände versehen.</p>
     ${b.teile.map((t) => liste(`${t.kategorie}: vorhandener Text behalten`, t.behalten) + liste(`${t.kategorie}: in der PDF gefunden, aber nicht zugeordnet`, t.nichtZugeordnet) + liste(`${t.kategorie}: ohne Beschreibung aus diesem Buch`, t.ohne)).join("")}

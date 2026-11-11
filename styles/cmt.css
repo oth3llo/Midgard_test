@@ -579,3 +579,10 @@ table.midgard-tabelle td.kurz { white-space: nowrap; }
 table.midgard-tabelle th { background: rgba(127, 127, 127, .18); font-weight: bold; }
 div.midgard-kasten { border-left: 4px solid rgba(127, 127, 127, .55); background: rgba(127, 127, 127, .08); padding: 4px 10px; margin: 6px 0 10px; }
 div.midgard-kasten p { margin: 2px 0; }
+
+/* ---------------------------------------------------------------- Sperre des Assistenten bis zum Kodex-Import */
+.midgard-abenteurer .ma-sperre { display: flex; align-items: center; justify-content: center; min-height: 360px; padding: 24px; }
+.midgard-abenteurer .ma-sperre-karte { max-width: 520px; text-align: center; --f: var(--a1); }
+.midgard-abenteurer .ma-sperre-karte h3 { font-size: 1.3rem; }
+.midgard-abenteurer .ma-sperre-karte button { width: auto; margin-top: 8px; }
+.midgard-bericht .warnung { color: #b2382f; font-weight: bold; }
