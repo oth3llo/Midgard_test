@@ -805,25 +805,34 @@
       const extraGekauft = S.kaeufe.some((k) => k.topf === t.id && k.extra);
       teile.push(karte(null,
         h("div", { class: "topf-kopf" }, h("h3", {}, t.titel), h("span", { class: "topf-rest" + (rest < 0 ? " ueber" : rest === 0 ? " leer" : "") }, `${rest} von ${t.le} LE frei`)),
-        h("div", { class: "optionen" }, opts.map((o) => {
-          const vorhanden = !K.mitAngabe[o.name] && besitzt(o.name);
-          const verboten = elfVerbot(o.name);
-          const zuTeuer = o.kosten > rest;
-          return h("button", {
-            type: "button", class: "option", disabled: vorhanden || verboten || zuTeuer,
-            title: verboten ? "Für Elfen bei Spielbeginn nicht erlaubt" : vorhanden ? "schon vorhanden" : zuTeuer ? "nicht genug LE" : "",
-            onclick: () => { kaufen(o, t.id, false); neuZeichnen(); },
-          }, h("span", {}, `${o.name}+${o.wert}`), h("small", {}, `${o.le} · ${o.stufe} · ${o.kosten} LE`));
-        })),
+        (() => {
+          // nur, was jetzt mit den freien LE gelernt werden kann
+          const waehlbar = opts.filter((o) => !(!K.mitAngabe[o.name] && besitzt(o.name)) && !elfVerbot(o.name) && o.kosten <= rest);
+          return [
+            waehlbar.length ? h("div", { class: "optionen" }, waehlbar.map((o) => h("button", {
+              type: "button", class: "option",
+              onclick: () => lernenBestaetigen(o.name, `+${o.wert}`, `${o.kosten} LE`, () => { kaufen(o, t.id, false); neuZeichnen(); }),
+            }, h("span", {}, `${o.name}+${o.wert}`), h("small", {}, `${o.le} · ${o.stufe} · ${o.kosten} LE`))))
+              : info(rest > 0 ? "Mit den freien LE ist hier nichts mehr lernbar." : "Alle LE dieser Gruppe sind verteilt."),
+            ausgeblendet(opts.length - waehlbar.length, "zu teuer, schon vorhanden oder nicht erlaubt"),
+          ];
+        })(),
         t.gruppe !== "Alltag" ? h("div", { class: "extra" },
           h("small", {}, "1 LE dieser Gruppe darf für eine leichte oder normale Alltagsfertigkeit verwendet werden (S. 37): "),
           extraGekauft ? h("small", {}, "bereits genutzt.") :
-            h("select", { disabled: rest < 1, onchange: (ev) => { const o = alltagExtraOptionen().find((x) => x.name === ev.target.value); if (o) kaufen(o, t.id, true); neuZeichnen(); } },
-              h("option", { value: "" }, rest < 1 ? "kein LE frei" : "Alltagsfertigkeit wählen …"),
-              alltagExtraOptionen().map((o) => h("option", { value: o.name, disabled: (!K.mitAngabe[o.name] && besitzt(o.name)) || elfVerbot(o.name) }, `${o.name}+${o.wert} (${o.le})`)))) : null,
+            alltagAuswahl(t.id, rest)) : null,
         gekaufteListe(t.id)));
     }
     return teile;
+  }
+  function alltagAuswahl(topf, rest) {
+    if (rest < 1) return h("small", {}, "kein LE frei.");
+    const waehlbar = alltagExtraOptionen().filter((o) => !(!K.mitAngabe[o.name] && besitzt(o.name)) && !elfVerbot(o.name));
+    return h("select", { onchange: (ev) => {
+      const o = waehlbar.find((x) => x.name === ev.target.value);
+      ev.target.value = "";
+      if (o) lernenBestaetigen(o.name, `+${o.wert}`, "1 LE", () => { kaufen(o, topf, true); neuZeichnen(); });
+    } }, h("option", { value: "" }, "Alltagsfertigkeit wählen …"), waehlbar.map((o) => h("option", { value: o.name }, `${o.name}+${o.wert} (${o.le})`)));
   }
   function gekaufteListe(topf) {
     const liste = S.kaeufe.map((k, i) => [k, i]).filter(([k]) => k.topf === topf);
@@ -859,23 +868,25 @@
       info("Waffenfertigkeiten beginnen mit +5, Schilde und Parierwaffen mit +1 (S. 40-41). Die Liste der Waffen mit Mindestwerten für St und Gs steht im nächsten Schritt bei der Spezialisierung."),
       karte(null,
         h("div", { class: "topf-kopf" }, h("h3", {}, "Waffen"), h("span", { class: "topf-rest" + (rest < 0 ? " ueber" : rest === 0 ? " leer" : "") }, `${rest} von ${kl.waffenLE} LE frei`)),
-        K.startWaffen.map(([stufe, le, ...namen]) => h("div", { class: "waffenstufe" },
-          h("h4", {}, `${stufe}: ${le} LE`),
-          h("div", { class: "optionen" }, namen.map((n) => {
-            const grund = waffenErlaubt(n);
-            const hat = S.waffen.some((w) => w.name === n);
-            const start = K.verteidigungsWaffen.includes(n) ? 1 : 5;
-            return h("button", {
-              type: "button", class: "option", disabled: hat || !!grund || le > rest, title: grund || (hat ? "schon gewählt" : le > rest ? "nicht genug LE" : ""),
-              onclick: () => { S.waffen.push({ name: n, wert: start, kosten: le, topf: "Waffen" }); neuZeichnen(); },
-            }, h("span", {}, `${n}+${start}`), h("small", {}, grund || `${le} LE`));
-          })))),
+        (() => {
+          let versteckt = 0;
+          const stufen = K.startWaffen.map(([stufe, le, ...namen]) => {
+            const waehlbar = namen.filter((n) => { const ok = !waffenErlaubt(n) && !S.waffen.some((w) => w.name === n) && le <= rest; if (!ok) versteckt++; return ok; });
+            return waehlbar.length ? h("div", { class: "waffenstufe" }, h("h4", {}, `${stufe}: ${le} LE`),
+              h("div", { class: "optionen" }, waehlbar.map((n) => {
+                const start = K.verteidigungsWaffen.includes(n) ? 1 : 5;
+                return h("button", { type: "button", class: "option",
+                  onclick: () => lernenBestaetigen(n, `+${start}`, `${le} LE`, () => { S.waffen.push({ name: n, wert: start, kosten: le, topf: "Waffen" }); neuZeichnen(); }),
+                }, h("span", {}, `${n}+${start}`), h("small", {}, `${le} LE`));
+              }))) : null;
+          });
+          return [stufen.some(Boolean) ? stufen : info(rest > 0 ? "Mit den freien LE ist keine weitere Waffenfertigkeit lernbar." : "Alle Waffen-LE sind verteilt."),
+            ausgeblendet(versteckt, "zu teuer, schon gewählt oder nicht nutzbar")];
+        })(),
         h("div", { class: "extra" },
           h("small", {}, "Übrige LE: 1 LE darf für eine leichte oder normale Alltagsfertigkeit verwendet werden (S. 37): "),
           extraGekauft ? h("small", {}, "bereits genutzt.") :
-            h("select", { disabled: rest < 1, onchange: (ev) => { const o = alltagExtraOptionen().find((x) => x.name === ev.target.value); if (o) kaufen(o, "Waffen", true); neuZeichnen(); } },
-              h("option", { value: "" }, rest < 1 ? "kein LE frei" : "Alltagsfertigkeit wählen …"),
-              alltagExtraOptionen().map((o) => h("option", { value: o.name, disabled: (!K.mitAngabe[o.name] && besitzt(o.name)) || elfVerbot(o.name) }, `${o.name}+${o.wert} (${o.le})`)))),
+            alltagAuswahl("Waffen", rest)),
         S.waffen.length ? h("ul", { class: "gekauft" }, S.waffen.map((w, i) => h("li", {},
           h("span", {}, `${w.name}+${w.wert}`), h("small", {}, `${w.kosten} LE`),
           h("button", { type: "button", class: "entfernen", onclick: () => { S.waffen.splice(i, 1); S.spezialwaffen = S.spezialwaffen.filter((s) => waffenZuSpez(s) !== w.name); neuZeichnen(); } }, "entfernen")))) : null,
@@ -906,19 +917,26 @@
       karte(null,
         h("div", { class: "topf-kopf" }, h("h3", {}, `Zauber: ${kl.zauberGruppen.join(", ")}`), h("span", { class: "topf-rest" + (rest < 0 ? " ueber" : rest === 0 ? " leer" : "") }, `${rest} von ${zauberTopf()} LE frei`)),
         S.rasse === "Elf" ? info("Mit * markierte Zauber gehören zur Schwarzen Magie; Elfen dürfen sie nicht lernen.") : null,
-        kl.zauberGruppen.map((g) => {
-          const daten = K.startZauber[g];
-          return h("div", { class: "waffenstufe" }, h("h4", {}, g),
-            [1, 2].map((le) => h("div", { class: "optionen" }, (daten[le] || []).map((z) => {
-              const schwarz = z.endsWith("*");
+        (() => {
+          let versteckt = 0;
+          const gruppen = kl.zauberGruppen.map((g) => {
+            const daten = K.startZauber[g];
+            const reihen = [1, 2].map((le) => (daten[le] || []).filter((z) => {
               const name = z.replace("*", "");
-              const hat = S.zauber.some((x) => x.name === name);
-              const verboten = schwarz && S.rasse === "Elf";
-              return h("button", { type: "button", class: "option", disabled: hat || verboten || le > rest, title: verboten ? "Schwarze Magie" : "",
-                onclick: () => { S.zauber.push({ name, gruppe: g, le }); neuZeichnen(); } },
-                h("span", {}, z), h("small", {}, `${le} LE` + (zauberInfo(name, g) ? ` · Stufe ${zauberInfo(name, g).stufe}` : "")));
-            }))));
-        }),
+              const ok = !S.zauber.some((x) => x.name === name) && !(z.endsWith("*") && S.rasse === "Elf") && le <= rest;
+              if (!ok) versteckt++;
+              return ok;
+            }).map((z) => [z, le])).filter((r) => r.length);
+            return reihen.length ? h("div", { class: "waffenstufe" }, h("h4", {}, g), reihen.map((r) => h("div", { class: "optionen" }, r.map(([z, le]) => {
+              const name = z.replace("*", ""), zi = zauberInfo(name, g);
+              return h("button", { type: "button", class: "option",
+                onclick: () => lernenBestaetigen(`den Zauber ${name}`, zi ? String(zi.stufe) : "", `${le} LE`, () => { S.zauber.push({ name, gruppe: g, le }); neuZeichnen(); }) },
+                h("span", {}, z), h("small", {}, `${le} LE` + (zi ? ` · Stufe ${zi.stufe}` : "")));
+            })))) : null;
+          });
+          return [gruppen.some(Boolean) ? gruppen : info(rest > 0 ? "Mit den freien LE ist kein weiterer Zauber lernbar." : "Alle Zauber-LE sind verteilt."),
+            ausgeblendet(versteckt, "zu teuer, schon gewählt oder Schwarze Magie")];
+        })(),
         S.zauber.length ? h("ul", { class: "gekauft" }, S.zauber.map((z, i) => h("li", {},
           h("span", {}, z.name), h("small", {}, `${z.gruppe} · ${z.le} LE`),
           h("button", { type: "button", class: "entfernen", onclick: () => { S.zauber.splice(i, 1); neuZeichnen(); } }, "entfernen")))) : null),
@@ -975,10 +993,26 @@
     const werkzeug = { "Erste Hilfe": "Salben, Heilkräuter, Verbände", "Fälschen": "Hilfsmittel und Werkzeuge zum Fälschen", Gaukeln: "Bälle, Reifen und Keulen zum Jonglieren",
       "Glücksspiel": "geladene Würfel oder gezinkte Karten", Musizieren: "ein Instrument nach Wahl", "Schlösser öffnen": "ein Satz Dietriche und Nachschlüssel" };
     for (const f of alleFertigkeiten()) if (werkzeug[f.name]) frei.push(`${f.name}: ${werkzeug[f.name]}`);
-    teile.push(karte("Ausrüstung (S. 46)",
+    // In Foundry: Ausrüstungskompendium öffnen; die Karte nimmt Gegenstände, Waffen und Rüstungen per Ziehen an
+    const kompendium = typeof opts.kompendium === "function";
+    const vorhanden = typeof opts.gegenstaende === "function" ? opts.gegenstaende() : [];
+    const ausruestungKarte = karte("Ausrüstung (S. 46)",
       h("ul", {}, [...new Set(frei)].map((x) => h("li", {}, x))),
       info("Dazu 80 GS Startgeld für weitere Einkäufe (Preislisten S. 197ff)."),
-      feld("Gewählte Waffen und weitere Einkäufe (für den Bogen)", h("textarea", { rows: 5, oninput: (ev) => { S.ausruestung = ev.target.value; speichern(); } }, S.ausruestung))));
+      kompendium ? h("div", { class: "knopfreihe" },
+        h("button", { type: "button", class: "kompendium-knopf", onclick: () => opts.kompendium("gegenstaende") }, "Kompendium: Ausrüstung"),
+        h("button", { type: "button", onclick: () => opts.kompendium("waffen") }, "Kompendium: Waffen"),
+        h("button", { type: "button", onclick: () => opts.kompendium("ruestungen") }, "Kompendium: Rüstungen")) : null,
+      kompendium ? info("Einträge aus dem Kompendium auf diesen Kasten ziehen; sie kommen direkt auf den Bogen. Gegenstände, die schon da sind, erhöhen die Anzahl.") : null,
+      vorhanden.length ? h("div", { class: "auf-dem-bogen" }, h("strong", {}, "Schon auf dem Bogen: "), vorhanden.join(", ")) : null,
+      feld("Gewählte Waffen und weitere Einkäufe (für den Bogen)", h("textarea", { rows: 5, oninput: (ev) => { S.ausruestung = ev.target.value; speichern(); } }, S.ausruestung)));
+    if (kompendium) {
+      ausruestungKarte.classList.add("cmt-ablage");
+      ausruestungKarte.addEventListener("dragover", (ev) => { ev.preventDefault(); ausruestungKarte.classList.add("cmt-ablage-aktiv"); });
+      ausruestungKarte.addEventListener("dragleave", (ev) => { if (!ausruestungKarte.contains(ev.relatedTarget)) ausruestungKarte.classList.remove("cmt-ablage-aktiv"); });
+      ausruestungKarte.addEventListener("drop", () => ausruestungKarte.classList.remove("cmt-ablage-aktiv"));
+    }
+    teile.push(ausruestungKarte);
     return teile;
   }
   function pruefeSpezial() {
@@ -1227,6 +1261,12 @@
         h("button", { type: "button", onclick: zu }, "Abbrechen"))];
     });
   }
+  // Bestätigung vor dem Lernen: „Willst du wirklich … lernen?“ (Nein schließt nur das Fenster)
+  function lernenBestaetigen(was, stufe, kosten, aktion) {
+    frage("Lernen bestätigen", `Willst du wirklich ${was}${stufe ? ` auf Stufe ${stufe}` : ""} für ${kosten} lernen?`, "Ja, lernen", aktion, "Nein");
+  }
+  // nur wählbare Optionen zeigen; der Rest wird gezählt und als Hinweis genannt
+  function ausgeblendet(n, grund) { return n ? h("small", { class: "ausgeblendet" }, `${n} ${n === 1 ? "Option" : "Optionen"} ausgeblendet (${grund}).`) : null; }
   function meldung(titel, text) {
     fenster(titel, (zu) => [h("p", {}, text), h("div", { class: "knopfreihe" }, h("button", { type: "button", class: "haupt", onclick: zu }, "OK"))]);
   }
@@ -1349,7 +1389,7 @@
     { id: "fert", titel: "Fertigkeiten" },
     { id: "waffen", titel: "Waffen" },
     { id: "zauber", titel: "Zauber", nur: () => !!(L.zauberKosten[S.klasse] && Object.keys(L.zauberKosten[S.klasse]).length) },
-    { id: "tabellen", titel: "Lerntabellen" },
+    { id: "tabellen", titel: "Lernliste" },
     { id: "protokoll", titel: "Protokoll" },
   ];
   function gradAus(es) {
@@ -1789,8 +1829,113 @@
   function ansichtProtokoll() {
     return [kontoKacheln(), karte("Alle Buchungen", info("Die jeweils letzte Buchung lässt sich rückgängig machen, auch mehrmals hintereinander."), protokollListe())];
   }
+  // Lernliste: nur, was mit den vorhandenen EP und dem Gold jetzt lernbar ist. Ein Klick fragt nach
+  // („Willst du wirklich …?“) und bucht. Praxispunkte werden zuerst verrechnet; Gold statt EP,
+  // Belohnungen und Spruchrollen gehen über die ausführlichen Fenster in den anderen Reitern.
+  function lernlisteDaten() {
+    const sp = S.spiel, elf = S.rasse === "Elf";
+    const leistbar = (k) => k.ep <= sp.ep && k.gold <= sp.gold;
+    const steigern = gelernteListe().map((g) => {
+      const ppVerf = sp.pp[g.key] || 0, stufen = [];
+      let te = 0;
+      for (let i = 1; i <= 6; i++) {
+        const t = teFuer(g.gruppe, g.wert + i);
+        if (t === null) break;
+        te += t;
+        const pp = Math.min(ppVerf, te), rest = te - pp;
+        const k = { ziel: g.wert + i, te, pp, ep: rest * g.ep, gold: rest * 20 };
+        if (!leistbar(k)) break;   // jede weitere Stufe kostet mehr
+        stufen.push(k);
+      }
+      return { g, stufen };
+    }).filter((x) => x.stufen.length);
+    const neu = (waffen) => {
+      const hat = new Set(gelernteListe().filter((g) => !!g.waffe === waffen).map((g) => g.lname));
+      const quelle = waffen ? L.waffen.map((w) => ({ lname: w.name, gruppe: w.gruppe, le: "Gs", ep: L.waffenKosten[S.klasse], waffe: true }))
+        : L.fertigkeiten.map((f) => ({ lname: f.name, gruppe: f.gruppe, le: f.le, ep: f.kosten[S.klasse] }));
+      return quelle.filter((e) => (!hat.has(e.lname) || MEHRFACH.includes(e.lname))
+        && !(waffen ? (waffenErlaubt(e.lname) || "").includes("nicht nutzbar") || (waffenErlaubt(e.lname) || "").includes("nur für Zauberer") : elf && K.elfenNie.includes(e.lname)))
+        .map((e) => { const t = L.te[e.gruppe], le = t.lernTE / 3; return { e, start: t.start, le, ep: t.lernTE * e.ep + elfZuschlag() * le, gold: le * 200 }; })
+        .filter(leistbar);
+    };
+    const zauber = [];
+    for (const gruppe of Object.keys(L.zauberKosten[S.klasse] || {})) {
+      const basis = zauberEP(gruppe);
+      if (basis === null) continue;
+      const ppVerf = sp.pp["Z:" + gruppe] || 0;
+      for (const z of ZAUBER.filter((x) => x.gruppe === gruppe)) {
+        if (kenntZauber(z.name, gruppe) || (elf && z.urspr === "schwarzmagisch")) continue;
+        const le = STUFEN_LE[z.stufe - 1], pp = Math.min(ppVerf, le), rest = le - pp;
+        const k = { z, gruppe, le, pp, ep: rest * (basis + elfZuschlag()), gold: rest * 100 };
+        if (leistbar(k)) zauber.push(k);
+      }
+    }
+    zauber.sort((a, b) => a.gruppe.localeCompare(b.gruppe, "de") || a.z.stufe - b.z.stufe || a.z.name.localeCompare(b.z.name, "de"));
+    return { steigern, fert: neu(false), waffen: neu(true), zauber };
+  }
+  const lernAnzeige = (n) => String(n).replace(/:Sprache$/, " (Sprache)");
+  const kostenText = (k) => [k.le ? `${k.le} LE` : null, k.te ? `${k.te} TE` : null, `${fmt(k.ep)} EP`, `${fmt(k.gold)} GS`].filter(Boolean).join(", ");
+  function lernlisteSteigern(g, k) {
+    const ppText = k.pp ? ` (davon ${k.pp} TE mit Praxispunkten)` : "";
+    lernenBestaetigen(g.titel, `+${k.ziel}`, kostenText(k) + ppText, () => {
+      buchen(`${g.titel} auf +${k.ziel}: ${k.te} TE` + (k.pp ? ` (${k.pp} PP)` : "") + ` – ${fmt(k.ep)} EP, ${fmt(k.gold)} GS`, (s) => {
+        s.werte[g.key] = k.ziel; if (k.pp) s.pp[g.key] = (s.pp[g.key] || 0) - k.pp; s.ep -= k.ep; s.gold -= k.gold;
+      });
+    });
+  }
+  function lernlisteNeu(x) {
+    const { e } = x;
+    const buche = (spez) => buchen(`${e.lname}${spez ? " (" + spez + ")" : ""} gelernt (+${x.start}): ${x.le} LE – ${fmt(x.ep)} EP, ${fmt(x.gold)} GS`, (s) => {
+      s.neu.push(e.waffe ? { name: e.lname, waffe: true, wert: x.start } : { name: e.lname, spez, le: e.le, wert: x.start });
+      s.ep -= x.ep; s.gold -= x.gold;
+    });
+    if (!MEHRFACH.includes(e.lname)) return lernenBestaetigen(lernAnzeige(e.lname), `+${x.start}`, kostenText(x), () => buche(""));
+    // Sprachen, Landeskunde, Überleben: Angabe im selben Fenster
+    let spez = "";
+    const art = e.lname === "Landeskunde" ? "Land" : e.lname === "Überleben" ? "Gelände" : "Sprache bzw. Schrift";
+    fenster("Lernen bestätigen", (zu, neuZ) => {
+      const schonDa = spez.trim() && gelernteListe().some((g) => g.lname === e.lname && g.titel.toLowerCase().includes(`(${spez.trim().toLowerCase()})`));
+      return [h("p", {}, `Willst du wirklich ${lernAnzeige(e.lname)} auf Stufe +${x.start} für ${kostenText(x)} lernen?`),
+        feld(art, h("input", { type: "text", value: spez, oninput: (ev) => { spez = ev.target.value; }, onchange: () => neuZ() })),
+        schonDa ? h("p", { class: "fehlt" }, "Diese Angabe ist schon gelernt.") : null,
+        h("div", { class: "knopfreihe" },
+          h("button", { type: "button", class: "haupt", onclick: () => { if (!spez.trim() || schonDa) return neuZ(); zu(); buche(spez.trim()); } }, "Ja, lernen"),
+          h("button", { type: "button", onclick: zu }, "Nein"))];
+    });
+  }
+  function lernlisteZauber(k) {
+    lernenBestaetigen(`den Zauber ${k.z.name} (${k.gruppe})`, String(k.z.stufe), kostenText(k) + (k.pp ? ` (davon ${k.pp} LE mit Praxispunkten)` : ""), () => {
+      buchen(`Zauber gelernt: ${k.z.name} (${k.gruppe}, Stufe ${k.z.stufe})` + (k.pp ? ` (${k.pp} PP)` : "") + ` – ${fmt(k.ep)} EP, ${fmt(k.gold)} GS`, (s) => {
+        s.neu.push({ name: k.z.name, zauber: true, gruppe: k.gruppe, stufe: k.z.stufe });
+        if (k.pp) s.pp["Z:" + k.gruppe] = (s.pp["Z:" + k.gruppe] || 0) - k.pp;
+        s.ep -= k.ep; s.gold -= k.gold;
+      });
+    });
+  }
   function ansichtTabellen() {
-    return [lerntabelle(klasse())];
+    const d = lernlisteDaten(), sp = S.spiel;
+    const knopf = (titel, unter, onclick) => h("button", { type: "button", class: "option lernbar", onclick }, h("span", {}, titel), h("small", {}, unter));
+    const leer = (text) => info(text);
+    const teile = [kontoKacheln(),
+      info(`Angezeigt wird nur, was mit ${fmt(sp.ep)} EP und ${fmt(sp.gold)} GS jetzt lernbar ist. Ein Klick fragt nach und bucht. Praxispunkte werden zuerst verrechnet. Gold statt EP, Belohnungen und Spruchrollen: über die Reiter Fertigkeiten, Waffen und Zauber.`),
+      karte("Gelernte Fertigkeiten steigern", d.steigern.length
+        ? h("div", { class: "lernliste" }, d.steigern.map(({ g, stufen }) => h("div", { class: "lernzeile" },
+          h("strong", {}, `${g.titel} ${vz(g.wert)}`),
+          h("div", { class: "optionen" }, stufen.map((k) => knopf(`+${k.ziel}`, kostenText(k) + (k.pp ? `, ${k.pp} PP` : ""), () => lernlisteSteigern(g, k)))))))
+        : leer("Für keine gelernte Fertigkeit reichen EP und Gold für die nächste Stufe.")),
+      karte("Neue Fertigkeit lernen", d.fert.length ? h("div", { class: "optionen" }, d.fert.map((x) => knopf(`${lernAnzeige(x.e.lname)} +${x.start}`, `${x.e.le} · ${kostenText(x)}`, () => lernlisteNeu(x))))
+        : leer("Für keine neue Fertigkeit reichen EP und Gold.")),
+      karte("Neue Waffenfertigkeit lernen", d.waffen.length ? h("div", { class: "optionen" }, d.waffen.map((x) => knopf(`${x.e.lname} +${x.start}`, kostenText(x), () => lernlisteNeu(x))))
+        : leer("Für keine neue Waffenfertigkeit reichen EP und Gold.")),
+    ];
+    if (Object.keys(L.zauberKosten[S.klasse] || {}).length) {
+      const gruppen = [...new Set(d.zauber.map((k) => k.gruppe))];
+      teile.push(karte("Zauber lernen", gruppen.length ? gruppen.map((g) => h("div", { class: "waffenstufe" }, h("h4", {}, g),
+        h("div", { class: "optionen" }, d.zauber.filter((k) => k.gruppe === g).map((k) => knopf(k.z.name, `Stufe ${k.z.stufe} · ${kostenText(k)}${k.pp ? `, ${k.pp} PP` : ""}`, () => lernlisteZauber(k))))))
+        : leer("Für keinen weiteren Zauber reichen EP und Gold.")));
+    }
+    teile.push(h("details", { class: "volle-lerntabelle" }, h("summary", {}, "Vollständige Lerntabelle (alle Kosten, zum Nachschlagen und Drucken)"), lerntabelle(klasse())));
+    return teile;
   }
   function renderLernen(id) {
     if (!klasse()) return [info("Zuerst in der Erschaffung einen Abenteurertyp wählen.")];

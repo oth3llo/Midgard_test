@@ -220,7 +220,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
 
   // ---------------------------------------------------------------- Ziehen und Ablegen
   async #ablegen(ev) {
-    if (ev.target.closest(".ma-werkzeug")) return;
+    // im Werkzeug nur die Ausrüstungskarte (Ablagefläche der Erschaffung)
+    if (ev.target.closest(".ma-werkzeug") && !ev.target.closest(".cmt-ablage")) return;
     ev.preventDefault();
     let daten;
     try { daten = JSON.parse(ev.dataTransfer.getData("text/plain")); } catch { return; }
@@ -247,6 +248,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
   #nachAblage(item) {
     const reiter = { gegenstand: "ausruestung", waffe: "kampf", ruestung: "kampf", waffenfertigkeit: "kampf", fertigkeit: "fertigkeiten", zauber: "zauber" }[item.type];
     ui.notifications.info(`${this.actor.name}: ${item.name} hinzugefügt.`);
+    // während der Erschaffung im Werkzeug bleiben und dessen Liste „Schon auf dem Bogen“ auffrischen
+    if (this.#reiter === "werkzeug") { this.#werkzeug?.neuZeichnen?.(); return; }
     if (reiter && reiter !== this.#reiter) this.#wechseln(reiter);
   }
 
@@ -759,6 +762,10 @@ export class AbenteurerBogen extends ActorSheetV2 {
       mindestsumme: game.settings.get(SYSTEM_ID, "hausregelMindestsumme"),
       neuanfaenge: game.settings.get(SYSTEM_ID, "neuanfaenge"),
       sperren: () => this.#sperren(),
+      // Ausrüstung bei der Erschaffung: Kompendium neben dem Bogen öffnen, vorhandene Ausrüstung anzeigen
+      kompendium: (kat) => KompendiumBrowser.oeffnen(kat, { neben: this }),
+      gegenstaende: () => this.actor.items.filter((i) => ["gegenstand", "waffe", "ruestung"].includes(i.type))
+        .map((i) => (i.type === "gegenstand" && i.system.anzahl > 1 ? `${i.name} (${i.system.anzahl})` : i.name)),
     });
     this.#startZustand = JSON.stringify(this.#werkzeug.zustand());
   }

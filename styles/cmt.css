@@ -513,6 +513,17 @@
 .midgard-cmt.midgard-cmt div.gesperrt {opacity: .6; filter: grayscale(.4);}
 .midgard-cmt.midgard-cmt .neuanfang {display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;}
 .midgard-cmt.midgard-cmt .neuanfang .info {margin: 0; flex: 1;}
+.midgard-cmt.midgard-cmt .lernliste {display: flex; flex-direction: column; gap: .2rem;}
+.midgard-cmt.midgard-cmt .lernzeile {display: grid; grid-template-columns: minmax(10rem, 14rem) 1fr; align-items: center; gap: .6rem; border-bottom: 1px solid var(--linie, #0002);}
+.midgard-cmt.midgard-cmt .lernzeile .optionen {margin: .35rem 0; gap: .45rem;}
+.midgard-cmt.midgard-cmt .option.lernbar {cursor: pointer;}
+.midgard-cmt.midgard-cmt .option.lernbar:hover, .midgard-cmt.midgard-cmt .option.lernbar:focus-visible {filter: brightness(1.08); outline: 2px solid var(--akzent, #b8860b); outline-offset: 1px;}
+.midgard-cmt.midgard-cmt .ausgeblendet {display: block; opacity: .7; margin: -.2rem 0 .5rem;}
+.midgard-cmt.midgard-cmt details.volle-lerntabelle {margin-top: 1rem;}
+.midgard-cmt.midgard-cmt details.volle-lerntabelle > summary {cursor: pointer; font-weight: 700; padding: .4rem 0;}
+@media (max-width: 640px) {
+.midgard-cmt.midgard-cmt .lernzeile {grid-template-columns: 1fr;}
+}
 
 /* Schriften und Grundmaße auch außerhalb der Bögen (Journale, Chat, Dialoge) */
 :root { --schrift-titel: "Alegreya", "Palatino Linotype", Georgia, serif; --schrift-kapitaelchen: "Alegreya SC", "Alegreya", Georgia, serif; --schrift-text: "Alegreya", "Palatino Linotype", Georgia, serif; --radius: 4px; }
@@ -1199,3 +1210,9 @@ img[src*="midgard5-cmt/bilder/"]:not([src*="/textur/"]),
 .midgard-export-leiste button { width: auto; flex: 0 0 auto; }
 .midgard-export-leiste .leise { opacity: .75; }
 .midgard-export-vorschau { flex: 1 1 auto; width: 100%; min-height: 300px; border: 0; background: #fff; }
+
+/* Erschaffung: Ausrüstungskarte als Ablagefläche für Einträge aus dem Kompendium */
+.midgard-abenteurer .ma-werkzeug .karte.cmt-ablage-aktiv { outline: 2px dashed var(--gold, #c9a227); outline-offset: 3px; background: color-mix(in srgb, var(--gold, #c9a227) 10%, transparent); }
+.midgard-abenteurer .ma-werkzeug .karte.cmt-ablage .knopfreihe { margin: .6rem 0 .3rem; }
+.midgard-abenteurer .ma-werkzeug .karte.cmt-ablage .knopfreihe button { width: auto; flex: 0 0 auto; }
+.midgard-abenteurer .ma-werkzeug .auf-dem-bogen { margin: .4rem 0 .6rem; }
