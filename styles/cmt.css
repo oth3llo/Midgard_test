@@ -1189,3 +1189,13 @@ img[src*="midgard5-cmt/bilder/"]:not([src*="/textur/"]),
 .midgard-abenteurer .ma-zaubermittel small { flex-basis: 100%; color: var(--leise); }
 .midgard-abenteurer .ma-anzahl { color: var(--leise); font-weight: 700; }
 .midgard-browser .mb-hinweis.mb-ziehen { border-style: solid; border-color: var(--gold); background: color-mix(in srgb, var(--gold) 14%, var(--flaeche)); }
+
+/* Export: Knopf im Bogenkopf und Fenster mit Vorschau des Übertragungsblatts */
+.midgard-abenteurer .ma-wurzel button.ma-export-knopf { display: inline-flex; align-items: center; gap: 6px; width: auto; height: auto; min-height: 28px; margin: 0 0 0 6px; padding: 1px 10px; background: var(--knopf, var(--a7)); color: var(--knopf-text, var(--a7t)); border: 1px solid var(--rahmen, var(--rand)); border-radius: 3px; font-family: var(--schrift-titel); font-size: .95rem; }
+.midgard-abenteurer .ma-wurzel button.ma-export-knopf:hover, .midgard-abenteurer .ma-wurzel button.ma-export-knopf:focus-visible { filter: brightness(1.12); }
+.midgard-export .window-content { padding: 0; }
+.midgard-export-wurzel { display: flex; flex-direction: column; height: 100%; }
+.midgard-export-leiste { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--rahmen, #8a7a62); }
+.midgard-export-leiste button { width: auto; flex: 0 0 auto; }
+.midgard-export-leiste .leise { opacity: .75; }
+.midgard-export-vorschau { flex: 1 1 auto; width: 100%; min-height: 300px; border: 0; background: #fff; }

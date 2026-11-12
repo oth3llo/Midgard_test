@@ -9,6 +9,7 @@ import { KompendiumBrowser } from "./browser.mjs";
 import { erfolgswurf, pruefwurf, nachricht, esc } from "./wuerfe.mjs";
 import { angreifen } from "./kampf.mjs";
 import { bildPfad, slug } from "./bilder.mjs";
+import { exportOeffnen } from "./export.mjs";
 
 const { ActorSheetV2 } = foundry.applications.sheets;
 const SPEICHER_VERZOEGERUNG = 400;
@@ -328,7 +329,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
         el("p", { class: "ma-unter", text: unter }),
         el("p", { class: "ma-konto" }, el("span", { text: `ES ${fmt(s.es)}` }), el("span", { text: `EP ${fmt(s.ep)}` }), el("span", { text: `Gold ${fmt(s.gold)} GS` }),
           this.#verwaltet ? el("span", { class: "ma-marke", title: "Eigenschaften, Fertigkeiten, Zauber und Konto werden mit „Erschaffung & Lernen“ geändert; hier sind sie gesperrt." }, icon("fa-lock"), " vom Werkzeug verwaltet") : null,
-          el("button", { type: "button", class: ["ma-werkzeug-knopf", this.#reiter === "werkzeug" && "aktiv"], "data-reiter": "werkzeug", "aria-pressed": String(this.#reiter === "werkzeug"), onclick: () => this.#wechseln("werkzeug") }, icon("fa-hammer"), " Erschaffung & Lernen"))),
+          el("button", { type: "button", class: ["ma-werkzeug-knopf", this.#reiter === "werkzeug" && "aktiv"], "data-reiter": "werkzeug", "aria-pressed": String(this.#reiter === "werkzeug"), onclick: () => this.#wechseln("werkzeug") }, icon("fa-hammer"), " Erschaffung & Lernen"),
+          el("button", { type: "button", class: "ma-export-knopf", title: "Alle Werte übersichtlich zum Abschreiben in den Papierbogen, geordnet nach Figuren-, Abenteuer- und Zauberblatt", onclick: () => exportOeffnen(this.actor) }, icon("fa-file-export"), " Export"))),
       el("div", { class: "ma-vorraete" }, vorrat("LP", "system.lp.wert", s.lp), vorrat("AP", "system.ap.wert", s.ap),
         el("div", { class: "ma-glueck" },
           el("label", { title: "Schicksalsgunst: 1 SG opfern, um einen eigenen EW, WW oder einen Schadenswurf gegen sich zu wiederholen (Kodex S. 166)" }, el("abbr", { title: "Schicksalsgunst", text: "SG" }), " ", this.#feld("system.sg.wert", s.sg.wert, { typ: "number", breite: "3.2em" }), el("small", { text: ` / ${s.sg.max}` })),
