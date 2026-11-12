@@ -17,6 +17,7 @@ import { pdfImportStarten, pdfImportieren, einstellungenRegistrieren as importEi
 import { updatePruefen } from "./module/update.mjs";
 import { einstellungenRegistrieren as wurfEinstellungen } from "./module/wuerfe.mjs";
 import { einstellungenRegistrieren as kampfEinstellungen, socketEinrichten, karteEinrichten, angreifen } from "./module/kampf.mjs";
+import { einstellungenRegistrieren as systemEinstellungen, beimStart, journalDarstellen, chatKarteAnpassen, StartDialog, RegelwerkeFenster, EpFenster, epVerteilen } from "./module/einstellungen.mjs";
 
 const SYSTEM_ID = "midgard5-cmt";
 
@@ -33,11 +34,14 @@ Hooks.once("init", () => {
     makeDefault: true,
     label: "MIDGARD.GegenstandBogen",
   });
+  systemEinstellungen(); // zuerst, damit sie oben in den Spieleinstellungen stehen
   einstellungenRegistrieren();
   wurfEinstellungen();
   importEinstellungen();
   kampfEinstellungen();
-  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, kompendienOhnePdf, angreifen, pdfImport: pdfImportStarten, pdfImportieren, updatePruefen, stand: KOMPENDIUM_STAND };
+  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, kompendienOhnePdf, angreifen, pdfImport: pdfImportStarten, pdfImportieren, updatePruefen, stand: KOMPENDIUM_STAND,
+    start: () => StartDialog.oeffnen(), regelwerke: () => new RegelwerkeFenster().render({ force: true }),
+    epVerteilen: (verteilung, anlass) => (verteilung ? epVerteilen(verteilung, anlass) : new EpFenster().render({ force: true })) };
   console.log(`${SYSTEM_ID} | Midgard-CMT ${game.system.version} geladen`);
 });
 
@@ -51,13 +55,18 @@ Hooks.once("ready", async () => {
     console.error(`${SYSTEM_ID} | Kompendien konnten nicht eingerichtet werden`, fehler);
     ui.notifications.error("Midgard: Kompendien konnten nicht eingerichtet werden (Details in der Konsole).");
   }
+  beimStart(); // Farbschema und Startfenster (nach der Kodex-Prüfung, damit der Hinweis stimmt)
 });
+
+// Regel-Journale in der Leseansicht (Foundry ruft den Hook je Klasse der Vererbungskette auf)
+for (const h of ["renderJournalEntrySheet", "renderJournalEntryPageSheet"]) Hooks.on(h, journalDarstellen);
 
 Hooks.on("renderCompendiumDirectory", knopfEinbauen);
 Hooks.on("midgardKompendienGeaendert", () => KompendiumBrowser.zuruecksetzen());
 // Kodex importiert oder entfernt: offene Abenteurerbögen neu zeichnen, damit die Sperre verschwindet bzw. erscheint
 Hooks.on("midgardKodexStatus", () => {
   const offen = foundry.applications?.instances ? [...foundry.applications.instances.values()] : Object.values(ui.windows ?? {});
-  for (const app of offen) if (app instanceof AbenteurerBogen && app.rendered) app.render();
+  for (const app of offen) if ((app instanceof AbenteurerBogen || app instanceof StartDialog || app instanceof RegelwerkeFenster) && app.rendered) app.render();
 });
 Hooks.on("renderChatMessageHTML", karteEinrichten);
+Hooks.on("renderChatMessageHTML", chatKarteAnpassen);

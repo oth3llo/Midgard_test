@@ -2,12 +2,13 @@
 // und Zauberblatt), aufgeteilt in Reiter. Die Übersicht entspricht dem Abenteurerblatt.
 // Solange das Erschaffungs- und Lernwerkzeug einen Charakter verwaltet, sind die von ihm
 // berechneten Werte hier schreibgeschützt; geändert werden sie im Reiter „Erschaffung & Lernen“.
-import { EIGENSCHAFTEN, EIGENSCHAFT_NAMEN, ZAUBERGRUPPEN, ZUSTAENDE, bonus, vz, gradAus, abTabelle } from "./regeln.mjs";
+import { EIGENSCHAFTEN, EIGENSCHAFT_NAMEN, ZAUBERGRUPPEN, ZUSTAENDE, bonus, vz, gradAus, abTabelle, wuerfelName } from "./regeln.mjs";
 import { ausWerkzeug } from "./akteur.mjs";
 import { SYSTEM_ID } from "./kategorien.mjs";
 import { KompendiumBrowser } from "./browser.mjs";
-import { erfolgswurf, pruefwurf } from "./wuerfe.mjs";
+import { erfolgswurf, pruefwurf, nachricht, esc } from "./wuerfe.mjs";
 import { angreifen } from "./kampf.mjs";
+import { bildPfad, slug } from "./bilder.mjs";
 
 const { ActorSheetV2 } = foundry.applications.sheets;
 const SPEICHER_VERZOEGERUNG = 400;
@@ -78,7 +79,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
     // Das Werkzeug ist kein gleichrangiger Reiter, sondern ein abgesetzter Knopf im Kopf
     wurzel.append(this.#kopf(), el("nav", { class: "ma-reiter", role: "tablist" }, reiter.filter((r) => !r.werkzeug).map((r) =>
       el("button", { type: "button", role: "tab", "data-reiter": r.id, class: r.id === this.#reiter ? "aktiv" : null, "aria-selected": String(r.id === this.#reiter), title: r.titel, onclick: () => this.#wechseln(r.id) },
-        icon(r.icon), el("span", { text: r.titel })))));
+        this.#reiterSymbol(r), el("span", { text: r.titel })))));
     const inhalt = el("div", { class: "ma-inhalt" });
     for (const r of reiter) {
       const panel = el("div", { class: ["ma-panel", r.id === this.#reiter && "aktiv"], "data-panel": r.id, role: "tabpanel" });
@@ -311,7 +312,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
       this.isEditable ? el("button", { type: "button", class: "ma-plus", title: `${kurz} +1`, text: "+", onclick: () => this.#vorratAendern(pfad, 1) }) : null,
       el("span", { class: "ma-balken" }, el("span", { style: `width:${v.max ? Math.max(0, Math.min(100, (v.wert / v.max) * 100)) : 0}%` })));
     return el("header", { class: "ma-kopf" },
-      el("img", { class: "ma-portrait", src: a.img, alt: "", title: this.isEditable ? "Bild ändern" : null, onclick: () => this.#bildWaehlen() }),
+      this.#portraitElement(a),
       el("div", { class: "ma-kopf-text" },
         this.isEditable && !this.#verwaltet ? el("input", { type: "text", class: "ma-name", "data-pfad": "name", value: a.name, "aria-label": "Name" }) : el("h1", { class: "ma-name", text: a.name }),
         el("p", { class: "ma-unter", text: unter }),
@@ -321,7 +322,11 @@ export class AbenteurerBogen extends ActorSheetV2 {
       el("div", { class: "ma-vorraete" }, vorrat("LP", "system.lp.wert", s.lp), vorrat("AP", "system.ap.wert", s.ap),
         el("div", { class: "ma-glueck" },
           el("label", { title: "Schicksalsgunst: 1 SG opfern, um einen eigenen EW, WW oder einen Schadenswurf gegen sich zu wiederholen (Kodex S. 166)" }, el("abbr", { title: "Schicksalsgunst", text: "SG" }), " ", this.#feld("system.sg.wert", s.sg.wert, { typ: "number", breite: "3.2em" }), el("small", { text: ` / ${s.sg.max}` })),
-          el("label", { title: "Göttliche Gnade: Eingreifen einer übernatürlichen Macht in Notlagen (Das Arkanum)" }, el("abbr", { title: "Göttliche Gnade", text: "GG" }), " ", this.#feld("system.gg", s.gg, { typ: "number", breite: "3.2em" })))));
+          el("label", { title: "Göttliche Gnade: Eingreifen einer übernatürlichen Macht in Notlagen (Das Arkanum)" }, el("abbr", { title: "Göttliche Gnade", text: "GG" }), " ", this.#feld("system.gg", s.gg, { typ: "number", breite: "3.2em" })),
+          // Glückspunkte nur mit der Einstellung (Kodex S. 167)
+          game.settings.get(SYSTEM_ID, "glueckspunkte")
+            ? el("label", { class: "ma-gp", title: "Glückspunkte: 1 GP für einen Wurf wiederholen, einen Treffer abmildern oder einen Hinweis erhalten (Kodex S. 167)" }, el("abbr", { title: "Glückspunkte", text: "GP" }), " ", this.#feld("system.gp", s.gp, { typ: "number", breite: "3.2em" }))
+            : null)));
   }
 
   #bildWaehlen() {
@@ -371,6 +376,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
       d.erschoepft ? { name: "erschöpft", icon: "fa-battery-empty", text: "0 AP: EW:Angriff und WW:Abwehr –4, keine Verteidigungswaffe; Angreifer +4 (Kodex S. 71)." } : null,
       d.belastet ? { name: d.last.stufe === "zu schwer" ? "über Höchstlast" : "schwer belastet", icon: "fa-weight-hanging", text: `${fmt(d.last.kg)} kg über der Normallast von ${d.last.normal} kg: B halbiert, –4 auf Kampf- und Bewegungsfertigkeiten (Kodex S. 58).` } : null,
     ].filter(Boolean);
+    // Einstellung „nur anzeigen“: Hinweis statt Verrechnung
+    if (!d.automatik) for (const z of automatisch) z.text = `${z.text} Nur Anzeige: wird laut Einstellung nicht verrechnet.`;
     return el("div", { class: "ma-zustaende" },
       el("div", { class: "ma-zustand-knoepfe" }, ZUSTAENDE.map((z) => {
         const an = d.zustaende[z.id];
@@ -647,7 +654,12 @@ export class AbenteurerBogen extends ActorSheetV2 {
     // Das Werkzeug startet erst, wenn der Reiter geöffnet wird oder es den Charakter schon verwaltet
     if (!this.#werkzeugWurzel && (this.#verwaltet || this.#reiter === "werkzeug")) this.#werkzeugStarten();
     if (!this.#werkzeugWurzel) return el("div", { class: "ma-werkzeug-platz" });
+    // Freigabe von außen geändert (Spielleitung, Einstellung): Werkzeug mit den neuen Sperren zeichnen
+    const sperre = JSON.stringify(this.#sperren());
+    if (this.#letzteSperre !== null && sperre !== this.#letzteSperre) this.#werkzeug?.neuZeichnen();
+    this.#letzteSperre = sperre;
     this.#leiste = el("div", { class: "ma-werkzeug-leiste", role: "status" }, icon("fa-hammer"), el("span", { class: "ma-werkzeug-stand" }),
+      this.#freigabeElement(),
       el("button", { type: "button", class: "ma-knopf", onclick: () => this.#wechseln("uebersicht") }, icon("fa-arrow-left"), " Zurück zum Bogen"));
     this.#leisteAktualisieren(this.#werkzeug.auswertung());
     return [
@@ -655,6 +667,33 @@ export class AbenteurerBogen extends ActorSheetV2 {
       this.#verwaltet ? null : el("p", { class: "info ma-werkzeug-hinweis", text: "Sobald du hier etwas einträgst, übernimmt das Werkzeug Eigenschaften, Fertigkeiten, Zauber und Konto dieses Charakters. Die übrigen Reiter zeigen dann das Ergebnis." }),
       this.#werkzeugWurzel,
     ];
+  }
+
+  /** Einstellung „Erschaffung freigeben“: muss die Spielleitung den Charakter freigeben? */
+  get #freigabePflicht() { return game.settings.get(SYSTEM_ID, "erschaffungFreigabe") === "spielleiter"; }
+  get #freigegeben() { return !!this.actor.getFlag?.(SYSTEM_ID, "freigegeben"); }
+
+  /**
+   * Sperren für das Werkzeug: Spieler lernen erst nach der Freigabe; danach ist die Erschaffung
+   * für sie abgeschlossen. Die Spielleitung darf immer alles.
+   */
+  #sperren() {
+    if (!this.#freigabePflicht || game.user.isGM) return {};
+    return this.#freigegeben
+      ? { erschaffung: "Die Erschaffung ist von der Spielleitung freigegeben und damit abgeschlossen. Änderungen nimmt die Spielleitung vor." }
+      : { lernen: "Lernen und Steigern sind gesperrt, bis die Spielleitung den Charakter freigegeben hat." };
+  }
+
+  #freigabeElement() {
+    if (!this.#freigabePflicht) return null;
+    const frei = this.#freigegeben;
+    if (!game.user.isGM) return el("span", { class: ["ma-freigabe", frei ? "frei" : "offen"] }, icon(frei ? "fa-circle-check" : "fa-hourglass-half"), frei ? " freigegeben" : " wartet auf Freigabe");
+    return el("button", { type: "button", class: "ma-knopf ma-freigabe-knopf", onclick: async () => {
+      await this.actor.setFlag(SYSTEM_ID, "freigegeben", !frei);
+      this.#werkzeug?.neuZeichnen();
+      ui.notifications.info(`${this.actor.name}: ${frei ? "Freigabe zurückgenommen" : "Charakter freigegeben"}.`);
+      this.render();
+    } }, icon(frei ? "fa-lock-open" : "fa-stamp"), frei ? " Freigabe zurücknehmen" : " Charakter freigeben");
   }
 
   #leisteAktualisieren(a) {
@@ -673,6 +712,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
         game.user.isGM ? el("button", { type: "button", class: "haupt", text: "Regelwerk-PDF importieren", onclick: () => game.midgard.pdfImport() }) : el("p", { class: "info", text: "Das erledigt der Spielleiter." })));
   }
 
+  #letzteSperre = null;
+
   #werkzeugStarten() {
     this.#werkzeugWurzel = el("div", { class: "ma-werkzeug" });
     this.#startZustand = "startet"; // Speicherungen während des Starts nicht übernehmen
@@ -683,8 +724,46 @@ export class AbenteurerBogen extends ActorSheetV2 {
       zustand: this.#zustandLesen(),
       cssUrl: new URL(`systems/${SYSTEM_ID}/styles/cmt.css`, document.baseURI).href,
       speichere: (zustand, auswertung) => this.#vormerken(zustand, auswertung),
+      // Vorgaben aus den Systemeinstellungen
+      wuerfelModus: game.settings.get(SYSTEM_ID, "erschaffungWuerfel"),
+      methode: game.settings.get(SYSTEM_ID, "erschaffungMethode"),
+      wurfMelden: game.settings.get(SYSTEM_ID, "erschaffungChat") ? (w) => this.#wurfMelden(w) : null,
+      mindestsumme: game.settings.get(SYSTEM_ID, "hausregelMindestsumme"),
+      neuanfaenge: game.settings.get(SYSTEM_ID, "neuanfaenge"),
+      sperren: () => this.#sperren(),
     });
     this.#startZustand = JSON.stringify(this.#werkzeug.zustand());
+  }
+
+  /**
+   * Porträt: eigenes Bild des Akteurs, sonst das Rassenporträt passend zum Geschlecht
+   * (bilder/rassen/<rasse>-maennlich|weiblich, ohne Geschlecht bilder/rassen/<rasse>).
+   * Nur Anzeige; das Bild des Akteurs (Seitenleiste, Token) bleibt unverändert.
+   */
+  #portraitElement(a) {
+    const standard = !a.img || /(^|\/)mystery-man\.svg$/.test(a.img);
+    const s = a.system, rasse = slug(s.rasse || "Mensch");
+    const geschlecht = /^w/i.test(s.geschlecht ?? "") ? "weiblich" : /^m/i.test(s.geschlecht ?? "") ? "maennlich" : null;
+    const ersatz = standard ? ((geschlecht && bildPfad(`rassen/${rasse}-${geschlecht}`)) || bildPfad(`rassen/${rasse}`)) : null;
+    return el("img", { class: ["ma-portrait", ersatz && "ma-portrait-rasse"], src: ersatz ?? a.img, alt: "", title: this.isEditable ? (ersatz ? "Rassenporträt (Standard). Klicken, um ein eigenes Bild zu wählen" : "Bild ändern") : null, onclick: () => this.#bildWaehlen() });
+  }
+
+  /** Reitersymbol: eigene Grafik (bilder/reiter/<id>), sonst Font Awesome. */
+  #reiterSymbol(r) {
+    const pfad = bildPfad(`reiter/${r.id}`);
+    if (!pfad) return icon(r.icon);
+    // absolute Adresse: relative Pfade in CSS-Variablen löst der Browser gegen das Stylesheet auf
+    return el("i", { class: "mit-bild", "aria-hidden": "true", style: `--bild: url("${new URL(pfad, document.baseURI).href}")` });
+  }
+
+  /** Digitale Würfe des Erschaffungswerkzeugs als Chatkarte. */
+  #wurfMelden({ aktion, schritt, wuerfe }) {
+    const name = wuerfelName;
+    const gruppen = new Map();
+    for (const [n, w] of wuerfe) gruppen.set(n, [...(gruppen.get(n) ?? []), w]);
+    const zeilen = [...gruppen].map(([n, l]) => `<li><strong>${name(n)}</strong> ${l.join(", ")}</li>`).join("");
+    return nachricht(this.actor, `<div class="midgard-karte mk-erschaffung"><header>Erschaffung · ${esc(schritt)}</header>
+      <p class="mk-klein">${esc(aktion)}</p><ul class="mk-wuerfe">${zeilen}</ul></div>`, [], { erschaffung: true });
   }
 
   #zustandLesen() {

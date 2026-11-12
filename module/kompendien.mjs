@@ -6,6 +6,15 @@
 // Einträge früherer Versionen, die ohne Import angelegt wurden, werden entfernt.
 import KOMPENDIUM from "../daten/kompendium.js";
 import { KATEGORIEN, SYSTEM_ID, packName, packId } from "./kategorien.mjs";
+import { eintragBild, bilderVorhanden } from "./bilder.mjs";
+
+/** Stand der Kompendien: Datensatz plus gelieferte Symbole (neue Symbole lösen einen Abgleich aus). */
+function sollStand() {
+  const symbole = bilderVorhanden().filter((n) => /^(waffen|zauber|ausruestung|ruestungen|rassen|typen|fertigkeiten)\//.test(n)).sort().join(",");
+  let h = 0;
+  for (const c of symbole) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return symbole ? `${KOMPENDIUM.stand}|${h.toString(36)}` : KOMPENDIUM.stand;
+}
 
 const ORDNER = "Midgard 5";
 const BEHALTEN = ["beschreibung", "kurzwirkung"]; // in der Welt nachgetragene Texte
@@ -58,7 +67,7 @@ async function regelPackHolen() {
 }
 
 /** Gleicht ein Kompendium mit den Solldaten ab. Gibt die Zahl der Änderungen zurück. */
-async function abgleichen(pack, soll) {
+async function abgleichen(pack, soll, kat) {
   const vorhanden = new Map((await pack.getDocuments()).map((d) => [d.id, d]));
   const sollIds = new Set(soll.map((e) => e._id));
   const neu = [], aendern = [], loeschen = [];
@@ -68,6 +77,7 @@ async function abgleichen(pack, soll) {
     // aus früheren Versionen: ohne Import angelegt und ohne nachgetragenen Text
     if (!alt.getFlag?.(SYSTEM_ID, "pdfImport") && !alt.system.beschreibung && !alt.system.kurzwirkung) { loeschen.push(alt.id); continue; }
     const daten = foundry.utils.deepClone(eintrag);
+    daten.img = eintragBild(kat, eintrag) ?? daten.img; // eigene Symbole aus bilder/
     for (const k of BEHALTEN) if (!daten.system[k] && alt.system[k]) daten.system[k] = alt.system[k];
     daten.flags = foundry.utils.mergeObject(alt.toObject().flags ?? {}, daten.flags, { inplace: false });
     aendern.push(daten);
@@ -94,7 +104,7 @@ export async function kompendienAufbauen(erzwingen = false) {
   const fehlt = Object.keys(KATEGORIEN).some((k) => !game.packs.get(packId(k))) || !game.packs.get("world.midgard-regeln");
   const stand = game.settings.get(SYSTEM_ID, "kompendiumStand");
   const modell = game.settings.get(SYSTEM_ID, "kompendiumModell");
-  if (!erzwingen && !fehlt && stand === KOMPENDIUM.stand && modell === 2) return false;
+  if (!erzwingen && !fehlt && stand === sollStand() && modell === 2) return false;
 
   await regelPackHolen();
   if (fehlt) ui.notifications.info("Midgard: Kompendien werden angelegt. Gefüllt werden sie über „Regelwerk-PDF importieren“ im Kompendium-Reiter.");
@@ -104,13 +114,13 @@ export async function kompendienAufbauen(erzwingen = false) {
     const gesperrt = pack.locked;
     if (gesperrt) await pack.configure({ locked: false });
     try {
-      const n = await abgleichen(pack, soll);
+      const n = await abgleichen(pack, soll, kat);
       console.log(`${SYSTEM_ID} | Kompendium ${kat}: ${soll.length} Einträge, ${n} Änderungen`);
     } finally {
       await pack.configure({ locked: true });
     }
   }
-  await game.settings.set(SYSTEM_ID, "kompendiumStand", KOMPENDIUM.stand);
+  await game.settings.set(SYSTEM_ID, "kompendiumStand", sollStand());
   await game.settings.set(SYSTEM_ID, "kompendiumModell", 2);
   console.log(`${SYSTEM_ID} | Kompendien auf Stand ${KOMPENDIUM.stand}`);
   return true;
@@ -129,6 +139,7 @@ export async function kompendienOhnePdf() {
     const vorhanden = new Set((await pack.getIndex()).map((e) => e._id));
     const neu = soll.filter((e) => !vorhanden.has(e._id)).map((e) => {
       const d = foundry.utils.deepClone(e);
+      d.img = eintragBild(kat, e) ?? d.img;
       d.flags[SYSTEM_ID].pdfImport = { buch: null, seite: null };
       return d;
     });

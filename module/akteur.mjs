@@ -23,6 +23,7 @@ export class AbenteurerDaten extends foundry.abstract.TypeDataModel {
       sg: vorrat(), gg: zahl(0),
       // schaltbare Zustände im Kampf (Kodex S. 71, 77); erschöpft und belastet ergeben sich von selbst
       zustaende: new f.SchemaField(Object.fromEntries(["liegend", "geblendet", "ueberrascht", "wehrlos"].map((k) => [k, new f.BooleanField({ required: true, initial: false })]))),
+      gp: zahl(0), // Glückspunkte (Kodex S. 167), nur sichtbar mit der Einstellung „Glückspunkte“
       es: zahl(0), ep: zahl(0), gold: new f.NumberField({ required: true, nullable: false, initial: 0 }),
       faehigkeiten: new f.ArrayField(new f.ObjectField(), { required: true, initial: [] }),
       zauberPP: new f.ObjectField({ required: true, initial: {} }),
@@ -44,7 +45,9 @@ export class AbenteurerDaten extends foundry.abstract.TypeDataModel {
   }
 
   prepareDerivedData() {
-    this.abgeleitet = ableiten(this, this.parent?.items ? [...this.parent.items] : []);
+    let automatik = true;
+    try { automatik = game.settings.get(SYSTEM_ID, "zustandAutomatik") !== "anzeigen"; } catch { /* vor der Registrierung */ }
+    this.abgeleitet = ableiten(this, this.parent?.items ? [...this.parent.items] : [], { automatik });
   }
 }
 

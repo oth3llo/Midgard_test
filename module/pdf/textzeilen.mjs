@@ -1,3 +1,5 @@
+import { trennstelle, woerterVerbinden } from "./textpruefung.mjs";
+
 // Zerlegt PDF-Seiten (pdf.js) in Textzeilen in Lesereihenfolge: zweispaltiger Satz,
 // linke Spalte von oben nach unten, dann rechte. Läuft im Browser (Foundry) und in Node (Tests).
 
@@ -133,8 +135,10 @@ export function ligaturenReparieren(zeilen) {
   }
 }
 
-const verbinden = (akt, text) => {
+/** Zwei Zeilen verbinden; an Trennstellen entscheidet das Wörterbuch des Buches (textpruefung.mjs), sonst die Grundregel. */
+export const verbinden = (akt, text) => {
   if (!akt) return text;
+  if (/\p{L}-$/u.test(akt)) { const t = trennstelle(akt, text); if (t !== null) return t; }
   if (/[a-zäöüß]-$/.test(akt) && /^[a-zäöüß]/.test(text) && !/^(und|oder|bzw\.|sowie)\b/.test(text)) return akt.slice(0, -1) + text;
   return `${akt} ${text}`;
 };
@@ -143,12 +147,21 @@ const verbinden = (akt, text) => {
  * Fügt Zeilen zu Blöcken zusammen: Absätze (Text), Tabellen ({tabelle: [[Zelle, …], …]}) und
  * eingerückte Kästen ({kasten: [Zeile, …]}). Silbentrennung am Zeilenende wird aufgelöst.
  */
+const AUFZAEHLUNG = /^(?:[•▪■◆]|[-–])\s/;
+
 export function absaetze(zeilen, zeilenabstand) {
   const out = [];
   let akt = "";
-  const absatzEnde = () => { if (akt) out.push(akt); akt = ""; };
+  const absatzEnde = () => { if (akt) out.push(woerterVerbinden(akt)); akt = ""; };
   for (let i = 0; i < zeilen.length; i++) {
     const z = zeilen[i];
+    // Aufzählungspunkt mit hängendem Einzug: die eingerückten Folgezeilen gehören zum Punkt
+    if (akt && AUFZAEHLUNG.test(akt) && !AUFZAEHLUNG.test(z.text) && (z.spalten?.length ?? 1) < 2
+      && z.abstand !== null && z.abstand >= 0 && z.abstand < zeilenabstand * 1.45) {
+      akt = verbinden(akt, z.text);
+      continue;
+    }
+    if (AUFZAEHLUNG.test(z.text)) absatzEnde();
     // Tabelle: mindestens zwei aufeinanderfolgende Zeilen mit zwei oder mehr Spalten
     if ((z.spalten?.length ?? 0) >= 2 && (zeilen[i + 1]?.spalten?.length ?? 0) >= 2) {
       absatzEnde();
@@ -184,6 +197,8 @@ export function absaetze(zeilen, zeilenabstand) {
         if (neueZeile) kasten.push(t); else kasten[kasten.length - 1] = verbinden(letzte, t);
       }
       if (kasten.length > 1) { out.push({ kasten }); i = j - 1; continue; }
+      // zusammenhängender eingerückter Text (Beispiel, Randnotiz): ein Block statt einer Zeile je Absatz
+      if (k - i >= 2) { out.push({ einschub: woerterVerbinden(kasten[0]), klein: zeilen.slice(i, k).every((x) => x.groesse < 9.6) }); i = k - 1; continue; }
       // einzelne eingerückte Zeile: normaler Text
     }
     // Großer Abstand beginnt einen Absatz, außer der Satz läuft erkennbar weiter (Kasten oder

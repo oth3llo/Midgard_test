@@ -46,7 +46,7 @@ export const vz = (w) => (w === null || w === undefined || Number.isNaN(w) ? "�
  * @param {object} s       system-Daten des Akteurs
  * @param {Item[]} items   eingebettete Gegenstände
  */
-export function ableiten(s, items) {
+export function ableiten(s, items, { automatik = true } = {}) {
   items = items ?? [];
   const e = s.eigenschaften;
   const art = s.typArt;                                   // K, ZK, Z oder leer
@@ -85,7 +85,9 @@ export function ableiten(s, items) {
   r.kampfAbzuege = [];
   if (metall && (e.St ?? 0) < metall.st) r.kampfAbzuege.push({ wert: -2, grund: `zu schwach für ${r.ruestung.kuerzel} (St ${metall.st})`, nurNah: false });
   if (r.ruestung.kuerzel === "VR" && !items.some((i) => i.type === "fertigkeit" && i.name === "Kampf in Vollrüstung")) r.kampfAbzuege.push({ wert: -2, grund: "Vollrüstung ohne Kampf in Vollrüstung", nurNah: true });
-  if ((s.ap?.wert ?? 1) <= 0 && (s.ap?.max ?? 0) > 0) r.kampfAbzuege.push({ wert: -4, grund: "erschöpft (0 AP)", nurNah: false });
+  // automatik false (Einstellung „nur anzeigen“): Erschöpfung und Last werden angezeigt, aber nicht verrechnet
+  r.automatik = automatik;
+  if (automatik && (s.ap?.wert ?? 1) <= 0 && (s.ap?.max ?? 0) > 0) r.kampfAbzuege.push({ wert: -4, grund: "erschöpft (0 AP)", nurNah: false });
   r.erschoepft = (s.ap?.wert ?? 1) <= 0 && (s.ap?.max ?? 0) > 0;
 
   // Last (Kodex S. 58): Rüstung und Kleidung zählen nicht mit; über der Normallast ist man belastet
@@ -95,8 +97,8 @@ export function ableiten(s, items) {
   r.last = { kg: Math.round(kg * 100) / 100, normal: zeile?.[1] ?? null, schwer: zeile?.[2] ?? null, hoechst: zeile?.[3] ?? null };
   r.last.stufe = zeile === null ? "unbekannt" : kg > r.last.hoechst ? "zu schwer" : kg > r.last.normal ? "belastet" : "frei";
   r.belastet = r.last.stufe === "belastet" || r.last.stufe === "zu schwer";
-  if (r.belastet) r.kampfAbzuege.push({ wert: -4, grund: "schwer belastet", nurNah: false });
-  if (r.belastet && r.bEffektiv !== null) r.bEffektiv = Math.floor(r.bEffektiv / 2);
+  if (automatik && r.belastet) r.kampfAbzuege.push({ wert: -4, grund: "schwer belastet", nurNah: false });
+  if (automatik && r.belastet && r.bEffektiv !== null) r.bEffektiv = Math.floor(r.bEffektiv / 2);
 
   // schaltbare Zustände
   r.zustaende = Object.fromEntries(ZUSTAENDE.map((z) => [z.id, !!s.zustaende?.[z.id]]));
@@ -109,7 +111,7 @@ export function ableiten(s, items) {
   // Zuschläge für Angreifer gegen diesen Abenteurer (höchstens einmal +4 aus „sehr leicht“)
   r.gegnerZuschlag = (nah, angreiferLiegt) => {
     const gruende = [];
-    if (r.erschoepft) gruende.push("erschöpft");
+    if (r.erschoepft && automatik) gruende.push("erschöpft");
     if (r.wehrlos) gruende.push("wehrlos");
     if (r.zustaende.liegend && nah && !angreiferLiegt) gruende.push("liegt am Boden");
     return gruende.length ? { wert: 4, grund: `Ziel ${gruende.join(", ")}` } : null;
@@ -120,7 +122,7 @@ export function ableiten(s, items) {
   const vertFert = items.filter((i) => i.type === "waffenfertigkeit" && i.system.verteidigung);
   const vertWaffen = items.filter((i) => i.type === "waffe" && i.system.art === "verteidigung" && i.system.ausgeruestet);
   const passend = vertFert.filter((f) => vertWaffen.some((w) => w.system.fertigkeit === f.name));
-  r.verteidigungswaffe = passend.length && !r.erschoepft && !r.wehrlos ? Math.max(...passend.map((f) => f.system.wert)) : null;
+  r.verteidigungswaffe = passend.length && !(r.erschoepft && automatik) && !r.wehrlos ? Math.max(...passend.map((f) => f.system.wert)) : null;
 
   r.resistenzGeist = r.gradAbwehr + (r.boni.ResG ?? 0);
   r.resistenzKoerper = r.gradAbwehr + (r.boni.ResK ?? 0);
@@ -170,5 +172,11 @@ export function schadensFormel(text, bonus = 0) {
   return bonus ? `${t}${bonus > 0 ? "+" : ""}${bonus}` : t;
 }
 
-/** Würfelformel in Midgard-Schreibweise: „1d6-1+3“ → „1W6–1+3“. */
-export const wNotation = (f) => String(f ?? "").replace(/(\d*)d(\d+)/g, "$1W$2").replace(/-/g, "–");
+/** Würfelschreibweise der Welt: „W“ (Midgard, Standard) oder „d“ (Einstellung wuerfelSchrift). */
+const schrift = () => { try { return globalThis.game?.settings?.get("midgard5-cmt", "wuerfelSchrift") ?? "W"; } catch { return "W"; } };
+
+/** Würfelformel in der gewählten Schreibweise: „1d6-1+3“ → „1W6–1+3“ (bzw. unverändert bei „d“). */
+export const wNotation = (f) => (schrift() === "d" ? String(f ?? "") : String(f ?? "").replace(/(\d*)d(\d+)/g, "$1W$2").replace(/-/g, "–"));
+
+/** Name eines Würfels: 20 → „W20“ / „d20“, 100 → „W%“ / „d100“. */
+export const wuerfelName = (n) => (schrift() === "d" ? `d${n}` : n === 100 ? "W%" : `W${n}`);

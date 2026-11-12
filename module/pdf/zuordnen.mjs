@@ -1,5 +1,6 @@
 // Ordnet aus einer PDF gelesene Beschreibungen den Kompendium-Einträgen zu und baut daraus HTML.
 import { normName } from "./kodex.mjs";
+import { gliedern } from "./gliedern.mjs";
 
 /** Editierdistanz (für Tippfehler wie „Himmlicher“/„Himmlischer“). */
 function distanz(a, b) {
@@ -49,20 +50,53 @@ export function zuordnen(gelesen, ziele, { aliase = {}, gruppeVon = () => null }
 }
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const WUERFEL_NAME = { "1d6": "W6", "1d10": "W10", "1d20": "W20", "1d100": "W%" };
+// Zahl, Würfel oder kurzer Wert: Zelle rechtsbündig und schmal
+const istWert = (c) => /^[+–-]?[\d.,]+%?$|^\d*W\d+|^\d*W%|^[–-]$/.test(String(c).trim());
 
-/** Absätze als HTML mit Fundstelle am Ende. */
+function tabelleHtml(reihen, { titel, kopfSpalte } = {}) {
+  const breite = Math.max(...reihen.map((r) => r.length));
+  // Kopfzeile: erste Zeile ohne Zahlenwerte, darunter Zeilen mit Werten
+  const kopf = !kopfSpalte && reihen.length >= 3 && reihen[0].filter(Boolean).length >= 2 && reihen[0].every((c) => !istWert(c))
+    && reihen.slice(1).some((r) => r.some(istWert));
+  const zelle = (c, k) => (kopfSpalte && k === 0 ? `<th scope="row">${esc(c)}</th>` : `<td${istWert(c) ? ' class="wert"' : c.length <= 12 ? ' class="kurz"' : ""}>${esc(c)}</td>`);
+  const zeile = (r) => `<tr>${r.length === 1 || (r.filter(Boolean).length === 1 && r[0] && breite > 1 && r.slice(1).every((c) => !c))
+    ? `<th colspan="${breite}" class="zwischen">${esc(r[0])}</th>` : r.map(zelle).join("")}</tr>`;
+  const rumpf = kopf ? reihen.slice(1) : reihen;
+  return `<table class="midgard-tabelle">${titel ? `<caption>${esc(titel)}</caption>` : ""}${kopf ? `<thead><tr>${reihen[0].map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>` : ""}<tbody>${rumpf.map(zeile).join("")}</tbody></table>`;
+}
+
+const schrittHtml = (punkte) => `<ol class="midgard-schritte">${punkte.map((p) => `<li><span class="marke">${esc(p.marke)}</span> ${esc(p.text)}${p.unter.length ? schrittHtml(p.unter) : ""}</li>`).join("")}</ol>`;
+
+/** Ein Block als HTML (Absatz, Tabelle, Kasten …; Blocktypen aus absaetze() und gliedern()). */
+export function blockHtml(a) {
+  if (typeof a === "string") return `<p>${esc(a)}</p>`;
+  if (a.tabelle) return tabelleHtml(a.tabelle, a);
+  if (a.wurftabelle) {
+    const w = a.wurftabelle;
+    // Inline-Wurf: Foundry macht daraus einen anklickbaren Würfel
+    return `<table class="midgard-tabelle midgard-wurftabelle"><caption><span class="midgard-tabellenkopf">${w.titel ? `<span>${esc(w.titel)}</span> ` : ""}<span class="midgard-wurf">[[/r ${w.wuerfel}]]{${WUERFEL_NAME[w.wuerfel]} würfeln}</span></span></caption>`
+      + `<thead><tr><th>${WUERFEL_NAME[w.wuerfel]}</th><th>Ergebnis</th></tr></thead><tbody>${w.zeilen.map(([b, t, d]) => `<tr><td class="bereich">${esc(b)}</td><td>${d ? `<strong>${esc(t)}</strong> ${esc(d)}` : esc(t)}</td></tr>`).join("")}</tbody></table>`;
+  }
+  if (a.liste) return `<ul class="midgard-liste">${a.liste.map((z) => `<li>${esc(z)}</li>`).join("")}</ul>`;
+  if (a.schritte) return schrittHtml(a.schritte);
+  if (a.wert) return `<p class="midgard-wert"><span>Wert</span> ${esc(a.wert)}</p>`;
+  if (a.merk) return `<div class="midgard-merk"><p class="midgard-merk-titel">${esc(a.titel ?? "Auf einen Blick")}</p><dl>${a.merk.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>`;
+  if (a.beispiel) return `<details class="midgard-beispiel"><summary>Beispiel</summary><p>${esc(a.beispiel)}</p></details>`;
+  if (a.randnotiz) return `<aside class="midgard-randnotiz"><p>${esc(a.randnotiz)}</p></aside>`;
+  if (a.fussnote) return `<p class="midgard-fussnote">* ${esc(a.fussnote)}</p>`;
+  // Kasten: Überschrift (erste kurze Zeile ohne Satzzeichen) und Stufen wie „(+4)“ fett
+  if (a.kasten) return `<div class="midgard-kasten">${a.kasten.map((z, i) => (/\([+–-]\d+\)$/.test(z) || (i === 0 && a.kasten.length > 1 && z.length < 50 && !/[.,;:]$/.test(z)) ? `<p><strong>${esc(z)}</strong></p>` : `<p>${esc(z)}</p>`)).join("")}</div>`;
+  if (a.einschub) return blockHtml(a.klein ? { beispiel: a.einschub } : { randnotiz: a.einschub });
+  return "";
+}
+
+/** Absätze als HTML mit Fundstelle am Ende; die Blöcke werden vorher gegliedert (gliedern.mjs). */
 export function alsHtml(absaetze, fundstelle) {
-  const block = (a) => {
-    if (typeof a === "string") return `<p>${esc(a)}</p>`;
-    if (a.tabelle) {
-      const breite = Math.max(...a.tabelle.map((r) => r.length));
-      return `<table class="midgard-tabelle"><tbody>${a.tabelle.map((r) => `<tr>${r.length === 1 || r.filter(Boolean).length === 1 && r[0] && breite > 1 && r.slice(1).every((c) => !c)
-        ? `<th colspan="${breite}">${esc(r[0])}</th>` : r.map((c) => (c.length <= 12 ? `<td class="kurz">${esc(c)}</td>` : `<td>${esc(c)}</td>`)).join("")}</tr>`).join("")}</tbody></table>`;
-    }
-    if (a.liste) return `<ul>${a.liste.map((z) => `<li>${esc(z)}</li>`).join("")}</ul>`;
-    // Kasten: Überschrift (erste kurze Zeile ohne Satzzeichen) und Stufen wie „(+4)“ fett
-    if (a.kasten) return `<div class="midgard-kasten">${a.kasten.map((z, i) => (/\([+–-]\d+\)$/.test(z) || (i === 0 && a.kasten.length > 1 && z.length < 50 && !/[.,;:]$/.test(z)) ? `<p><strong>${esc(z)}</strong></p>` : `<p>${esc(z)}</p>`)).join("")}</div>`;
-    return "";
-  };
-  return absaetze.map(block).join("") + (fundstelle ? `<p class="midgard-fundstelle"><em>${esc(fundstelle)}</em></p>` : "");
+  return gegliedertAlsHtml(gliedern(absaetze), fundstelle);
+}
+
+/** Bereits gegliederte Blöcke als HTML (wenn die Blöcke auch für andere Zwecke gebraucht werden). */
+export function gegliedertAlsHtml(bloecke, fundstelle) {
+  return bloecke.map(blockHtml).join("") + (fundstelle ? `<p class="midgard-fundstelle"><em>${esc(fundstelle)}</em></p>` : "");
 }

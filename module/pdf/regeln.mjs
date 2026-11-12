@@ -3,6 +3,7 @@
 // Abstand davor). Ergebnis ist eine Liste von Kapiteln mit Seiten für das Regel-Kompendium.
 import { absaetze } from "./textzeilen.mjs";
 import { unlesbar } from "./arkanum.mjs";
+import { anfangMelden } from "./textpruefung.mjs";
 
 /** Seitenbereiche der Regelkapitel je Buch. */
 export const REGELBEREICHE = {
@@ -10,8 +11,12 @@ export const REGELBEREICHE = {
   "Das Arkanum": [[9, 24, "Die Regeln der Magie"], [26, 36, "Die Welt der Magie"], [37, 61, "Der Konspekt der Zauberer"]],
 };
 
-/** Zierschrift mit falscher Zeichenzuordnung („Einfğhr§ng“ → „Einführung“). */
-const zierschrift = (t) => (/[ğ§]/.test(t) ? t.replace(/ğ/g, "ü").replace(/§/g, "u") : t);
+/**
+ * Zierschrift mit falscher Zeichenzuordnung („Einfğhr§ng“ → „Einführung“, „Kraf¥“ → „Kraft“,
+ * „t¢effen“ → „treffen“). Ersetzt wird nur innerhalb von Wörtern.
+ */
+const ZIER = { "ğ": "ü", "§": "u", "¥": "t", "¢": "r" };
+const zierschrift = (t) => (/[ğ§¥¢]/.test(t) ? t.replace(/(?<=\p{L})[ğ§¥¢]|[ğ§¥¢](?=\p{L})/gu, (c) => ZIER[c]) : t);
 
 /** Titel eines Aufzählungseintrags: „Alba*: …“ → „Alba“, sonst der fette Einstieg, sonst die ersten Wörter. */
 function eintragTitel(z) {
@@ -49,7 +54,8 @@ export function regelnAusBuch(zeilen, bereiche) {
   const kindAbschliessen = () => {
     if (!eltern || seite === eltern || !seite) return;
     const laenge = laengeVon(seite.text);
-    const eigeneSeite = (seite.doppelpunkt && laenge >= 60) || (seite.mitFett && laenge >= 150);
+    // klein beginnende „Titel“ („mehr als die Hälfte“) sind Listenpunkte, keine benannten Einträge
+    const eigeneSeite = /^[A-ZÄÖÜ]/.test(seite.titel) && ((seite.doppelpunkt && laenge >= 60) || (seite.mitFett && laenge >= 150));
     if (!eigeneSeite) {
       seite.text[0] = { ...seite.text[0], text: `• ${seite.text[0].text}`, abstand: 99 };
       eltern.text.push(...seite.text);
@@ -65,7 +71,11 @@ export function regelnAusBuch(zeilen, bereiche) {
     kindAbschliessen();
     if (!seite) return;
     seite.absaetze = absaetze(seite.text.filter((l) => !l.leer), abstand);
+    // Absatz beginnt klein mitten im Satz: Anfang verloren (Textprüfung meldet die Stelle)
+    if (typeof seite.absaetze[0] === "string" && /^[a-zäöüß]/.test(seite.absaetze[0])) anfangMelden(seite.titel, seite.absaetze[0], seite.seite);
+    if (seite.wert) seite.absaetze.unshift({ wert: seite.wert });
     delete seite.text;
+    delete seite.wert;
     const laenge = seite.absaetze.reduce((n, a) => n + (typeof a === "string" ? a.length : JSON.stringify(a).length), 0);
     if (laenge >= 40 || seite.kinder?.length) kap.seiten.push(seite);
     else if (laenge && kap.seiten.length) kap.seiten.at(-1).absaetze.push(...seite.absaetze); // Splitter anhängen
@@ -129,7 +139,8 @@ export function regelnAusBuch(zeilen, bereiche) {
     }
     if (unter) {
       neueSeite(zierschrift(z.text).replace(/\s[+–-]\s?[(\d].*$/, ""), 3, z); // „Berserkergang +(18–Wk/5)“ → „Berserkergang“
-      if (z.groesse > 10.5 && z.text !== seite.titel) seite.text.push({ ...z, abstand: null }); // Wertangabe behalten
+      // Wertangabe („Einprägen +4“, „Hören +2 / –2 auf EW:Wahrnehmung …“) als eigener Wertblock
+      if (z.groesse > 10.5 && z.text !== seite.titel) seite.wert = z.text.slice(seite.titel.length).trim() || null;
       vorher = { ...z, unterKopf: true };
       continue;
     }
@@ -146,9 +157,14 @@ export function regelnAusBuch(zeilen, bereiche) {
     }
     // Absatz nach einer Aufzählung gehört wieder zum Abschnitt
     if (eltern && seite !== eltern && z.groesse >= 8.5 && z.groesse <= 10.5 && (z.abstand ?? 0) > abstand * 1.45 && !/^[a-zäöüß]/.test(z.text)) kindAbschliessen();
-    if (z.groesse < 8.5 || z.groesse > 10.5) { vorher = z; continue; }
+    // etwas größer gesetzte Textzeilen (Formeln, Hervorhebungen in 11 pt) gehören zum Text, sonst ginge
+    // z. B. „Die Formel »Bewegen M Luft l Erde« - zu lesen als: „Be-“ verloren
+    const groessererText = z.groesse > 10.5 && z.groesse < 14 && seite && (z.text.length > 30 || /\p{L}-$/u.test(z.text));
+    if ((z.groesse < 8.5 || z.groesse > 10.5) && !groessererText) { vorher = z; continue; }
     if (!seite) { vorher = z; continue; }
-    seite.text.push(z);
+    // zweite Zeile einer Wertangabe („Riechen +2 / –2 auf EW:Wahrnehmung“ / „von Geruch und Geschmack“)
+    if (seite.wert && !seite.text.length && /^[a-zäöüß]/.test(z.text) && z.text.length < 40) { seite.wert = `${seite.wert} ${z.text}`; vorher = z; continue; }
+    seite.text.push(/[ğ§¥¢]/.test(z.text) ? { ...z, text: zierschrift(z.text) } : z);
     vorher = z;
   }
   seiteAbschliessen();

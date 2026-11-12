@@ -161,9 +161,9 @@ export async function abwehren(message, zielUuid, { automatisch: auto = false } 
   const kritSchaden = angriff.krit === "erfolg" && !gelungen;
   const rolls = [ww.roll];
   const zusatz = [];
-  if (ww.krit === "fehler") { const k = await kritHinweis("fehler", "abwehrFehler"); rolls.push(k.roll); zusatz.push(k.html); }
-  if (ww.krit === "erfolg" && nah && angriff.krit !== "erfolg") { const k = await kritHinweis("erfolg", "abwehrErfolg"); rolls.push(k.roll); zusatz.push(k.html); }
-  if (kritSchaden) { const k = await kritHinweis("erfolg", "schaden"); rolls.push(k.roll); zusatz.push(k.html); }
+  if (ww.krit === "fehler") { const k = await kritHinweis("fehler", "abwehrFehler"); if (k.roll) rolls.push(k.roll); zusatz.push(k.html); }
+  if (ww.krit === "erfolg" && nah && angriff.krit !== "erfolg") { const k = await kritHinweis("erfolg", "abwehrErfolg"); if (k.roll) rolls.push(k.roll); zusatz.push(k.html); }
+  if (kritSchaden) { const k = await kritHinweis("erfolg", "schaden"); if (k.roll) rolls.push(k.roll); zusatz.push(k.html); }
   if (angriff.krit === "erfolg" && gelungen) zusatz.push(`<p class="mk-krit">Beide Würfe kritisch: Die Ergebnisse heben sich auf, nur leichter Schaden.</p>`);
 
   const ergebnis = schadenBerechnen(ziel, angriff, !gelungen);
@@ -187,7 +187,7 @@ async function wehrlosGetroffen(message, ziel, angriff, zielUuid) {
   await ziel.update({ "system.ap.wert": ergebnis.apNeu, "system.lp.wert": ergebnis.lpNeu });
   const rolls = [];
   const zusatz = [];
-  if (angriff.krit === "erfolg") { const k = await kritHinweis("erfolg", "schaden"); rolls.push(k.roll); zusatz.push(k.html); }
+  if (angriff.krit === "erfolg") { const k = await kritHinweis("erfolg", "schaden"); if (k.roll) rolls.push(k.roll); zusatz.push(k.html); }
   const inhalt = `<div class="midgard-karte mk-abwehr">
     <header>WW:Abwehr · ${esc(ziel.name)} <small>gegen ${angriff.gesamt}</small></header>
     <p class="mk-ergebnis schlecht">wehrlos: keine Abwehr möglich, schwerer Treffer</p>

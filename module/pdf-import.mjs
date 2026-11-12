@@ -9,10 +9,13 @@ import { zauberAusArkanum, zaubermittelAusArkanum } from "./pdf/arkanum.mjs";
 import { fertigkeitenAusKodex, typenUndRassenAusKodex, ruestungenAusKodex } from "./pdf/kodex.mjs";
 import { buchErkennen, ausgabeFingerabdruck, GEPRUEFTE_AUSGABEN } from "./pdf/erkennung.mjs";
 import KOMPENDIUM from "../daten/kompendium.js";
-import { zuordnen, alsHtml } from "./pdf/zuordnen.mjs";
+import { zuordnen, alsHtml, gegliedertAlsHtml } from "./pdf/zuordnen.mjs";
 import { regelnAusBuch, REGELBEREICHE } from "./pdf/regeln.mjs";
+import { gliedern } from "./pdf/gliedern.mjs";
+import { textPruefen, pruefbericht, woerterbuchLoeschen } from "./pdf/textpruefung.mjs";
 import { allesVerlinken, REGEL_PACK } from "./verlinken.mjs";
 import { esc } from "./wuerfe.mjs";
+import { eintragBild, bildPfad, slug } from "./bilder.mjs";
 
 const PFAD = `systems/${SYSTEM_ID}/vendor/pdfjs`;
 let pdfjs = null;
@@ -79,6 +82,8 @@ export async function pdfImportieren(daten, { dateiname = "PDF", ueberschreiben 
     const lib = await pdfjsLaden();
     const doc = await lib.getDocument({ data: new Uint8Array(daten), verbosity: 0 }).promise;
     const zeilen = await textzeilen(doc);
+    // Textprüfung: Wörterbuch des Buches für Trennungen und Absatzanfänge (gilt bis zum Ende des Imports)
+    textPruefen(zeilen);
     // Erkennung nur am Inhalt (Dateiname spielt keine Rolle)
     const erkannt = buchErkennen(zeilen, doc.numPages);
     if (!erkannt.buch) {
@@ -97,6 +102,8 @@ export async function pdfImportieren(daten, { dateiname = "PDF", ueberschreiben 
     bericht.gepruefteAusgabe = gepruefteAusgabe;
     await protokollieren({ datei: dateiname, buch: erkannt.buch, fingerabdruck, gepruefteAusgabe });
     bericht.teile.push(await regelnSchreiben(zeilen, bericht.buch));
+    bericht.textpruefung = pruefbericht();
+    await protokollErgaenzen(bericht.textpruefung.zusammenfassung);
     bericht.links = await allesVerlinken();
     bericht.dateiname = dateiname;
     Hooks.callAll("midgardKompendienGeaendert");
@@ -107,8 +114,17 @@ export async function pdfImportieren(daten, { dateiname = "PDF", ueberschreiben 
     ui.notifications.error(`Midgard: ${dateiname} konnte nicht gelesen werden (Details in der Konsole).`);
     return null;
   } finally {
+    woerterbuchLoeschen();
     fortschritt?.remove?.();
   }
+}
+
+/** Ergebnis der Textprüfung am letzten Protokolleintrag vermerken. */
+async function protokollErgaenzen(text) {
+  const alt = [...(game.settings.get(SYSTEM_ID, "importProtokoll") ?? [])];
+  if (!alt.length) return;
+  alt[alt.length - 1] = { ...alt.at(-1), textpruefung: text };
+  await game.settings.set(SYSTEM_ID, "importProtokoll", alt);
 }
 
 async function arkanumImportieren(zeilen, ueberschreiben) {
@@ -174,17 +190,22 @@ async function schreiben(kat, gelesen, { aliase, gruppeVon, nameVon, buch, ueber
     const flag = g ? { buch, seite: g.seite } : { buch, seite: null };
     if (!g) ohne.push(e.name);
     const doc = vorhanden.get(e._id);
+    const bild = eintragBild(kat, e); // eigenes Symbol aus bilder/, sonst das Foundry-Symbol des Datensatzes
     if (!doc) {
       const d = foundry.utils.deepClone(e);
+      if (bild) d.img = bild;
       d.system.beschreibung = html;
       d.flags[SYSTEM_ID].pdfImport = flag;
       neu.push(d);
       continue;
     }
+    if (bild && doc.img !== bild) aenderungen.push({ _id: e._id, img: bild });
     if (!g) continue;
     // selbst geschriebener Text (Eintrag ohne Importmarke) bleibt, außer auf ausdrücklichen Wunsch
     if (doc.system.beschreibung && !doc.getFlag(SYSTEM_ID, "pdfImport") && !ueberschreiben) { behalten.push(e.name); continue; }
-    aenderungen.push({ _id: e._id, "system.beschreibung": html, [`flags.${SYSTEM_ID}.pdfImport`]: flag });
+    const vorhandeneAenderung = aenderungen.find((x) => x._id === e._id);
+    if (vorhandeneAenderung) Object.assign(vorhandeneAenderung, { "system.beschreibung": html, [`flags.${SYSTEM_ID}.pdfImport`]: flag });
+    else aenderungen.push({ _id: e._id, "system.beschreibung": html, [`flags.${SYSTEM_ID}.pdfImport`]: flag });
   }
   if (neu.length || aenderungen.length || ORDNER_VON[kat]) {
     const gesperrt = pack.locked;
@@ -260,11 +281,12 @@ async function regelnSchreiben(zeilen, buch) {
     if (alt.length) await JournalEntry.deleteDocuments(alt, { pack: pack.collection });
     const altOrdner = [...(pack.folders ?? [])].filter((f) => f.getFlag?.(SYSTEM_ID, "buch") === buch || f.flags?.[SYSTEM_ID]?.buch === buch).map((f) => f.id);
     if (altOrdner.length) await Folder.deleteDocuments(altOrdner, { pack: pack.collection });
-    const seiteDaten = (buchKap, s, i, level = Math.min(3, s.ebene)) => ({
+    const seiteDaten = (buchKap, s, i, level = Math.min(3, s.ebene), g = gliedern(s.absaetze)) => ({
       _id: stabileId(`${buch}|${buchKap}|${s.titel}|${i}`), name: s.titel, type: "text", sort: i * 100,
       title: { show: true, level },
-      text: { format: 1, content: alsHtml(s.absaetze, `${buch}, S. ${s.seite}`) },
-      flags: { [SYSTEM_ID]: { seite: s.seite, ebene: s.ebene } },
+      text: { format: 1, content: gegliedertAlsHtml(g, `${buch}, S. ${s.seite}`) },
+      // W%-Tabellen als Daten, damit kritische Ereignisse das Ergebnis nachschlagen können
+      flags: { [SYSTEM_ID]: { seite: s.seite, ebene: s.ebene, wurftabellen: g.filter((b) => b.wurftabelle).map((b) => b.wurftabelle) } },
     });
     const neu = [];
     let nr = 0;
@@ -272,6 +294,8 @@ async function regelnSchreiben(zeilen, buch) {
       const ordner = await ordnerPfad(pack, [buch, k.teil], "JournalEntry", { buch });
       const kapId = stabileId(`${buch}|${k.titel}`);
       const seiten = [];
+      // Kapitelbild des Buchteils (bilder/kapitel/<buchteil>), sobald geliefert
+      const kapitelBild = bildPfad(`kapitel/${slug(k.teil)}`);
       // Einträge unter ihrem Abschnitt gruppieren
       for (let i = 0; i < k.seiten.length; i++) {
         const s = k.seiten[i];
@@ -292,6 +316,7 @@ async function regelnSchreiben(zeilen, buch) {
           for (const c of kinder) seiten.push(seiteDaten(k.titel, c, seiten.length));
         }
       }
+      if (kapitelBild && seiten[0]) seiten[0].text.content = `<img class="midgard-kapitelbild" src="${kapitelBild}" alt="">${seiten[0].text.content}`;
       neu.push({ _id: kapId, name: k.titel, folder: ordner, sort: (nr++) * 100, flags: { [SYSTEM_ID]: { buch, seite: k.seite } }, pages: seiten });
     }
     if (neu.length) await JournalEntry.createDocuments(neu, { pack: pack.collection, keepId: true });
@@ -299,6 +324,16 @@ async function regelnSchreiben(zeilen, buch) {
     seitenZahl = neu.reduce((n, j) => n + j.pages.length, 0);
   } finally { if (gesperrt) await pack.configure({ locked: true }); }
   return { kategorie: "regeln", angelegt: seitenZahl, geschrieben: seitenZahl, behalten: [], nichtZugeordnet: [], ohne: [], kapitel: journale };
+}
+
+/** Ergebnis der Textprüfung für den Bericht: Zusammenfassung, Beispiele, verdächtige Stellen zum Nachsehen. */
+function textpruefungHtml(t) {
+  const liste = (titel, l, f = (x) => x) => (l.length ? `<details><summary>${esc(titel)} (${l.length})</summary><p>${l.slice(0, 60).map((x) => esc(f(x))).join("; ")}</p></details>` : "");
+  return `<p><strong>Textprüfung:</strong> ${esc(t.zusammenfassung)}.</p>
+    ${liste("Fehlende Anfangsbuchstaben ergänzt", t.anfaenge, (x) => `S. ${x.seite}: ${x.alt} → ${x.neu}`)}
+    ${liste("Zerrissene Wörter verbunden", t.zusammengefuegt)}
+    ${liste("Vorzeitige Umbrüche zusammengeführt", t.umbrueche)}
+    ${liste("Verdächtig, bitte im Buch prüfen", t.verdaechtig, (x) => `${x.art}${x.seite ? ` S. ${x.seite}` : ""}: ${x.text}`)}`;
 }
 
 function berichtZeigen(b) {
@@ -311,8 +346,9 @@ function berichtZeigen(b) {
     <p>Übernommen:</p>
     <ul>${b.teile.map((t) => t.kategorie === "regeln" ? `<li>Regeln: ${t.kapitel ?? 0} Kapitel mit ${t.angelegt} Seiten</li>` : `<li>${esc(t.kategorie)}: ${t.angelegt} neu angelegt, ${t.geschrieben} mit Beschreibung</li>`).join("")}</ul>
     <p>${b.links ?? 0} Texte mit Verweisen auf Regeln, Zauber, Fertigkeiten und Gegenstände versehen.</p>
+    ${b.textpruefung ? textpruefungHtml(b.textpruefung) : ""}
     ${b.teile.map((t) => liste(`${t.kategorie}: vorhandener Text behalten`, t.behalten) + liste(`${t.kategorie}: in der PDF gefunden, aber nicht zugeordnet`, t.nichtZugeordnet) + liste(`${t.kategorie}: ohne Beschreibung aus diesem Buch`, t.ohne)).join("")}
-    <p class="hinweis">Die Texte stehen nur in den Kompendien dieser Welt. Tabellen aus dem Buch erscheinen als Fließtext. Bereits auf Charakterbögen liegende Gegenstände behalten ihren alten Stand.</p>
+    <p class="hinweis">Die Texte stehen nur in den Kompendien dieser Welt. Würfeltabellen, Beispiele und Merkkästen werden erkannt und eigens dargestellt; mehrspaltige Tabellen können unvollständig sein. Bereits auf Charakterbögen liegende Gegenstände behalten ihren alten Stand.</p>
   </div>`;
   if (D) D.prompt({ window: { title: "Regelwerk importiert" }, content: inhalt, ok: { label: "OK" }, rejectClose: false }).catch(() => {});
   else ui.notifications.info(`Midgard: ${b.teile.map((t) => `${t.geschrieben} ${t.kategorie}`).join(", ")} importiert.`);

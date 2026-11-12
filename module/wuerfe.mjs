@@ -2,7 +2,7 @@
 // (S. 152-153). Kritische Ergebnisse werden angezeigt; die Folgetabellen stehen im Kodex und
 // werden hier nur mit ihrem W%-Wurf und der Fundstelle genannt, nicht abgeschrieben.
 import { SYSTEM_ID } from "./kategorien.mjs";
-import { vz } from "./regeln.mjs";
+import { vz, wuerfelName } from "./regeln.mjs";
 
 export const SCHWIERIGKEIT = [[8, "äußerst leicht"], [6, "besonders leicht"], [4, "sehr leicht"], [2, "leicht"], [0, "normal"], [-2, "schwer"], [-4, "sehr schwer"], [-6, "besonders schwer"], [-8, "äußerst schwer"]];
 
@@ -94,22 +94,35 @@ export async function prozent() {
   return (await new Roll("1d100").evaluate());
 }
 
-/** Chatnachricht mit Würfen und Systemdaten erzeugen. */
-export async function nachricht(actor, inhalt, rolls = [], flags = {}) {
+/**
+ * Fertigkeiten, die laut Einstellung verdeckt gewürfelt werden (Kodex S. 52 „Wer würfelt?“).
+ * Gibt den Würfelmodus zurück („blindroll“, „gmroll“) oder null.
+ */
+export function verdeckterModus(titel) {
+  const modus = game.settings.get(SYSTEM_ID, "verdecktModus");
+  if (!modus || modus === "aus") return null;
+  const name = String(titel ?? "").replace(/\s*\(.*$/, "").trim().toLocaleLowerCase("de");
+  const liste = String(game.settings.get(SYSTEM_ID, "verdeckteFertigkeiten") ?? "").split(/[,;\n]/).map((x) => x.trim().toLocaleLowerCase("de")).filter(Boolean);
+  return liste.includes(name) ? modus : null;
+}
+
+/** Chatnachricht mit Würfen und Systemdaten erzeugen. rollMode überschreibt den gewählten Würfelmodus. */
+export async function nachricht(actor, inhalt, rolls = [], flags = {}, rollMode = null) {
   const daten = {
     speaker: ChatMessage.getSpeaker({ actor }),
     content: inhalt,
     rolls,
     flags: { [SYSTEM_ID]: flags },
   };
-  ChatMessage.applyRollMode?.(daten, game.settings.get("core", "rollMode"));
+  ChatMessage.applyRollMode?.(daten, rollMode ?? game.settings.get("core", "rollMode"));
+  if (rollMode) daten.rollMode = rollMode;
   return ChatMessage.create(daten);
 }
 
 /** Wurfzeile mit aufklappbarer Zusammensetzung (z. B. Fertigkeitswert, Leiteigenschaft, Zuschläge). */
 export function wurfZeile(w, teile = []) {
   const liste = teile.filter(([, v]) => v);
-  const details = liste.length ? `<details class="mk-teile"><summary>Zusammensetzung</summary><ul>${liste.map(([t, v]) => `<li><span>${esc(t)}</span> <strong>${vz(v)}</strong></li>`).join("")}<li class="mk-summe"><span>W20</span> <strong>${w.d20}</strong></li></ul></details>` : "";
+  const details = liste.length ? `<details class="mk-teile"><summary>Zusammensetzung</summary><ul>${liste.map(([t, v]) => `<li><span>${esc(t)}</span> <strong>${vz(v)}</strong></li>`).join("")}<li class="mk-summe"><span>${wuerfelName(20)}</span> <strong>${w.d20}</strong></li></ul></details>` : "";
   return `<div class="mk-wurf"><span class="mk-w20 ${w.krit ?? ""}">${w.d20}</span> ${vz(w.wert)}${w.mod ? ` ${vz(w.mod)}` : ""} = <strong class="mk-gesamt">${w.gesamt}</strong></div>${details}`;
 }
 
@@ -142,7 +155,8 @@ export async function erfolgswurf(actor, o) {
     <p class="mk-ergebnis ${w.erfolg ? "gut" : "schlecht"}">${ergebnisText(w)}</p>
     ${o.zusatz ?? ""}${krit?.html ?? ""}${ppHtml}
   </div>`;
-  const msg = await nachricht(actor, inhalt, [w.roll, ...(krit?.roll ? [krit.roll] : [])], { wurf: { art: o.art ?? "EW", titel: o.titel, gesamt: w.gesamt, d20: w.d20 }, pp: ppFlag });
+  const verdeckt = o.art === "WW" ? null : verdeckterModus(o.titel);
+  const msg = await nachricht(actor, inhalt, [w.roll, ...(krit?.roll ? [krit.roll] : [])], { wurf: { art: o.art ?? "EW", titel: o.titel, gesamt: w.gesamt, d20: w.d20, verdeckt: !!verdeckt }, pp: ppFlag }, verdeckt);
   return { ...w, message: msg };
 }
 
@@ -165,15 +179,55 @@ export async function pruefwurf(actor, { titel, wert, ohneDialog = false }) {
   return nachricht(actor, inhalt, [roll], { wurf: { art: "PW", titel, gesamt: roll.total } });
 }
 
-/** Hinweis auf kritische Folgen mit W%-Wurf und Fundstelle. */
+const KRIT_TABELLEN = {
+  angriffFehler: [4, "Tabelle 4: kritischer Fehler bei Angriffen", "S. 88"], abwehrFehler: [5, "Tabelle 5: kritischer Fehler bei der Abwehr", "S. 88"],
+  abwehrErfolg: [6, "Tabelle 6: kritischer Erfolg bei der Abwehr", "S. 89"], schaden: [7, "Tabelle 7: kritischer Schaden", "S. 91"],
+};
+
+/** Liegt w im Bereich „01–10“, „96–99“ oder „100“? */
+export function imBereich(bereich, w) {
+  const [a, b] = String(bereich).split(/[–-]/).map((x) => Number(x));
+  return w >= a && w <= (Number.isFinite(b) ? b : a);
+}
+
+/**
+ * Zeile einer importierten W%-Tabelle (Seiten-Flag „wurftabellen“ im Regel-Kompendium).
+ * @returns {{titel, bereich, text, uuid}|null}
+ */
+export async function tabelleNachschlagen(nummer, wert) {
+  const pack = game.packs.get("world.midgard-regeln");
+  if (!pack) return null;
+  for (const j of await pack.getDocuments()) {
+    for (const p of j.pages ?? []) {
+      for (const t of p.flags?.[SYSTEM_ID]?.wurftabellen ?? []) {
+        if (!new RegExp(`^Tabelle ${nummer}\\b`).test(t.titel ?? "")) continue;
+        const z = t.zeilen.find(([b]) => imBereich(b, wert));
+        if (z) return { titel: t.titel, bereich: z[0], text: z[2] ? `${z[1]}: ${z[2]}` : z[1], uuid: p.uuid };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Hinweis auf kritische Folgen je nach Einstellung „kritModus“: nur Hinweis mit Würfelknopf,
+ * W%-Wurf mit Fundstelle, oder Wurf samt Ergebnis aus der importierten Tabelle.
+ */
 export async function kritHinweis(krit, bereich) {
   if (bereich === "fertigkeit") {
     return { html: `<p class="mk-krit">${krit === "erfolg" ? "Die Anwendung ist hervorragend gelungen." : "Ein katastrophaler Fehler ist unterlaufen."} (Kodex S. 51)</p>` };
   }
-  const tabelle = { angriffFehler: ["Tabelle 4: kritischer Fehler bei Angriffen", "S. 88"], abwehrFehler: ["Tabelle 5: kritischer Fehler bei der Abwehr", "S. 88"], abwehrErfolg: ["Tabelle 6: kritischer Erfolg bei der Abwehr", "S. 89"], schaden: ["Tabelle 7: kritischer Schaden", "S. 91"] }[bereich];
+  const tabelle = KRIT_TABELLEN[bereich];
   if (!tabelle) return null;
+  const [nummer, titel, seite] = tabelle;
+  const modus = game.settings.get(SYSTEM_ID, "kritModus") ?? "wurf";
+  if (modus === "hinweis") return { html: `<p class="mk-krit">${titel} (Kodex ${seite}): [[/r 1d100]]{${wuerfelName(100)} würfeln}</p>` };
   const roll = await prozent();
-  return { roll, html: `<p class="mk-krit">${tabelle[0]}: W% = <strong>${roll.total}</strong> (Kodex ${tabelle[1]})</p>` };
+  const kopf = `${titel}: ${wuerfelName(100)} = <strong>${roll.total}</strong> (Kodex ${seite})`;
+  if (modus !== "tabelle") return { roll, html: `<p class="mk-krit">${kopf}</p>` };
+  const z = await tabelleNachschlagen(nummer, roll.total);
+  if (!z) return { roll, html: `<p class="mk-krit">${kopf}</p><p class="mk-klein">Tabelle nicht importiert: Ergebnis im Kodex nachschlagen.</p>` };
+  return { roll, ergebnis: z, html: `<p class="mk-krit">${kopf}</p><p class="mk-krit-ergebnis"><strong>${esc(z.bereich)}</strong> ${esc(z.text)} @UUID[${z.uuid}]{Tabelle}</p>` };
 }
 
 // ------------------------------------------------------------------ Praxispunkte

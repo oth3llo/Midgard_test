@@ -1,7 +1,11 @@
 /* Midgard 5 Charaktererschaffung und Lernen nach dem Kodex.
    Einbettbar: MidgardCMT.starte({ wurzel, modus, zustand, speichere, cssUrl })
    - modus "browser": eigenständige Seite, mehrere Charaktere im Browser-Speicher
-   - modus "foundry": ein Charakter je Aufruf, gespeichert über speichere(zustand) */
+   - modus "foundry": ein Charakter je Aufruf, gespeichert über speichere(zustand)
+   Vorgaben der Spielleitung (Foundry-Einstellungen): wuerfelModus "frei" | "digital" | "tisch",
+   methode "I" | "II" (sonst freie Wahl), wurfMelden({ aktion, schritt, wuerfe: [[Seiten, Ergebnis], …] }),
+   mindestsumme (Hausregel, 0 = aus), neuanfaenge (erlaubte Neuanfänge der Eigenschaften, 0 = unbegrenzt),
+   sperren() → { erschaffung: Text|null, lernen: Text|null } (Freigabe durch die Spielleitung) */
 (function () {
   "use strict";
 
@@ -22,7 +26,10 @@
   const ZAUBER = window.ZAUBER || []; // Zauber des Arkanums mit Gruppe und Spruchstufe
   const SPEICHER = "midgard5-charakter";        // alte Einzelablage (wird übernommen)
   const BIBLIOTHEK = "midgard5-bibliothek";     // alle Charaktere dieses Browsers
-  const MINDESTSUMME = 420; // Hausregel: Summe der 6 Basiseigenschaften, darunter darf neu gewürfelt werden
+  // Hausregel: Summe der 6 Basiseigenschaften, darunter darf neu gewürfelt werden (0 = Hausregel aus)
+  const MINDESTSUMME = Number.isFinite(opts.mindestsumme) ? opts.mindestsumme : 420;
+  const NEUANFAENGE = Number.isFinite(opts.neuanfaenge) && opts.neuanfaenge > 0 ? opts.neuanfaenge : null;
+  const sperren = () => { try { return (opts.sperren && opts.sperren()) || {}; } catch (e) { return {}; } };
 
   // ---------------------------------------------------------------- Hilfen
   const $ = (sel) => wurzel.querySelector(sel);
@@ -41,7 +48,11 @@
     }
     return el;
   }
-  const W = (n) => 1 + Math.floor(Math.random() * n);
+  // Würfe eines Würfeln-Knopfs werden gesammelt und danach gemeldet (z. B. in den Foundry-Chat)
+  let wurfPuffer = null;
+  const W = (n) => { const w = 1 + Math.floor(Math.random() * n); if (wurfPuffer) wurfPuffer.push([n, w]); return w; };
+  const WUERFEL_MODUS = ["digital", "tisch"].includes(opts.wuerfelModus) ? opts.wuerfelModus : "frei";
+  const METHODE_FEST = ["I", "II"].includes(opts.methode) ? opts.methode : null;
   const Wn = (anzahl, seiten) => Array.from({ length: anzahl }, () => W(seiten));
   const summe = (a) => a.reduce((x, y) => x + y, 0);
   const fl = Math.floor;
@@ -105,6 +116,10 @@
   if (FOUNDRY) {
     S = normalisieren(opts.zustand || {});
     BIBL = { aktiv: S.id, charaktere: { [S.id]: S } };
+    // Vorgaben der Spielleitung gehen den eigenen Einstellungen vor
+    if (WUERFEL_MODUS !== "frei") S.toolWuerfel = WUERFEL_MODUS === "digital";
+    // feste Methode nur, solange noch keine Eigenschaft steht (bestehende Charaktere behalten ihre Würfe)
+    if (METHODE_FEST && Object.values(S.eig || {}).every((v) => v === null || v === undefined)) S.methode = METHODE_FEST;
   } else {
     BIBL = bibliothekLaden();
     S = BIBL.charaktere[BIBL.aktiv] || Object.values(BIBL.charaktere)[0];
@@ -293,7 +308,16 @@
   }
   function wuerfelKnopf(text, aktion) {
     if (!S.toolWuerfel) return null;
-    return h("button", { type: "button", class: "wuerfel", onclick: () => { aktion(); neuZeichnen(); } }, text);
+    return h("button", { type: "button", class: "wuerfel", onclick: () => {
+      wurfPuffer = [];
+      try { aktion(); } finally {
+        const wuerfe = wurfPuffer; wurfPuffer = null;
+        if (wuerfe.length && opts.wurfMelden) {
+          try { opts.wurfMelden({ aktion: text, schritt: (schritte[S.schritt] || {}).titel || "", wuerfe }); } catch (e) { console.warn("Midgard-CMT | Wurf nicht gemeldet", e); }
+        }
+      }
+      neuZeichnen();
+    } }, text);
   }
   function wurfZeile(label, formel, wertAkt, setzen, wuerfeln, ergebnis, opt = {}) {
     return h("div", { class: "wurfzeile" },
@@ -307,9 +331,11 @@
   // ---------------------------------------------------------------- 1 Start
   function schrittStart() {
     return [
-      info("Gewürfelt wird am Tisch. Trag die Würfe so ein, wie sie fallen: das Programm rechnet Formeln, Rassengrenzen und Boni aus und sagt, wann nachgewürfelt werden muss."),
-      h("label", { class: "schalter" }, h("input", { type: "checkbox", checked: S.toolWuerfel, onchange: (ev) => { S.toolWuerfel = ev.target.checked; neuZeichnen(); } }),
-        " Würfeln-Knöpfe anzeigen (falls doch einmal das Programm würfeln soll, z. B. ohne Spieler am Tisch)"),
+      WUERFEL_MODUS === "digital"
+        ? info("Die Spielleitung hat festgelegt: Es wird digital im Bogen gewürfelt. Nutze die Würfeln-Knöpfe in den folgenden Schritten" + (opts.wurfMelden ? "; jedes Ergebnis erscheint im Chat." : "."))
+        : info("Gewürfelt wird am Tisch. Trag die Würfe so ein, wie sie fallen: das Programm rechnet Formeln, Rassengrenzen und Boni aus und sagt, wann nachgewürfelt werden muss."),
+      WUERFEL_MODUS === "frei" ? h("label", { class: "schalter" }, h("input", { type: "checkbox", checked: S.toolWuerfel, onchange: (ev) => { S.toolWuerfel = ev.target.checked; neuZeichnen(); } }),
+        " Würfeln-Knöpfe anzeigen (falls doch einmal das Programm würfeln soll, z. B. ohne Spieler am Tisch)") : null,
       karte("Abenteurer",
         h("div", { class: "raster2" },
           feld("Name des Abenteurers", textFeld(S.name, (v) => (S.name = v))),
@@ -421,9 +447,10 @@
     const teile = [wichtigInfo()];
     teile.push(karte("Methode",
       h("div", { class: "methoden" },
-        h("label", {}, h("input", { type: "radio", name: "m", checked: S.methode === "I", onchange: () => { S.methode = "I"; neuZeichnen(); } }), " Methode I: je Eigenschaft 2×W%, der bessere Wert zählt (für Überraschungen)"),
-        h("label", {}, h("input", { type: "radio", name: "m", checked: S.methode === "II", onchange: () => { S.methode = "II"; neuZeichnen(); } }), " Methode II: 9×W%, die 3 schlechtesten streichen, Rest frei verteilen (mehr Kontrolle)")),
-      info("Kodex S. 21: Bei Pech darfst du bis zu drei- oder viermal ganz von vorn anfangen.")));
+        h("label", {}, h("input", { type: "radio", name: "m", checked: S.methode === "I", disabled: METHODE_FEST === "II", onchange: () => { S.methode = "I"; neuZeichnen(); } }), " Methode I: je Eigenschaft 2×W%, der bessere Wert zählt (für Überraschungen)"),
+        h("label", {}, h("input", { type: "radio", name: "m", checked: S.methode === "II", disabled: METHODE_FEST === "I", onchange: () => { S.methode = "II"; neuZeichnen(); } }), " Methode II: 9×W%, die 3 schlechtesten streichen, Rest frei verteilen (mehr Kontrolle)")),
+      METHODE_FEST ? info(`Die Spielleitung hat Methode ${METHODE_FEST} festgelegt.`) : null,
+      neuanfangZeile()));
     if (S.methode === "I") {
       teile.push(karte("Methode I",
         h("div", { class: "eig-raster" },
@@ -522,7 +549,7 @@
     }
     return eigSumme() === null ? null : K.eigenschaften.map((e) => S.eig[e]);
   }
-  function summeZuNiedrig() { const w = pruefWerte(); return w !== null && summe(w) < MINDESTSUMME; }
+  function summeZuNiedrig() { const w = pruefWerte(); return MINDESTSUMME > 0 && w !== null && summe(w) < MINDESTSUMME; }
   // Methode II: Welche Mindestwerte lassen sich mit den behaltenen Würfen nicht erreichen?
   // Höchste Anforderung zuerst, jeweils mit dem höchsten noch freien Wurf.
   function m2Fehlende() {
@@ -560,6 +587,20 @@
           h("button", { type: "button", onclick: () => { schliessen(); S.summeGefragt = schluessel; speichern(); } }, "Nein, weiter"))));
     schliessen = ueberlagern(hg);
     hg.querySelector("button.haupt").focus();
+  }
+  // Neuanfang: alle Basiseigenschaften verwerfen (Kodex S. 21: drei- bis viermal); Grenze aus den Einstellungen
+  function neuanfangZeile() {
+    const genutzt = S.neuanfaenge || 0;
+    const rest = NEUANFAENGE === null ? null : NEUANFAENGE - genutzt;
+    const gewuerfelt = K.eigenschaften.some((e) => S.eig[e] !== null) || (S.m2.wuerfe || []).some((w) => w !== null);
+    return h("div", { class: "neuanfang" },
+      info(NEUANFAENGE === null ? "Kodex S. 21: Bei Pech darfst du bis zu drei- oder viermal ganz von vorn anfangen."
+        : `Die Spielleitung erlaubt ${NEUANFAENGE} Neuanfänge; ${rest > 0 ? `noch ${rest} übrig` : "keiner mehr übrig"}.`),
+      gewuerfelt ? h("button", { type: "button", class: "neuanfang-knopf", disabled: rest !== null && rest <= 0, onclick: () => {
+        frage("Ganz von vorn anfangen?", "Alle gewürfelten Basiseigenschaften werden verworfen.", "Von vorn", () => {
+          S.neuanfaenge = genutzt + 1; S.summeGefragt = null; eigZuruecksetzen(); neuZeichnen();
+        });
+      } }, "Von vorn anfangen") : null);
   }
   function eigZuruecksetzen() {
     S.m1 = {}; S.m2 = { wuerfe: Array(9).fill(null), zuordnung: {} }; S.wuerfe = {};
@@ -1801,22 +1842,27 @@
       h("span", { class: "nr punkt" }), h("span", {}, a.titel)))));
     const haupt = $(".cmt-inhalt");
     kopfzeile();
+    const sp = sperren();
     if (S.ansicht) {
       const a = lernListe.find((x) => x.id === S.ansicht);
-      haupt.replaceChildren(...[h("h2", { class: "schritt-titel" }, `Lernen: ${a.titel}`), renderLernen(a.id)].flat(Infinity).filter((x) => x !== null && x !== undefined && x !== false));
+      haupt.replaceChildren(...[h("h2", { class: "schritt-titel" }, `Lernen: ${a.titel}`),
+        sp.lernen ? h("div", { class: "sperre-hinweis warnung" }, sp.lernen) : renderLernen(a.id)].flat(Infinity).filter((x) => x !== null && x !== undefined && x !== false));
       return;
     }
     const meldungen = akt.pruefen();
+    // gesperrte Erschaffung: Inhalt sichtbar, aber nicht bedienbar
+    const inhalt = sp.erschaffung ? h("div", { class: "gesperrt", inert: true, "aria-disabled": "true" }, akt.render()) : akt.render();
     haupt.replaceChildren(...[
       h("h2", { class: "schritt-titel" }, `${S.schritt + 1}. ${akt.titel}`),
-      akt.render(),
+      sp.erschaffung ? h("div", { class: "sperre-hinweis warnung" }, sp.erschaffung) : null,
+      inhalt,
       meldungen.length ? h("div", { class: "meldungen nicht-drucken" }, meldungen.map((m) => h("p", { class: m.art }, m.text))) : null,
       h("div", { class: "weiter nicht-drucken" },
         S.schritt > 0 ? h("button", { type: "button", onclick: () => { S.schritt--; neuZeichnen(); nachOben(); } }, "Zurück") : h("span"),
         S.schritt < liste.length - 1 ? h("button", { type: "button", class: "haupt", onclick: () => { S.schritt++; neuZeichnen(); nachOben(); } }, "Weiter") : null),
     ].flat(Infinity).filter((x) => x !== null && x !== undefined && x !== false));
     kopfzeile();
-    if (akt.id === "eig") summenAbfrage();
+    if (akt.id === "eig" && !sp.erschaffung) summenAbfrage();
   }
   // Zusammenfassung für den Foundry-Bogen: alle Werte so, wie sie im Charakterbogen erscheinen
   function auswertung() {
