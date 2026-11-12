@@ -265,7 +265,9 @@ export function karteEinrichten(message, html) {
   for (const knopf of wurzel.querySelectorAll("[data-midgard-aktion=pp]")) {
     const actor = pp ? fromUuidSync(pp.actor) : null;
     if (!pp || pp.vergeben) { knopf.replaceWith(Object.assign(document.createElement("span"), { className: "mk-erledigt", textContent: "gutgeschrieben" })); continue; }
-    if (!actor?.isOwner || !pp.ziel?.id && pp.ziel?.typ !== "zauber") { knopf.disabled = true; continue; }
+    // Praxispunkte schreibt die Spielleitung gut; Spieler sehen den Vorschlag, können ihn aber nicht buchen
+    if (!game.user.isGM) { knopf.disabled = true; knopf.title = "Die Spielleitung schreibt den Praxispunkt gut."; continue; }
+    if (!actor || !pp.ziel?.id && pp.ziel?.typ !== "zauber") { knopf.disabled = true; continue; }
     knopf.addEventListener("click", async () => {
       knopf.disabled = true;
       await ppGutschreiben(actor, pp.ziel);

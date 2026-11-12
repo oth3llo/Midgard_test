@@ -145,9 +145,9 @@ export class AbenteurerBogen extends ActorSheetV2 {
 
   // ---------------------------------------------------------------- Eingaben
   /** Eingabefeld für einen Pfad im Akteur; schreibgeschützt, wenn das Werkzeug ihn verwaltet. */
-  #feld(pfad, wert, { typ = "text", werkzeug = false, klasse, breite, auswahl, platzhalter } = {}) {
-    const gesperrt = !this.isEditable || (werkzeug && this.#verwaltet);
-    if (gesperrt) return el("span", { class: ["ma-wert", klasse], text: zahlText(wert), title: werkzeug && this.#verwaltet ? "wird im Reiter „Erschaffung & Lernen“ verwaltet" : null });
+  #feld(pfad, wert, { typ = "text", werkzeug = false, klasse, breite, auswahl, platzhalter, nurSL = false } = {}) {
+    const gesperrt = !this.isEditable || (werkzeug && this.#verwaltet) || (nurSL && !game.user.isGM);
+    if (gesperrt) return el("span", { class: ["ma-wert", klasse], text: zahlText(wert), title: werkzeug && this.#verwaltet ? "wird im Reiter „Erschaffung & Lernen“ verwaltet" : nurSL && !game.user.isGM ? "trägt die Spielleitung ein" : null });
     if (auswahl) {
       return el("select", { "data-pfad": pfad, class: klasse }, auswahl.map(([w, t]) => el("option", { value: w, selected: String(w) === String(wert ?? ""), text: t })));
     }
@@ -159,6 +159,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
     if (t.closest(".ma-werkzeug")) return; // Eingaben des eingebetteten Werkzeugs
     const pfad = t.dataset.pfad;
     if (!pfad || !this.isEditable) return;
+    if (!game.user.isGM && ["system.ep", "system.es", "system.pp"].includes(pfad)) return;
     let wert = t.type === "checkbox" ? t.checked : t.value;
     if (t.type === "number") wert = t.value === "" ? null : Number(t.value);
     const id = t.dataset.item;
@@ -458,7 +459,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
   }
 
   #itemWert(i, pfad, wert) {
-    if (!this.isEditable || i.getFlag?.(SYSTEM_ID, "cmt")) return el("span", { text: zahlText(wert) });
+    const nurSL = pfad === "system.pp" && !game.user.isGM;   // Praxispunkte vergibt die Spielleitung
+    if (!this.isEditable || i.getFlag?.(SYSTEM_ID, "cmt") || nurSL) return el("span", { text: zahlText(wert), title: nurSL ? "Praxispunkte trägt die Spielleitung ein" : null });
     return el("input", { type: "number", "data-item": i.id, "data-pfad": pfad, value: wert ?? 0, class: "ma-klein", "aria-label": pfad });
   }
 
@@ -662,8 +664,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
       el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Erfahrungspunkte" }), el("span", { class: "ma-gross-wert", text: fmt(s.ep) })),
       el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Gold" }), el("span", { class: "ma-gross-wert", text: fmt(s.gold) }), el("small", { text: "GS" })));
     const eingabe = this.#verwaltet ? null : el("div", { class: "ma-zeilen" },
-      el("label", { class: "ma-zeile" }, el("span", { text: "ES" }), this.#feld("system.es", s.es, { typ: "number" })),
-      el("label", { class: "ma-zeile" }, el("span", { text: "EP" }), this.#feld("system.ep", s.ep, { typ: "number" })),
+      el("label", { class: "ma-zeile" }, el("span", { text: "ES" }), this.#feld("system.es", s.es, { typ: "number", nurSL: true })),
+      el("label", { class: "ma-zeile" }, el("span", { text: "EP" }), this.#feld("system.ep", s.ep, { typ: "number", nurSL: true })),
       el("label", { class: "ma-zeile" }, el("span", { text: "Grad" }), this.#feld("system.grad", s.grad, { typ: "number" })));
     const tabelle = el("table", { class: "ma-tabelle ma-gradtabelle" },
       el("thead", {}, el("tr", {}, ["Grad", "ab ES", "Abwehr/Resistenz", "Zaubern"].map((t) => el("th", { text: t })))),
@@ -762,6 +764,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
       mindestsumme: game.settings.get(SYSTEM_ID, "hausregelMindestsumme"),
       neuanfaenge: game.settings.get(SYSTEM_ID, "neuanfaenge"),
       sperren: () => this.#sperren(),
+      spielleitung: () => game.user.isGM,      // EP und PP nur durch die Spielleitung
       // Ausrüstung bei der Erschaffung: Kompendium neben dem Bogen öffnen, vorhandene Ausrüstung anzeigen
       kompendium: (kat) => KompendiumBrowser.oeffnen(kat, { neben: this }),
       gegenstaende: () => this.actor.items.filter((i) => ["gegenstand", "waffe", "ruestung"].includes(i.type))

@@ -30,6 +30,8 @@
   const MINDESTSUMME = Number.isFinite(opts.mindestsumme) ? opts.mindestsumme : 420;
   const NEUANFAENGE = Number.isFinite(opts.neuanfaenge) && opts.neuanfaenge > 0 ? opts.neuanfaenge : null;
   const sperren = () => { try { return (opts.sperren && opts.sperren()) || {}; } catch (e) { return {}; } };
+  // EP gutschreiben und Praxispunkte vergeben darf in Foundry nur die Spielleitung (ohne Angabe: alle, z. B. Browser-Fassung)
+  const darfVergeben = () => { try { return typeof opts.spielleitung === "function" ? !!opts.spielleitung() : true; } catch (e) { return false; } };
 
   // ---------------------------------------------------------------- Hilfen
   const $ = (sel) => wurzel.querySelector(sel);
@@ -1477,13 +1479,16 @@
     if (gradAus(sp.es) > sp.gradBestaetigt) teile.push(gradAufstieg(sp.gradBestaetigt + 1));
     // Gutschriften
     let ep = null, gold = null, grund = "";
+    const sl = darfVergeben();
     teile.push(karte("Erhalten und ausgeben",
-      info("EP aus dem Abenteuer erhöhen verfügbare EP und Erfahrungsschatz. Gold kann positiv (Belohnung) oder negativ (Einkauf) gebucht werden."),
+      info(sl ? "EP aus dem Abenteuer erhöhen verfügbare EP und Erfahrungsschatz. Gold kann positiv (Belohnung) oder negativ (Einkauf) gebucht werden."
+        : "Gold kann positiv (Belohnung) oder negativ (Einkauf) gebucht werden. EP schreibt die Spielleitung gut."),
       h("div", { class: "raster3" },
-        feld("Erfahrungspunkte", h("input", { type: "number", class: "zahl breit", min: 0, oninput: (ev) => (ep = zahl(ev.target.value)) })),
+        sl ? feld("Erfahrungspunkte", h("input", { type: "number", class: "zahl breit", min: 0, oninput: (ev) => (ep = zahl(ev.target.value)) })) : null,
         feld("Gold (GS, minus = ausgeben)", h("input", { type: "number", class: "zahl breit", oninput: (ev) => (gold = zahl(ev.target.value)) })),
         feld("Anlass", h("input", { type: "text", placeholder: "z. B. Abenteuer „Die Mühle“", oninput: (ev) => (grund = ev.target.value) }))),
       h("div", { class: "knopfreihe" }, h("button", { type: "button", class: "haupt", onclick: () => {
+        if (!sl) ep = null;
         if (!ep && !gold) return;
         const teileText = [ep ? `${fmt(ep)} EP` : null, gold ? `${gold > 0 ? "+" : ""}${fmt(gold)} GS` : null].filter(Boolean).join(", ");
         buchen(`${teileText}${grund ? " – " + grund : ""}`, (s) => { s.ep += ep || 0; s.es += ep || 0; s.gold += gold || 0; });
@@ -1493,7 +1498,8 @@
     const zk = L.zauberKosten[S.klasse] || {};
     for (const gruppe of Object.keys(zk)) ziele.push(["Z:" + gruppe, "Zaubern: " + gruppe]);
     let ppZiel = "", ppAnz = 1;
-    teile.push(karte("Praxispunkte gutschreiben",
+    if (!darfVergeben()) teile.push(karte("Praxispunkte", info("Praxispunkte schreibt die Spielleitung gut (Kodex S. 152). Eingesetzt werden sie beim Steigern, in der Lernliste automatisch."), ppListe() || info("Noch keine Praxispunkte.")));
+    else teile.push(karte("Praxispunkte gutschreiben",
       info("1 PP gibt es, wenn ein Erfolgswurf gelingt und der Würfel 16-20 zeigt (Waffen, Abwehr, Zaubern: 20). 1 PP ersetzt beim Steigern 1 TE derselben Fertigkeit, bei Zaubern 1 LE derselben Gruppe (Kodex S. 152-154)."),
       h("div", { class: "inline" },
         h("select", { onchange: (ev) => (ppZiel = ev.target.value) }, h("option", { value: "" }, "Fertigkeit, Waffe oder Zaubergruppe …"), ziele.map(([k, t]) => h("option", { value: k }, t))),
@@ -1735,7 +1741,7 @@
           h("td", {}, waffen ? (vert ? "Abwehr" : vz(g.wert + (r.AnB || 0))) : `${vz(bonus(wert(g.le)))} ${g.le}`),
           h("td", {}, g.gruppe), h("td", {}, g.ep),
           h("td", { class: "pp" }, h("span", {}, pp || "–"),
-            h("button", { type: "button", class: "mini", title: "1 Praxispunkt gutschreiben", onclick: () => buchen(`1 PP für ${g.titel}`, (s) => { s.pp[g.key] = pp + 1; }) }, "+1")),
+            darfVergeben() && h("button", { type: "button", class: "mini", title: "1 Praxispunkt gutschreiben", onclick: () => buchen(`1 PP für ${g.titel}`, (s) => { s.pp[g.key] = pp + 1; }) }, "+1")),
           steigerZelle(g),
           h("td", {}, teFuer(g.gruppe, g.wert + 1) === null ? null : h("button", { type: "button", class: "haupt klein-knopf", onclick: () => steigernDialog(g) }, "Steigern")));
       }))));
@@ -1764,7 +1770,7 @@
     return [
       kontoKacheln(),
       karte(waffen ? "Gelernte Waffenfertigkeiten" : "Gelernte Fertigkeiten",
-        info("„Steigern“ bucht die nächste Stufe. Praxispunkte und Gold statt EP werden im Fenster verrechnet. „+1“ schreibt einen Praxispunkt gut."),
+        info(`„Steigern“ bucht die nächste Stufe. Praxispunkte und Gold statt EP werden im Fenster verrechnet.${darfVergeben() ? " „+1“ schreibt einen Praxispunkt gut." : ""}`),
         gelernteTabelle(waffen)),
       karte(waffen ? "Neue Waffenfertigkeit lernen" : "Neue Fertigkeit lernen", lernbareTabelle(waffen)),
     ];
@@ -1786,7 +1792,7 @@
             const e = zauberEP(g) + elf;
             const pp = S.spiel.pp["Z:" + g] || 0;
             return h("tr", {}, h("th", {}, g), h("td", {}, e),
-              h("td", { class: "pp" }, h("span", {}, pp || "–"), h("button", { type: "button", class: "mini", title: "1 Praxispunkt gutschreiben", onclick: () => buchen(`1 PP für Zaubern: ${g}`, (s) => { s.pp["Z:" + g] = pp + 1; }) }, "+1")),
+              h("td", { class: "pp" }, h("span", {}, pp || "–"), darfVergeben() && h("button", { type: "button", class: "mini", title: "1 Praxispunkt gutschreiben", onclick: () => buchen(`1 PP für Zaubern: ${g}`, (s) => { s.pp["Z:" + g] = pp + 1; }) }, "+1")),
               STUFEN_LE.map((le) => h("td", {}, fmt(le * e))),
               h("td", {}, h("button", { type: "button", class: "klein-knopf", onclick: () => zauberDialog(g) }, "Lernen")));
           }))))),
