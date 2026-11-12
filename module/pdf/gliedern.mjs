@@ -166,6 +166,29 @@ function wertetabelle(bl, i) {
 }
 
 /**
+ * Kasten mit nummerierten Schritten als ein Fließtext („Der Ablauf eines Angriffs 1. Der Angreifer …
+ * 2. … *: Fällt beim …“): Titel, Schritte und Fußnote trennen. Gibt null zurück, wenn es keine
+ * Folge 1., 2., … gibt.
+ */
+export function kastenMitSchritten(text) {
+  const t = String(text ?? "");
+  const erster = t.search(/(^|\s)1\.\s+\S/);
+  if (erster < 0 || !/\s2\.\s+\S/.test(t.slice(erster + 2))) return null;
+  const titel = t.slice(0, erster).trim();
+  if (titel.length > 70) return null;
+  let rest = t.slice(erster).trim(), fussnote = null;
+  const f = rest.match(/\s\*+\s?:\s*(.+)$/);
+  if (f) { fussnote = f[1].trim(); rest = rest.slice(0, f.index).trim(); }
+  // an „ 2. Der …“ trennen, aber nicht an Verweisen wie „siehe 2.“ oder „aus 1.)“
+  const teile = rest.split(/(?<=[.:!?)]\s|^)(?=\d{1,2}\.\s+[A-ZÄÖÜ])/).map((x) => x.trim()).filter(Boolean);
+  const punkte = teile.map((x) => { const m = x.match(/^(\d{1,2})\.\s+(.*)$/s); return m ? { marke: `${m[1]}.`, text: m[2].trim(), unter: [] } : null; });
+  if (punkte.some((p) => !p) || punkte.length < 2) return null;
+  const bloecke = [{ schritte: punkte }];
+  if (fussnote) bloecke.push({ fussnote });
+  return { box: { titel: titel || null, bloecke } };
+}
+
+/**
  * @param {Array} bloecke  Strings und Objekte ({tabelle}, {kasten}, {einschub, klein})
  * @returns {Array} gegliederte Blöcke
  */
@@ -232,7 +255,10 @@ export function gliedern(bloecke) {
       out.push(titel ? { ...b, titel } : b);
       continue;
     }
+    if (b.kasten && kastenMitSchritten(b.kasten.join(" "))) { out.push(kastenMitSchritten(b.kasten.join(" "))); continue; }
     if (b.einschub) {
+      const box = kastenMitSchritten(b.einschub);
+      if (box) { out.push(box); continue; }
       out.push(b.klein || BEISPIEL.test(b.einschub) ? { beispiel: b.einschub } : { randnotiz: b.einschub });
       continue;
     }

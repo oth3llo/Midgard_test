@@ -68,14 +68,38 @@ function tabelleHtml(reihen, { titel, kopfSpalte } = {}) {
 
 const schrittHtml = (punkte) => `<ol class="midgard-schritte">${punkte.map((p) => `<li><span class="marke">${esc(p.marke)}</span> ${esc(p.text)}${p.unter.length ? schrittHtml(p.unter) : ""}</li>`).join("")}</ol>`;
 
+/**
+ * Kasten aus einzelnen Zeilen. Mit Stufen wie „sehr leicht (+4)“: Titel als Kopfleiste, jede Stufe als
+ * farbige Marke (Zuschlag grün, Abzug rot), die Fälle darunter eingerückt als Aufzählung. Ohne Stufen:
+ * Titel und Aufzählung.
+ */
+function kastenHtml(zeilen) {
+  const STUFE = /^(.*?)\s*\(([+–-]\d+)\)$/;
+  const istTitel = (z) => z.length < 60 && !/[.,;:]$/.test(z) && !STUFE.test(z);
+  const titel = zeilen.length > 1 && istTitel(zeilen[0]) ? zeilen[0] : null;
+  const rest = titel ? zeilen.slice(1) : zeilen;
+  const kopf = titel ? `<p class="midgard-kasten-titel">${esc(titel)}</p>` : "";
+  if (rest.some((z) => STUFE.test(z))) {
+    const gruppen = [];
+    for (const z of rest) {
+      const m = z.match(STUFE);
+      if (m) gruppen.push({ name: m[1], wert: m[2], faelle: [] });
+      else if (gruppen.length) gruppen.at(-1).faelle.push(z);
+      else gruppen.push({ name: null, wert: null, faelle: [z] });
+    }
+    return `<div class="midgard-kasten midgard-stufen">${kopf}<dl>${gruppen.map((g) => `${g.name !== null ? `<dt><span class="midgard-stufe ${/^\+/.test(g.wert) ? "plus" : "minus"}">${esc(g.wert)}</span> ${esc(g.name)}</dt>` : ""}<dd>${g.faelle.length ? `<ul>${g.faelle.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}</dd>`).join("")}</dl></div>`;
+  }
+  return `<div class="midgard-kasten">${kopf}${rest.length > 1 ? `<ul>${rest.map((z) => `<li>${esc(z)}</li>`).join("")}</ul>` : rest.map((z) => `<p>${esc(z)}</p>`).join("")}</div>`;
+}
+
 /** Ein Block als HTML (Absatz, Tabelle, Kasten …; Blocktypen aus absaetze() und gliedern()). */
 export function blockHtml(a) {
   if (typeof a === "string") return `<p>${esc(a)}</p>`;
   if (a.tabelle) return tabelleHtml(a.tabelle, a);
   if (a.wurftabelle) {
     const w = a.wurftabelle;
-    // Inline-Wurf: Foundry macht daraus einen anklickbaren Würfel
-    return `<table class="midgard-tabelle midgard-wurftabelle"><caption><span class="midgard-tabellenkopf">${w.titel ? `<span>${esc(w.titel)}</span> ` : ""}<span class="midgard-wurf">[[/r ${w.wuerfel}]]{${WUERFEL_NAME[w.wuerfel]} würfeln}</span></span></caption>`
+    // Würfelknopf des Systems (module/tabellenwurf.mjs): würfelt, sucht die Zeile und zeigt Ergebnis und Text im Chat
+    return `<table class="midgard-tabelle midgard-wurftabelle" data-wuerfel="${w.wuerfel}"><caption><span class="midgard-tabellenkopf">${w.titel ? `<span class="midgard-tabellentitel">${esc(w.titel)}</span> ` : "<span></span>"}<a class="midgard-tabellenwurf" data-wuerfel="${w.wuerfel}" role="button" tabindex="0" title="Würfeln und Ergebnis in den Chat"><i class="fa-solid fa-dice-d20"></i> ${WUERFEL_NAME[w.wuerfel]} würfeln</a></span></caption>`
       + `<thead><tr><th>${WUERFEL_NAME[w.wuerfel]}</th><th>Ergebnis</th></tr></thead><tbody>${w.zeilen.map(([b, t, d]) => `<tr><td class="bereich">${esc(b)}</td><td>${d ? `<strong>${esc(t)}</strong> ${esc(d)}` : esc(t)}</td></tr>`).join("")}</tbody></table>`;
   }
   if (a.liste) return `<ul class="midgard-liste">${a.liste.map((z) => `<li>${esc(z)}</li>`).join("")}</ul>`;
@@ -86,7 +110,8 @@ export function blockHtml(a) {
   if (a.randnotiz) return `<aside class="midgard-randnotiz"><p>${esc(a.randnotiz)}</p></aside>`;
   if (a.fussnote) return `<p class="midgard-fussnote">* ${esc(a.fussnote)}</p>`;
   // Kasten: Überschrift (erste kurze Zeile ohne Satzzeichen) und Stufen wie „(+4)“ fett
-  if (a.kasten) return `<div class="midgard-kasten">${a.kasten.map((z, i) => (/\([+–-]\d+\)$/.test(z) || (i === 0 && a.kasten.length > 1 && z.length < 50 && !/[.,;:]$/.test(z)) ? `<p><strong>${esc(z)}</strong></p>` : `<p>${esc(z)}</p>`)).join("")}</div>`;
+  if (a.kasten) return kastenHtml(a.kasten);
+  if (a.box) return `<aside class="midgard-box">${a.box.titel ? `<p class="midgard-box-titel">${esc(a.box.titel)}</p>` : ""}<div class="midgard-box-inhalt">${a.box.bloecke.map(blockHtml).join("")}</div></aside>`;
   if (a.einschub) return blockHtml(a.klein ? { beispiel: a.einschub } : { randnotiz: a.einschub });
   return "";
 }

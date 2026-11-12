@@ -38,7 +38,7 @@ export const REITER = [
   { id: "uebersicht", titel: "Übersicht", icon: "fa-user" },
   { id: "fertigkeiten", titel: "Fertigkeiten", icon: "fa-list-check" },
   { id: "kampf", titel: "Kampf", icon: "fa-shield-halved" },
-  { id: "zauber", titel: "Zauber", icon: "fa-wand-sparkles", nur: (s, items) => s.abgeleitet.kannZaubern || items.some((i) => i.type === "zauber") },
+  { id: "zauber", titel: "Zauber", icon: "fa-wand-sparkles" },
   { id: "ausruestung", titel: "Ausrüstung", icon: "fa-box-open" },
   { id: "persoenlich", titel: "Persönliches", icon: "fa-feather" },
   { id: "entwicklung", titel: "Entwicklung", icon: "fa-chart-line" },
@@ -112,8 +112,10 @@ export class AbenteurerBogen extends ActorSheetV2 {
       // Der Bogen ist ein <form>: Enter darf nichts absenden
       w.addEventListener("submit", (ev) => { ev.preventDefault(); ev.stopImmediatePropagation(); }, { capture: true });
       w.addEventListener("change", (ev) => this.#feldGeaendert(ev));
-      w.addEventListener("dragover", (ev) => ev.preventDefault());
-      w.addEventListener("drop", (ev) => this.#ablegen(ev));
+      // Ablegefläche: beim Ziehen über den Bogen sichtbar, außerhalb des Werkzeugs
+      w.addEventListener("dragover", (ev) => { ev.preventDefault(); if (!ev.target.closest?.(".ma-werkzeug") && this.isEditable) w.classList.add("ma-ablage-aktiv"); });
+      w.addEventListener("dragleave", (ev) => { if (!w.contains(ev.relatedTarget)) w.classList.remove("ma-ablage-aktiv"); });
+      w.addEventListener("drop", (ev) => { w.classList.remove("ma-ablage-aktiv"); this.#ablegen(ev); });
       w.addEventListener("click", (ev) => this.#wurfKlick(ev));
       // Enter und Leertaste lösen Links mit Knopf-Rolle aus (Würfe, Einträge öffnen)
       w.addEventListener("keydown", (ev) => {
@@ -229,7 +231,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const s = this.actor.system;
     if (item.type === "rasse" || item.type === "typ") return this.#rasseOderTyp(item);
     const vorhanden = this.actor.items.find((i) => i.type === item.type && i.name === item.name);
-    if (vorhanden && item.type === "gegenstand") return vorhanden.update({ "system.anzahl": (vorhanden.system.anzahl || 0) + 1 });
+    if (vorhanden && item.type === "gegenstand") { await vorhanden.update({ "system.anzahl": (vorhanden.system.anzahl || 0) + 1 }); return this.#nachAblage(item); }
     const neu = item.toObject();
     delete neu._id;
     if (item.type === "waffe") {
@@ -237,6 +239,14 @@ export class AbenteurerBogen extends ActorSheetV2 {
       if (mangel.length) ui.notifications.warn(`${item.name}: Mindestwerte nicht erfüllt (${mangel.map(([k, v]) => `${k} ${v}`).join(", ")}).`);
     }
     await this.actor.createEmbeddedDocuments("Item", [neu]);
+    this.#nachAblage(item);
+  }
+
+  /** Nach dem Ablegen in den Reiter wechseln, in dem der Eintrag erscheint, und kurz bestätigen. */
+  #nachAblage(item) {
+    const reiter = { gegenstand: "ausruestung", waffe: "kampf", ruestung: "kampf", waffenfertigkeit: "kampf", fertigkeit: "fertigkeiten", zauber: "zauber" }[item.type];
+    ui.notifications.info(`${this.actor.name}: ${item.name} hinzugefügt.`);
+    if (reiter && reiter !== this.#reiter) this.#wechseln(reiter);
   }
 
   /**
@@ -480,7 +490,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
           el("td", { class: "zahl" }, this.#itemWert(items.get(f.id), "system.pp", f.pp)), el("td", {}, this.#loeschKnopf(f.id))))
           : el("tr", {}, el("td", { colspan: "7", class: "info", text: this.#verwaltet ? "Fertigkeiten entstehen im Reiter „Erschaffung & Lernen“." : "Fertigkeiten aus dem Kompendium hierher ziehen." })))),
       el("p", { class: "info", text: "EW = Fertigkeitswert + Bonus der Leiteigenschaft. PP = Praxispunkte." }),
-      this.#verwaltet ? null : el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("fertigkeiten") }, icon("fa-book-open"), " Kompendium: Fertigkeiten")),
+      this.#verwaltet ? null : el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("fertigkeiten", { neben: this }) }, icon("fa-book-open"), " Kompendium: Fertigkeiten")),
       karte("Ungelernte Fertigkeiten", "ma-k-ungelernt",
         el("p", { class: "info", text: "Erfolgswert ohne Bonus der Leiteigenschaft (Kodex S. 44). Alle übrigen ungelernt +(0), außer Musizieren, Schreiben, Sprache und Lesen von Zauberschrift." }),
         el("ul", { class: "ma-spalten" }, d.ungelernt.map(([n, w]) => el("li", {}, el("a", { class: "ma-wurf", "data-wurf": "ungelernt", "data-name": n, "data-wert": w, title: `EW:${n} ungelernt`, text: `${n} +(${w})` }))))),
@@ -504,7 +514,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
           : el("tr", {}, el("td", { colspan: "5", class: "info", text: "Keine Waffenfertigkeiten." }))))),
       karte("Waffen", "ma-k-waffen", this.#waffenTabelle(s, false),
         el("p", { class: "info", text: "Spezialwaffen erhalten +2 auf EW:Angriff. Schaden einschließlich Schadensbonus." }),
-        el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("waffen") }, icon("fa-book-open"), " Kompendium: Waffen")),
+        el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("waffen", { neben: this }) }, icon("fa-book-open"), " Kompendium: Waffen")),
       karte("Rüstungen", "ma-k-ruestung", el("table", { class: "ma-tabelle" },
         el("thead", {}, el("tr", {}, ["Rüstung", "RK", "RS", "AbB-Verlust", "getragen", ""].map((t) => el("th", { text: t })))),
         el("tbody", {}, ruestungen.length ? ruestungen.map((r) => el("tr", {},
@@ -512,7 +522,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
           el("td", { text: r.system.abwehrbonusVerlust === "alle" ? "alle" : r.system.abwehrbonusVerlust === "0" ? "–" : `−${r.system.abwehrbonusVerlust}` }),
           el("td", {}, this.#schalter(r.id, "system.getragen", r.system.getragen, "getragen")), el("td", {}, this.#loeschKnopf(r.id))))
           : el("tr", {}, el("td", { colspan: "6", class: "info", text: "Keine Rüstung." })))),
-        el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("ruestungen") }, icon("fa-book-open"), " Kompendium: Rüstungen")),
+        el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("ruestungen", { neben: this }) }, icon("fa-book-open"), " Kompendium: Rüstungen")),
     ];
   }
 
@@ -539,10 +549,23 @@ export class AbenteurerBogen extends ActorSheetV2 {
           el("td", { text: z.system.ap }), el("td", { text: z.system.art }), el("td", { text: z.system.zauberdauer }), el("td", { text: z.system.reichweite }),
           el("td", { text: z.system.wirkungsziel }), el("td", { text: z.system.wirkungsbereich }), el("td", { text: z.system.wirkungsdauer }),
           mitWirkung ? el("td", { class: "ma-wirkung", text: z.system.kurzwirkung || "" }) : null, el("td", {}, this.#loeschKnopf(z.id)))))));
+    // Zaubermittel, Tränke und Spruchrollen aus dem Gepäck: auch für Abenteurer, die selbst nicht zaubern
+    const mittel = items.filter((i) => i.type === "gegenstand" && (i.system.kategorie === "Zaubermittel" || /spruchrolle|trank|elixier|amulett|zauber/i.test(i.name)));
+    const mittelKarte = karte("Zaubermittel im Gepäck", "ma-k-zaubermittel", mittel.length
+      ? el("ul", { class: "ma-zaubermittel" }, mittel.map((m) => el("li", {}, this.#itemName({ id: m.id, img: m.img, name: m.name }), m.system.anzahl > 1 ? el("span", { class: "ma-anzahl", text: `× ${m.system.anzahl}` }) : null, m.system.kurzwirkung ? el("small", { text: m.system.kurzwirkung }) : null)))
+      : el("p", { class: "info", text: "Keine Zaubermittel. Tränke, Spruchrollen und Amulette aus dem Kompendium Ausrüstung erscheinen hier." }),
+      el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("gegenstaende", { neben: this }) }, icon("fa-flask"), " Kompendium: Ausrüstung"));
+    if (!d.kannZaubern && !zauber.length) {
+      return [
+        karte("Zaubern", "ma-k-zaubern", el("p", { class: "info", text: s.typName ? `${s.typName} ${s.typArt === "K" ? "ist ein Kämpfer und " : ""}kann nicht zaubern. Zauberwirkungen kommen für diesen Charakter aus Zaubermitteln und Spruchrollen.` : "Sobald ein zauberkundiger Abenteurertyp gewählt ist, stehen hier Zaubern, Praxispunkte je Gruppe und das Zauberblatt." })),
+        mittelKarte,
+      ];
+    }
     return [
       karte("Zaubern", "ma-k-zaubern", kopf, el("h4", { text: "Praxispunkte je Gruppe" }), pp),
       karte("Zauberblatt", "ma-k-zauber", zauber.length ? tabelle : el("p", { class: "info", text: this.#verwaltet ? "Zauber entstehen im Reiter „Erschaffung & Lernen“." : "Zauber aus dem Kompendium hierher ziehen." }),
-        el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("zauber") }, icon("fa-book-open"), " Kompendium: Zauber")),
+        el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("zauber", { neben: this }) }, icon("fa-book-open"), " Kompendium: Zauber")),
+      mittelKarte,
     ];
   }
 
@@ -563,7 +586,10 @@ export class AbenteurerBogen extends ActorSheetV2 {
           el("td", { text: g.system.kurzwirkung }), el("td", {}, this.#loeschKnopf(g.id))))
           : el("tr", {}, el("td", { colspan: "5", class: "info", text: "Keine Gegenstände." })))),
         this.#lastAnzeige(s),
-        this.isEditable ? el("button", { type: "button", class: "ma-knopf", onclick: neu }, icon("fa-plus"), " Gegenstand anlegen") : null),
+        this.isEditable ? el("div", { class: "ma-knopfreihe" },
+          el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("gegenstaende", { neben: this }) }, icon("fa-book-open"), " Kompendium: Ausrüstung"),
+          el("button", { type: "button", class: "ma-knopf", onclick: neu }, icon("fa-plus"), " Gegenstand anlegen")) : null,
+        this.isEditable ? el("p", { class: "info", text: "Gegenstände aus dem Kompendium hierher ziehen; vorhandene erhöhen die Anzahl." }) : null),
       s.ausruestungText ? karte("Ausrüstung bei Spielbeginn", "ma-k-start", el("p", { class: "vorformatiert", text: s.ausruestungText })) : null,
     ].filter(Boolean);
   }

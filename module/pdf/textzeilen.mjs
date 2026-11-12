@@ -24,8 +24,32 @@ export async function textzeilen(doc, von = 1, bis = doc.numPages) {
     const menge = new Map();
     for (const st of stuecke) menge.set(st.schrift, (menge.get(st.schrift) || 0) + st.text.length);
     const grundschrift = [...menge].sort((a, b) => b[1] - a[1])[0]?.[0];
-    for (const spalte of [0, 1]) {
-      const teil = stuecke.filter((s) => s.text.trim() && (spalte === 0 ? s.x < mitte - 5 : s.x >= mitte - 5));
+    // Kästen quer über dem Mittelsteg (z. B. „Der Ablauf eines Angriffs“, Kodex S. 69): Zweispaltiger
+    // Fließtext überquert die Mitte nie; ein Stück, das es tut, gehört zu einem Kasten. Alles in dessen
+    // Höhenbereich rechts von seiner linken Kante wird als eigener Block (Spalte 2) gelesen.
+    const kaesten = stegKaesten(stuecke, mitte);
+    // Fortsetzung einer Fließtextzeile gehört nicht zum Kasten: ein Stück im Kastenbereich, das ohne Lücke
+    // (unter 10 pt) an ein Stück links der Kastenkante oder an eine schon erkannte Fortsetzung anschließt
+    // rechts begrenzt durch die Breite der Kastenstücke: Fließtext der rechten Spalte daneben bleibt Fließtext
+    const imBereich = (s, k) => s.y >= k.yMin - 1 && s.y <= k.yMax + 1 && s.x >= k.x - 2 && s.x <= k.xMax + 10;
+    const fortsetzungen = new Set();
+    for (const k of kaesten) {
+      const zone = stuecke.filter((s) => s.text.trim() && imBereich(s, k)).sort((a, b) => a.x - b.x);
+      let neu = true;
+      while (neu) {
+        neu = false;
+        for (const s of zone) {
+          if (fortsetzungen.has(s)) continue;
+          const davor = stuecke.some((t) => t !== s && Math.abs(t.y - s.y) < 2 && t.x < s.x && t.x + (t.breite ?? 0) > s.x - 10
+            && (t.x < k.x - 2 || fortsetzungen.has(t)));
+          if (davor) { fortsetzungen.add(s); neu = true; }
+        }
+      }
+    }
+    const imKasten = (s) => !fortsetzungen.has(s) && kaesten.find((k) => imBereich(s, k));
+    const proSpalte = [[], [], []];
+    for (const spalte of [0, 1, 2]) {
+      const teil = stuecke.filter((s) => s.text.trim() && (spalte === 2 ? imKasten(s) : !imKasten(s) && (spalte === 0 ? s.x < mitte - 5 : s.x >= mitte - 5)));
       // Zeilen: gleiche Grundlinie (Toleranz 2 pt)
       teil.sort((a, b) => b.y - a.y || a.x - b.x);
       const zeilen = [];
@@ -79,11 +103,20 @@ export async function textzeilen(doc, von = 1, bis = doc.numPages) {
           if (t.schrift !== grundschrift) { fett += (fett ? " " : "") + tt; imFett = true; }
           else if (imFett || (gelesen += tt.length) > 60) break;
         }
-        alle.push({ text, x: z.teile[0].x, ende: z.teile.at(-1).x + z.teile.at(-1).breite, y: z.y, aufzaehlung, fett: fett.replace(/[:*\s]+$/, "").replace(/\*/g, "").trim(), groesse: kopf.groesse, schrift: kopf.schrift, seite: n, spalte, hoehe, abstand: vorher === null ? null : vorher - z.y,
+        proSpalte[spalte].push({ text, x: z.teile[0].x, ende: z.teile.at(-1).x + z.teile.at(-1).breite, y: z.y, aufzaehlung, fett: fett.replace(/[:*\s]+$/, "").replace(/\*/g, "").trim(), groesse: kopf.groesse, schrift: kopf.schrift, seite: n, spalte, hoehe, abstand: vorher === null ? null : vorher - z.y,
           spalten: spalten.map((x) => ({ ...x, text: x.text.trim() })).filter((x) => x.text), nebenInitiale: !!z.nebenInitiale });
         vorher = z.y;
       }
     }
+    // Kastenzeilen in die linke Spalte vor die erste Zeile unterhalb des Kastens setzen
+    const [links, rechts, kasten] = proSpalte;
+    if (kasten.length) {
+      for (const z of kasten) z.kasten = true;
+      const unten = Math.min(...kaesten.map((k) => k.yMin));
+      const pos = links.findIndex((z) => z.y < unten);
+      links.splice(pos < 0 ? links.length : pos, 0, ...kasten);
+    }
+    alle.push(...links, ...rechts);
   }
   ligaturenReparieren(alle);
   // Einzug je Seite und Spalte: Abstand zum linken Rand des Fließtexts (Kästen sind eingerückt)
@@ -98,9 +131,56 @@ export async function textzeilen(doc, von = 1, bis = doc.numPages) {
   for (const z of alle) {
     const m = rand.get(`${z.seite}/${z.spalte}`);
     const basis = m ? [...m].sort((a, b) => b[1] - a[1])[0][0] : z.x;
-    z.einzug = z.nebenInitiale ? 0 : Math.round(z.x - basis);
+    z.einzug = z.kasten ? Math.max(20, Math.round(z.x - basis)) : z.nebenInitiale ? 0 : Math.round(z.x - basis);
   }
   return alle;
+}
+
+/**
+ * Kästen, die über den Mittelsteg reichen. Anker sind Textstücke, die links der Mitte beginnen und
+ * rechts davon enden; der Höhenbereich wird um benachbarte Stücke erweitert, die in der linken
+ * Seitenhälfte ungewöhnlich weit rechts beginnen (Kastentitel, kurze Kastenzeilen).
+ * @returns {Array<{x, yMin, yMax}>}
+ */
+export function stegKaesten(stuecke, mitte) {
+  const text = stuecke.filter((s) => s.text.trim() && s.groesse >= 7.5 && s.groesse <= 12.5);
+  const anker = text.filter((s) => s.x < mitte - 5 && s.x + (s.breite ?? 0) > mitte + 8 && s.x > mitte * 0.6);
+  if (!anker.length) return [];
+  // Gruppen nach Höhe (Lücke über 40 pt trennt Kästen)
+  anker.sort((a, b) => b.y - a.y);
+  const gruppen = [];
+  for (const a of anker) {
+    const g = gruppen.at(-1);
+    const ende = a.x + (a.breite ?? 0);
+    if (g && g.yMin - a.y < 40) { g.yMin = Math.min(g.yMin, a.y); g.x = Math.min(g.x, a.x); g.xMax = Math.max(g.xMax, ende); }
+    else gruppen.push({ x: a.x, xMax: ende, yMin: a.y, yMax: a.y });
+  }
+  // erweitern: Stücke links der Mitte, die weit rechts beginnen (nicht am Spaltenrand), nahe am Kasten
+  const randLinks = Math.min(...text.filter((s) => s.x < mitte - 5).map((s) => s.x));
+  for (const g of gruppen) {
+    let geaendert = true;
+    while (geaendert) {
+      geaendert = false;
+      for (const s of text) {
+        if (s.x >= mitte - 5 || s.x < Math.max(randLinks + 60, mitte * 0.6)) continue;
+        if (s.y > g.yMax + 30 || s.y < g.yMin - 30 || (s.y <= g.yMax && s.y >= g.yMin && s.x >= g.x)) continue;
+        g.yMin = Math.min(g.yMin, s.y); g.yMax = Math.max(g.yMax, s.y); g.x = Math.min(g.x, s.x); g.xMax = Math.max(g.xMax, s.x + (s.breite ?? 0)); geaendert = true;
+      }
+    }
+  }
+  // rechts erweitern um Tabellenspalten (kurze Stücke gleicher Ausrichtung), nicht um Fließtext der rechten
+  // Spalte (Stücke, die überwiegend bis an den rechten Rand reichen)
+  for (const g of gruppen) {
+    const kandidaten = text.filter((s) => s.y >= g.yMin - 1 && s.y <= g.yMax + 1 && s.x > g.xMax + 10);
+    const nachKante = new Map();
+    for (const s of kandidaten) { const k = Math.round(s.x / 4); nachKante.set(k, [...(nachKante.get(k) ?? []), s]); }
+    for (const liste of nachKante.values()) {
+      // Fließtext: überwiegend lange Stücke (Zeilen einer Spalte); Tabellenzellen sind kurz, auch rechtsbündige
+      const fliesstext = liste.filter((s) => (s.breite ?? 0) >= 110).length / liste.length >= 0.5;
+      if (!fliesstext) g.xMax = Math.max(g.xMax, ...liste.map((s) => s.x + (s.breite ?? 0)));
+    }
+  }
+  return gruppen;
 }
 
 /**

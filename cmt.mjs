@@ -17,6 +17,7 @@ import { pdfImportStarten, pdfImportieren, einstellungenRegistrieren as importEi
 import { updatePruefen } from "./module/update.mjs";
 import { einstellungenRegistrieren as wurfEinstellungen } from "./module/wuerfe.mjs";
 import { einstellungenRegistrieren as kampfEinstellungen, socketEinrichten, karteEinrichten, angreifen } from "./module/kampf.mjs";
+import { tabellenwurfEinrichten } from "./module/tabellenwurf.mjs";
 import { einstellungenRegistrieren as systemEinstellungen, beimStart, journalDarstellen, chatKarteAnpassen, StartDialog, RegelwerkeFenster, EpFenster, epVerteilen } from "./module/einstellungen.mjs";
 
 const SYSTEM_ID = "midgard5-cmt";
@@ -47,6 +48,7 @@ Hooks.once("init", () => {
 
 Hooks.once("ready", async () => {
   socketEinrichten();
+  tabellenwurfEinrichten();
   updatePruefen();
   try {
     await kompendienAufbauen();

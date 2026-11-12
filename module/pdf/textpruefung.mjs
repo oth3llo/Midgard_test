@@ -28,6 +28,8 @@ export const anzahl = (w) => (WB ? WB.get(klein(w)) ?? 0 : 0);
  */
 export function woerterbuchBauen(zeilen) {
   const wb = new Map();
+  // genaue Schreibweise ohne Trennbruchstücke („kampf“ klein als eigenes Wort ist selten, „den“ häufig)
+  wb.genau = new Map();
   let vorherGetrennt = false;
   for (const z of zeilen) {
     const t = String(z.text ?? "");
@@ -38,8 +40,15 @@ export function woerterbuchBauen(zeilen) {
       if (getrennt && i === treffer.length - 1) return;
       const w = klein(m[0]);
       wb.set(w, (wb.get(w) || 0) + 1);
+      wb.genau.set(m[0], (wb.genau.get(m[0]) || 0) + 1);
     });
     vorherGetrennt = getrennt;
+  }
+  // Wortpaare zählen („nah kampf“), um getrennte Komposita zu erkennen
+  wb.paare = new Map();
+  for (const z of zeilen) {
+    const w = [...String(z.text ?? "").matchAll(WORT)].map((m) => klein(m[0]));
+    for (let i = 0; i + 1 < w.length; i++) { const k = `${w[i]} ${w[i + 1]}`; wb.paare.set(k, (wb.paare.get(k) || 0) + 1); }
   }
   // Bindestrich-Wörter („Nahkampf-Angriff“) getrennt zählen: an Trennstellen entscheiden sie über den Strich
   wb.strich = new Map();
@@ -134,8 +143,13 @@ export function woerterVerbinden(text) {
   const teile = text.split(/(\p{L}+)/u); // gerade Indizes: Zwischenraum, ungerade: Wörter
   for (let i = 1; i + 2 < teile.length; i += 2) {
     const a = teile[i], b = teile[i + 2];
-    if (teile[i + 1] !== " " || (anzahl(a) > 1 && anzahl(b) > 1)) continue;
+    if (teile[i + 1] !== " ") continue;
     const verbunden = a + b;
+    // beide Teile sind Wörter: nur verbinden, wenn das Buch die Zusammenschreibung weit häufiger hat und der
+    // zweite Teil klein geschrieben als eigenes Wort kaum vorkommt („Nah kampf“ ja, „Wer den“, „außer dem“ nein)
+    const paar = WB.paare?.get(`${klein(a)} ${klein(b)}`) ?? 0;
+    const zweiterKleinSelten = /^\p{Ll}/u.test(b) && (WB.genau?.get(b) ?? 0) <= 2;
+    if (anzahl(a) > 1 && anzahl(b) > 1 && !(zweiterKleinSelten && anzahl(verbunden) >= 5 && anzahl(verbunden) >= 10 * Math.max(1, paar))) continue;
     if (anzahl(verbunden) < 2) continue;
     merke(bericht.zusammengefuegt, `${a} ${b} → ${verbunden}`);
     teile.splice(i, 3, verbunden);

@@ -30,11 +30,26 @@ export class KompendiumBrowser extends ApplicationV2 {
 
   /** Eine Instanz für alle Aufrufe. */
   static #instanz = null;
-  static oeffnen(kat) {
+  /**
+   * @param {string} kat  Kategorie (Reiter)
+   * @param {object} o    neben: Bogen, neben dem sich der Browser öffnet (Ziehen und Ablegen auf den Bogen)
+   */
+  static oeffnen(kat, { neben = null } = {}) {
     const b = (this.#instanz ??= new KompendiumBrowser());
     if (kat && KATEGORIEN[kat]) b.#kat = kat;
-    return b.render({ force: true });
+    b.#ziel = neben?.actor?.name ?? null;
+    const opt = { force: true };
+    const pos = neben?.position;
+    if (pos && Number.isFinite(pos.left) && Number.isFinite(pos.width)) {
+      // rechts neben den Bogen, sonst links davon; Breite an den freien Platz anpassen
+      const frei = (globalThis.innerWidth ?? 1600);
+      const breite = Math.min(980, Math.max(640, frei - (pos.left + pos.width) - 20));
+      const rechts = pos.left + pos.width + 10 + breite <= frei;
+      opt.position = { left: rechts ? pos.left + pos.width + 10 : Math.max(0, pos.left - breite - 10), top: pos.top ?? 60, width: breite };
+    }
+    return b.render(opt);
   }
+  #ziel = null;          // Name des Charakters, für den gerade gesucht wird
 
   #kat = "fertigkeiten";
   #suche = "";
@@ -110,6 +125,9 @@ export class KompendiumBrowser extends ApplicationV2 {
     if (this.#ausKompendium[this.#kat] && !eintraege.length) {
       wurzel.insertBefore(el("p", { class: "mb-hinweis" }, "Dieses Kompendium ist noch leer. Es wird durch den Import der eigenen Regelwerk-PDF gefüllt (Der Kodex, Das Arkanum)",
         game.user.isGM ? [": ", el("button", { type: "button", text: "Regelwerk-PDF importieren", onclick: () => pdfImportStarten() })] : ", das macht der Spielleiter."), wurzel.children[1]);
+    }
+    if (this.#ziel && eintraege.length) {
+      wurzel.insertBefore(el("p", { class: "mb-hinweis mb-ziehen" }, el("i", { class: "fa-solid fa-hand-pointer", "aria-hidden": "true" }), ` Einträge auf den Bogen von ${this.#ziel} ziehen, um sie hinzuzufügen. Gegenstände, die es schon gibt, erhöhen die Anzahl.`), wurzel.children[1]);
     }
     if (!this.#ausKompendium[this.#kat]) {
       wurzel.insertBefore(el("p", { class: "mb-hinweis", text: "Die Kompendien sind in dieser Welt noch nicht angelegt. Das geschieht, sobald ein Spielleiter die Welt öffnet; gefüllt werden sie durch den Import der Regelwerk-PDFs." }), wurzel.children[1]);
