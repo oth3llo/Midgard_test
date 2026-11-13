@@ -524,6 +524,13 @@
 @media (max-width: 640px) {
 .midgard-cmt.midgard-cmt .lernzeile {grid-template-columns: 1fr;}
 }
+.midgard-cmt.midgard-cmt .bogen {container-type: inline-size;}
+@container (max-width: 860px) { .bogen-raster { grid-template-columns: minmax(0, 1fr); } }
+.midgard-cmt.midgard-cmt .fert-tab th:first-child {white-space: normal;}
+.midgard-cmt.midgard-cmt .fert-tab .z {text-align: right; width: 1%; white-space: nowrap;}
+.midgard-cmt.midgard-cmt .fert-tab td.herkunft {white-space: normal; width: 7.5rem; color: var(--leise);}
+.midgard-cmt.midgard-cmt .fert-tab .wert-eingabe input, .midgard-cmt.midgard-cmt .fert-tab .pp-eingabe {width: 3.6em; text-align: right;}
+.midgard-cmt.midgard-cmt .kopfdaten .wert-eingabe input {width: 6.5em;}
 
 /* Schriften und Grundmaße auch außerhalb der Bögen (Journale, Chat, Dialoge) */
 :root { --schrift-titel: "Alegreya", "Palatino Linotype", Georgia, serif; --schrift-kapitaelchen: "Alegreya SC", "Alegreya", Georgia, serif; --schrift-text: "Alegreya", "Palatino Linotype", Georgia, serif; --radius: 4px; }
@@ -1216,3 +1223,18 @@ img[src*="midgard5-cmt/bilder/"]:not([src*="/textur/"]),
 .midgard-abenteurer .ma-werkzeug .karte.cmt-ablage .knopfreihe { margin: .6rem 0 .3rem; }
 .midgard-abenteurer .ma-werkzeug .karte.cmt-ablage .knopfreihe button { width: auto; flex: 0 0 auto; }
 .midgard-abenteurer .ma-werkzeug .auf-dem-bogen { margin: .4rem 0 .6rem; }
+
+/* Spielleitung: ES, EP direkt im Bogenkopf setzen */
+.midgard-abenteurer .ma-konto .ma-sl-wert { display: inline-flex; align-items: center; gap: 4px; }
+.midgard-abenteurer .ma-konto input.ma-sl-feld { width: 5.5em; height: 1.6em; padding: 0 4px; text-align: right; }
+
+/* Gegnerbogen: kompakter Spieldatenblock */
+.midgard-gegner .mg-raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.midgard-gegner .mg-wert { display: flex; flex-direction: column; align-items: flex-start; padding: 4px 8px; border: 1px solid var(--rahmen, #8a7a62); border-radius: 3px; background: color-mix(in srgb, var(--rahmen, #8a7a62) 8%, transparent); }
+.midgard-gegner .mg-wert small { font-size: .75rem; opacity: .8; }
+.midgard-gegner .mg-wert strong { font-size: 1.1rem; }
+.midgard-gegner .mg-formeln { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 0; }
+.midgard-gegner .mg-formeln button { width: auto; }
+.midgard-gegner .mg-faehigkeiten ul { margin: 0; padding-left: 1.2rem; }
+.midgard-gegner .mg-block { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.midgard-gegner .mg-block textarea { width: 100%; }

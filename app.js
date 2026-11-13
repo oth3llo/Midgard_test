@@ -1068,23 +1068,26 @@
       r.faehigkeiten.length ? zeile("Besondere Fähigkeiten", r.faehigkeiten.map((f) => f.name + vz(f.wert)).join(", ")) : null));
     const fert = alleFertigkeiten().map((f) => ({ ...f, schluessel: "F:" + f.name + "|" + (f.spez || "") }))
       .concat(S.spiel.neu.filter((n) => !n.waffe && !n.zauber).map((n) => ({ ...n, schluessel: "F:" + n.name + "|" + (n.spez || ""), quelle: "später gelernt" })));
-    const fertTab = h("table", { class: "werte" },
-      h("thead", {}, h("tr", {}, h("th", {}, "Fertigkeit"), h("th", {}, "Wert"), h("th", {}, "Bonus (Leiteig.)"), h("th", { class: "nicht-drucken" }, "Herkunft"))),
+    const ppKeys = new Set(gelernteListe().map((g) => g.key));   // PP nur für Fertigkeiten mit Lerndaten
+    const fertTab = h("table", { class: "werte fert-tab" },
+      h("thead", {}, h("tr", {}, h("th", {}, "Fertigkeit"), h("th", { class: "z" }, "Wert"), h("th", { class: "z" }, "Bonus"), h("th", { class: "z" }, "PP"), h("th", { class: "nicht-drucken" }, "Herkunft"))),
       h("tbody", {}, fert.map((f) => {
         const b = bonus(wert(f.le));
         return h("tr", {},
           h("th", {}, f.name + (f.spez ? ` (${f.spez})` : "")),
-          h("td", {}, wertEingabe(f.schluessel, f.wert)),
-          h("td", {}, `${vz(b)} (${f.le})`),
-          h("td", { class: "nicht-drucken klein" }, f.quelle === "alle" ? "alle Abenteurer" : f.quelle === "typisch" ? "typisch" : f.quelle));
+          h("td", { class: "z" }, wertEingabe(f.schluessel, f.wert)),
+          h("td", { class: "z" }, `${vz(b)} ${f.le}`),
+          h("td", { class: "z" }, ppKeys.has(f.schluessel) ? ppEingabe(f.schluessel, f.name + (f.spez ? ` (${f.spez})` : "")) : "–"),
+          h("td", { class: "nicht-drucken klein herkunft" }, f.quelle === "alle" ? "alle Abenteurer" : f.quelle === "typisch" ? "typisch" : f.quelle));
       })));
     const waffen = S.waffen.map((w) => ({ ...w, schluessel: "W:" + w.name })).concat(S.spiel.neu.filter((n) => n.waffe).map((n) => ({ ...n, schluessel: "W:" + n.name })));
-    const waffTab = h("table", { class: "werte" },
-      h("thead", {}, h("tr", {}, h("th", {}, "Waffenfertigkeit"), h("th", {}, "Wert"), h("th", {}, "mit AnB"))),
+    const waffTab = h("table", { class: "werte fert-tab" },
+      h("thead", {}, h("tr", {}, h("th", {}, "Waffenfertigkeit"), h("th", { class: "z" }, "Wert"), h("th", { class: "z" }, "mit AnB"), h("th", { class: "z" }, "PP"))),
       h("tbody", {}, waffen.map((w) => {
         const vert = K.verteidigungsWaffen.includes(w.name);
         const akt = aktuellerWert(w.schluessel, w.wert);
-        return h("tr", {}, h("th", {}, w.name), h("td", {}, wertEingabe(w.schluessel, w.wert)), h("td", {}, vert ? "(zur Abwehr)" : vz(akt + (r.AnB || 0))));
+        return h("tr", {}, h("th", {}, w.name), h("td", { class: "z" }, wertEingabe(w.schluessel, w.wert)), h("td", { class: "z" }, vert ? "Abwehr" : vz(akt + (r.AnB || 0))),
+          h("td", { class: "z" }, ppKeys.has(w.schluessel) ? ppEingabe(w.schluessel, w.name) : "–"));
       })));
     const spezTab = S.spezialwaffen.length ? h("p", {}, h("strong", {}, "Spezialwaffe(n): "), S.spezialwaffen.map((s) => {
       const [fertName, name] = s.split("|");
@@ -1104,8 +1107,9 @@
           ["Stand", st ? st.name : ""], ["Heimat", S.heimat], ["Glaube", S.glaube], ["Alter", S.alter],
           ["Gestalt", `${["Gnom", "Halbling", "Zwerg"].includes(S.rasse) ? "klein" : S.gestaltGroesse}, ${S.gestaltFigur}`],
           ["Größe / Gewicht", S.groesse ? `${S.groesse} cm / ${S.gewicht ?? "?"} kg` : ""], ["Händigkeit", haendigkeit() || ""],
-          ["EP verfügbar", fmt(S.spiel.ep)], ["Gold", fmt(S.spiel.gold) + " GS"]]
-          .map(([a, b]) => h("div", {}, h("small", {}, a), h("strong", {}, b || "–")))),
+          ["Erfahrungsschatz (ES)", darfVergeben() ? kontoEingabe("es", "ES") : fmt(S.spiel.es)],
+          ["EP verfügbar", darfVergeben() ? kontoEingabe("ep", "EP") : fmt(S.spiel.ep)], ["Gold", fmt(S.spiel.gold) + " GS"]]
+          .map(([a, b]) => h("div", {}, h("small", {}, a), b instanceof Node ? b : h("strong", {}, b || "–")))),
       h("div", { class: "bogen-raster" },
         h("div", {}, h("h3", {}, "Eigenschaften"), eigTab, h("h3", {}, "Kampf- und Grundwerte"), kampf),
         h("div", {}, h("h3", {}, "Fertigkeiten"), fertTab, h("h3", {}, "Waffenfertigkeiten"), waffTab, spezTab, zauberListe)),
@@ -1113,10 +1117,33 @@
       h("p", { class: "klein" }, ungelernt.map(([n, w]) => `${n}+(${w})`).join(", ") + ". Alle anderen Fertigkeiten ungelernt +(0); Musizieren, Schreiben, Sprache und Lesen von Zauberschrift gar nicht."),
       S.ausruestung ? h("div", {}, h("h3", {}, "Ausrüstung"), h("p", { class: "vorformatiert" }, S.ausruestung)) : null,
       h("div", { class: "nicht-drucken spaeter" },
-        info("Steigern und Lernen mit EP, Praxispunkten und Gold läuft über den Bereich „Lernen“ in der Seitenleiste und wird dort protokolliert. Die Wertfelder oben sind nur für Korrekturen gedacht.")));
+        info(darfVergeben() ? "Steigern und Lernen mit EP, Praxispunkten und Gold läuft über den Bereich „Lernen“ in der Seitenleiste und wird dort protokolliert. Die Wertfelder oben sind nur für Korrekturen der Spielleitung gedacht."
+          : "Werte steigen nur durch Lernen mit EP, Praxispunkten und Gold über den Bereich „Lernen“ in der Seitenleiste.")));
+  }
+  // Korrekturen der Spielleitung: als Buchung mit Rückgängig, damit sie im Protokoll nachvollziehbar sind
+  function kontoEingabe(art, name) {
+    const alt = S.spiel[art] || 0;
+    return h("span", { class: "wert-eingabe" }, h("span", { class: "nur-drucken" }, fmt(alt)),
+      h("input", { type: "number", class: "zahl breit nicht-drucken", value: alt, "aria-label": name, title: "Spielleitung: Wert direkt setzen", onchange: (ev) => {
+        const v = zahl(ev.target.value);
+        if (v === null || v === alt || !darfVergeben()) return neuZeichnen();
+        buchen(`Spielleitung: ${name} ${fmt(alt)} → ${fmt(v)}`, (sp) => { sp[art] = v; });
+      } }));
+  }
+  function ppEingabe(schluessel, titel) {
+    const alt = S.spiel.pp[schluessel] || 0;
+    if (!darfVergeben()) return h("span", {}, alt ? String(alt) : "–");
+    return h("span", { class: "wert-eingabe" }, h("span", { class: "nur-drucken" }, alt || "–"),
+      h("input", { type: "number", class: "zahl klein nicht-drucken pp-eingabe", min: 0, value: alt, "aria-label": `PP ${titel}`, title: "Spielleitung: Praxispunkte setzen", onchange: (ev) => {
+        const v = Math.max(0, zahl(ev.target.value) || 0);
+        if (v === alt) return;
+        buchen(`Spielleitung: PP für ${titel} ${alt} → ${v}`, (sp) => { if (v) sp.pp[schluessel] = v; else delete sp.pp[schluessel]; });
+      } }));
   }
   function wertEingabe(schluessel, start) {
     const akt = aktuellerWert(schluessel, start);
+    // Spieler steigern Werte nur über das Lernen (EP, PP, Gold); direkt korrigieren darf nur die Spielleitung
+    if (!darfVergeben()) return h("span", { class: "wert-fest", title: "Steigern über „Lernen“ in der Seitenleiste" }, vz(akt));
     return h("span", { class: "wert-eingabe" },
       h("span", { class: "nur-drucken" }, vz(akt)),
       h("input", { type: "number", class: "zahl klein nicht-drucken", value: akt, onchange: (ev) => { const v = zahl(ev.target.value); if (v === start || v === null) delete S.spiel.werte[schluessel]; else S.spiel.werte[schluessel] = v; neuZeichnen(); } }));
@@ -1493,6 +1520,9 @@
         const teileText = [ep ? `${fmt(ep)} EP` : null, gold ? `${gold > 0 ? "+" : ""}${fmt(gold)} GS` : null].filter(Boolean).join(", ");
         buchen(`${teileText}${grund ? " – " + grund : ""}`, (s) => { s.ep += ep || 0; s.es += ep || 0; s.gold += gold || 0; });
       } }, "Buchen"))));
+    if (sl) teile.push(karte("Konto korrigieren (Spielleitung)",
+      info("Setzt die Werte direkt, etwa nach analogem Spiel oder zum Berichtigen. Jede Änderung steht im Protokoll und lässt sich rückgängig machen."),
+      h("div", { class: "raster3" }, feld("Erfahrungsschatz (ES)", kontoEingabe("es", "ES")), feld("EP verfügbar", kontoEingabe("ep", "EP")), feld("Gold (GS)", kontoEingabe("gold", "Gold")))));
     // PP
     const ziele = gelernteListe().map((g) => [g.key, g.titel]);
     const zk = L.zauberKosten[S.klasse] || {};
@@ -1740,7 +1770,7 @@
           h("td", { class: "wert" }, vz(g.wert)),
           h("td", {}, waffen ? (vert ? "Abwehr" : vz(g.wert + (r.AnB || 0))) : `${vz(bonus(wert(g.le)))} ${g.le}`),
           h("td", {}, g.gruppe), h("td", {}, g.ep),
-          h("td", { class: "pp" }, h("span", {}, pp || "–"),
+          h("td", { class: "pp" }, darfVergeben() ? ppEingabe(g.key, g.titel) : h("span", {}, pp || "–"),
             darfVergeben() && h("button", { type: "button", class: "mini", title: "1 Praxispunkt gutschreiben", onclick: () => buchen(`1 PP für ${g.titel}`, (s) => { s.pp[g.key] = pp + 1; }) }, "+1")),
           steigerZelle(g),
           h("td", {}, teFuer(g.gruppe, g.wert + 1) === null ? null : h("button", { type: "button", class: "haupt klein-knopf", onclick: () => steigernDialog(g) }, "Steigern")));
@@ -1792,7 +1822,7 @@
             const e = zauberEP(g) + elf;
             const pp = S.spiel.pp["Z:" + g] || 0;
             return h("tr", {}, h("th", {}, g), h("td", {}, e),
-              h("td", { class: "pp" }, h("span", {}, pp || "–"), darfVergeben() && h("button", { type: "button", class: "mini", title: "1 Praxispunkt gutschreiben", onclick: () => buchen(`1 PP für Zaubern: ${g}`, (s) => { s.pp["Z:" + g] = pp + 1; }) }, "+1")),
+              h("td", { class: "pp" }, darfVergeben() ? ppEingabe("Z:" + g, "Zaubern: " + g) : h("span", {}, pp || "–"), darfVergeben() && h("button", { type: "button", class: "mini", title: "1 Praxispunkt gutschreiben", onclick: () => buchen(`1 PP für Zaubern: ${g}`, (s) => { s.pp["Z:" + g] = pp + 1; }) }, "+1")),
               STUFEN_LE.map((le) => h("td", {}, fmt(le * e))),
               h("td", {}, h("button", { type: "button", class: "klein-knopf", onclick: () => zauberDialog(g) }, "Lernen")));
           }))))),

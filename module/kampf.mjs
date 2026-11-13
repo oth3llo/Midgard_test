@@ -35,14 +35,15 @@ export async function angreifen(actor, waffeId, { ohneDialog = false } = {}) {
   const w = d.waffen.find((x) => x.id === waffeId);
   if (!w) return;
   if (w.vert) return ui.notifications.warn(`${w.name} dient der Abwehr, nicht dem Angriff.`);
-  if (w.ew === null) return ui.notifications.warn(`${actor.name} beherrscht ${w.fertigkeit} nicht. Ungelernter Einsatz: Kodex S. 92.`);
+  const istGegner = actor.type === "gegner";   // Gegner: Angriffswert steht direkt in den Spieldaten
+  if (w.ew === null) return ui.notifications.warn(istGegner ? `${w.name}: kein Angriffswert in den Spieldaten.` : `${actor.name} beherrscht ${w.fertigkeit} nicht. Ungelernter Einsatz: Kodex S. 92.`);
   const ziele = [...(game.user.targets ?? [])].map((t) => t.actor).filter((a) => a && a !== actor);
   const nah = w.art !== "fernkampf";
   const hinweise = [];
   let mod = 0;
   // Zusammensetzung für die Chatkarte
   const fertWert = actor.items.find((i) => i.type === "waffenfertigkeit" && i.name === w.fertigkeit)?.system.wert ?? 0;
-  const teile = [[w.fertigkeit, fertWert], ["Angriffsbonus", d.angriffsBonus], ...(w.spezialwaffe ? [["Spezialwaffe", 2]] : [])];
+  const teile = istGegner ? [[w.name, w.ew]] : [[w.fertigkeit, fertWert], ["Angriffsbonus", d.angriffsBonus], ...(w.spezialwaffe ? [["Spezialwaffe", 2]] : [])];
   for (const a of d.kampfAbzuege) if ((!a.nurNah || nah) && a.nur !== "abwehr") { mod += a.wert; hinweise.push(`${vz(a.wert)} ${a.grund}`); teile.push([a.grund, a.wert]); }
   const zuschlag = ziele.length === 1 ? ziele[0].system.abgeleitet?.gegnerZuschlag?.(nah, d.zustaende?.liegend) : null;
   if (zuschlag) { mod += zuschlag.wert; hinweise.push(`${vz(zuschlag.wert)} ${zuschlag.grund}`); teile.push([zuschlag.grund, zuschlag.wert]); }
@@ -64,7 +65,7 @@ export async function angreifen(actor, waffeId, { ohneDialog = false } = {}) {
   }
   if (angriff.krit === "fehler") krit = await kritHinweis("fehler", "angriffFehler");
   if (krit?.roll) rolls.push(krit.roll);
-  const pp = angriff.krit === "erfolg" ? { actor: actor.uuid, ziel: { typ: "item", id: actor.items.find((i) => i.type === "waffenfertigkeit" && i.name === w.fertigkeit)?.id }, name: w.fertigkeit } : null;
+  const pp = angriff.krit === "erfolg" && !istGegner ? { actor: actor.uuid, ziel: { typ: "item", id: actor.items.find((i) => i.type === "waffenfertigkeit" && i.name === w.fertigkeit)?.id }, name: w.fertigkeit } : null;
   const daten = {
     angreifer: actor.uuid, angreiferName: actor.name, waffe: w.name, grundname: w.grundname, fertigkeit: w.fertigkeit, art: w.art,
     gesamt: angriff.gesamt, d20: angriff.d20, krit: angriff.krit, erfolg: angriff.erfolg, schaden,
@@ -142,7 +143,7 @@ export async function abwehren(message, zielUuid, { automatisch: auto = false } 
   const vw = verteidigungswaffe(ziel, angriff);
   let mod = 0;
   const hinweise = [`gegen ${angriff.gesamt} (${angriff.angreiferName}, ${angriff.waffe})`];
-  const teile = [["Abwehr (Grad)", d.gradAbwehr], ["Abwehrbonus", d.abwehrBonusMitRuestung]];
+  const teile = [...(d.abwehrTeile ?? [["Abwehr (Grad)", d.gradAbwehr], ["Abwehrbonus", d.abwehrBonusMitRuestung]])];
   for (const a of d.kampfAbzuege) if ((!a.nurNah || nah) && a.nur !== "angriff") { mod += a.wert; hinweise.push(`${vz(a.wert)} ${a.grund}`); teile.push([a.grund, a.wert]); }
   if (d.wehrlos) return wehrlosGetroffen(message, ziel, angriff, zielUuid);
   let mitVW = !!vw;
@@ -204,16 +205,22 @@ export function schadenBerechnen(ziel, angriff, schwer) {
   const schaden = angriff.schaden?.gesamt ?? 0;
   let rs = d.ruestung?.rs ?? 0;
   if (DURCHSCHLAGEND.includes(angriff.grundname)) rs = Math.min(rs, 3);
-  const apVerlust = Math.min(s.ap.wert, schaden);
-  const lpVerlust = schwer ? Math.max(0, schaden - rs) : 0;
+  // Gegner: ohne LP (Geister, Projektionen) zählt nur die Ausdauer; mit AP ∞ (Untote, Automaten) nur die LP (Kodex S. 182)
+  const ohneLP = !!d.ohneLP, apUnendlich = !!d.apUnendlich;
+  const apVerlust = apUnendlich ? 0 : Math.min(s.ap.wert, schaden);
+  const lpVerlust = schwer && !ohneLP ? Math.max(0, schaden - rs) : 0;
   const apNeu = s.ap.wert - apVerlust, lpNeu = s.lp.wert - lpVerlust;
   const folgen = [];
-  if (apNeu <= 0) folgen.push("erschöpft (0 AP)");
-  if (lpNeu < 0) folgen.push("tödlich verwundet (LP unter 0)");
+  if (!apUnendlich && apNeu <= 0) folgen.push(ohneLP ? "0 AP: verschwindet bzw. ist gebannt" : "erschöpft (0 AP)");
+  if (ohneLP) { if (schwer) folgen.push("ohne Lebenspunkte: schwere Treffer wirken wie leichte"); }
+  else if (lpNeu < 0) folgen.push("tödlich verwundet (LP unter 0)");
   else if (lpNeu === 0) folgen.push("0 LP: kann sich nicht mehr bewegen");
   else if (lpNeu <= 3) folgen.push("dem Tode nah (höchstens 3 LP)");
   else if (lpNeu * 2 <= s.lp.max) folgen.push("halbe LP verloren: AP höchstens halbes Maximum, B halbiert");
-  const text = `${schaden} Schaden: −${apVerlust} AP${schwer ? `, −${lpVerlust} LP (Rüstungsschutz ${rs})` : ""}. Jetzt ${lpNeu} LP, ${apNeu} AP.${folgen.length ? " " + folgen.join("; ") + "." : ""}`;
+  const apText = apUnendlich ? "AP ∞" : `−${apVerlust} AP`;
+  const lpText = schwer && !ohneLP ? `, −${lpVerlust} LP (Rüstungsschutz ${rs})` : "";
+  const jetzt = [ohneLP ? null : `${lpNeu} LP`, apUnendlich ? null : `${apNeu} AP`].filter(Boolean).join(", ");
+  const text = `${schaden} Schaden: ${apText}${lpText}. Jetzt ${jetzt}.${folgen.length ? " " + folgen.join("; ") + "." : ""}${apUnendlich && !schwer ? " Leichte Treffer spüren Wesen mit AP ∞ nicht." : ""}`;
   return { schaden, rs, apVerlust, lpVerlust, apNeu, lpNeu, text };
 }
 

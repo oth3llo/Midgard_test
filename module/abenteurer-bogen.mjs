@@ -331,7 +331,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
       el("div", { class: "ma-kopf-text" },
         this.isEditable && !this.#verwaltet ? el("input", { type: "text", class: "ma-name", "data-pfad": "name", value: a.name, "aria-label": "Name" }) : el("h1", { class: "ma-name", text: a.name }),
         el("p", { class: "ma-unter", text: unter }),
-        el("p", { class: "ma-konto" }, el("span", { text: `ES ${fmt(s.es)}` }), el("span", { text: `EP ${fmt(s.ep)}` }), el("span", { text: `Gold ${fmt(s.gold)} GS` }),
+        el("p", { class: "ma-konto" }, this.#slFeld("es", "ES", s.es), this.#slFeld("ep", "EP", s.ep), el("span", { text: `Gold ${fmt(s.gold)} GS` }),
           this.#verwaltet ? el("span", { class: "ma-marke", title: "Eigenschaften, Fertigkeiten, Zauber und Konto werden mit „Erschaffung & Lernen“ geändert; hier sind sie gesperrt." }, icon("fa-lock"), " vom Werkzeug verwaltet") : null,
           el("button", { type: "button", class: ["ma-werkzeug-knopf", this.#reiter === "werkzeug" && "aktiv"], "data-reiter": "werkzeug", "aria-pressed": String(this.#reiter === "werkzeug"), onclick: () => this.#wechseln("werkzeug") }, icon("fa-hammer"), " Erschaffung & Lernen"),
           el("button", { type: "button", class: "ma-export-knopf", title: "Alle Werte übersichtlich zum Abschreiben in den Papierbogen, geordnet nach Figuren-, Abenteuer- und Zauberblatt", onclick: () => exportOeffnen(this.actor) }, icon("fa-file-export"), " Export"))),
@@ -458,8 +458,54 @@ export class AbenteurerBogen extends ActorSheetV2 {
     } });
   }
 
+  /** ES oder EP: für die Spielleitung als Eingabe, sonst als Text. */
+  #slFeld(art, name, wert, { roh = false } = {}) {
+    if (!game.user.isGM || !this.isEditable) return el("span", { text: roh ? zahlText(wert) : `${name} ${fmt(wert)}` });
+    const feld = el("input", { type: "number", value: wert ?? 0, class: "ma-sl-feld", "aria-label": name, title: `Spielleitung: ${name} direkt setzen`,
+      onchange: (ev) => this.#slKorrektur({ [art]: Number(ev.target.value) || 0 }) });
+    return roh ? feld : el("label", { class: "ma-sl-wert" }, `${name} `, feld);
+  }
+
+  /**
+   * Korrektur der Spielleitung (ES, EP, PP). Verwaltet das Werkzeug den Charakter, wird sie in dessen
+   * Zustand und Protokoll gebucht (mit Rückgängig), sonst würde der nächste Abgleich sie überschreiben.
+   */
+  async #slKorrektur({ es, ep, pp, zauberPP }) {
+    if (!game.user.isGM) return;
+    const a = this.actor, s = a.system, upd = {}, texte = [];
+    let schluessel = null, neuPP = null;
+    if (es !== undefined && es !== s.es) { upd["system.es"] = es; texte.push(`ES ${fmt(s.es)} → ${fmt(es)}`); }
+    if (ep !== undefined && ep !== s.ep) { upd["system.ep"] = ep; texte.push(`EP ${fmt(s.ep)} → ${fmt(ep)}`); }
+    if (pp && pp.wert !== (pp.item.system.pp ?? 0)) { schluessel = pp.item.getFlag(SYSTEM_ID, "cmt"); neuPP = pp.wert; texte.push(`PP für ${pp.item.name} ${pp.item.system.pp ?? 0} → ${pp.wert}`); }
+    if (zauberPP && zauberPP.wert !== (s.zauberPP?.[zauberPP.gruppe] ?? 0)) {
+      upd[`system.zauberPP.${zauberPP.gruppe}`] = zauberPP.wert; schluessel = `Z:${zauberPP.gruppe}`; neuPP = zauberPP.wert;
+      texte.push(`PP für Zaubern: ${zauberPP.gruppe} ${s.zauberPP?.[zauberPP.gruppe] ?? 0} → ${zauberPP.wert}`);
+    }
+    if (!texte.length) return;
+    if (s.zustand) {
+      const z = JSON.parse(s.zustand);
+      z.spiel ??= {}; z.spiel.pp ??= {}; z.spiel.protokoll ??= [];
+      const vorher = JSON.parse(JSON.stringify({ spiel: { ...z.spiel, protokoll: undefined }, eig: z.eig, pAwurf: z.pAwurf, Wkwurf: z.Wkwurf, Au: z.Au, festPA: z.festPA ?? null, festWk: z.festWk ?? null }));
+      if (es !== undefined) z.spiel.es = es;
+      if (ep !== undefined) z.spiel.ep = ep;
+      if (schluessel) { if (neuPP) z.spiel.pp[schluessel] = neuPP; else delete z.spiel.pp[schluessel]; }
+      const eintrag = { zeit: new Date().toISOString(), text: `Spielleitung: ${texte.join(", ")}` };
+      z.spiel.protokoll.unshift({ ...eintrag, vorher });
+      upd["system.zustand"] = JSON.stringify(z);
+      upd["system.protokoll"] = [eintrag, ...(s.protokoll ?? [])];
+    }
+    if (pp) await pp.item.update({ "system.pp": neuPP });
+    await a.update(upd);
+    ui.notifications.info(`${a.name}: ${texte.join(", ")}.`);
+  }
+
   #itemWert(i, pfad, wert) {
     const nurSL = pfad === "system.pp" && !game.user.isGM;   // Praxispunkte vergibt die Spielleitung
+    // Spielleitung: PP auch bei Einträgen, die das Werkzeug verwaltet (über dessen Zustand gebucht)
+    if (pfad === "system.pp" && game.user.isGM && this.isEditable && i.getFlag?.(SYSTEM_ID, "cmt")) {
+      return el("input", { type: "number", min: 0, value: wert ?? 0, class: "ma-klein", "aria-label": `PP ${i.name}`, title: "Spielleitung: Praxispunkte setzen",
+        onchange: (ev) => this.#slKorrektur({ pp: { item: i, wert: Math.max(0, Number(ev.target.value) || 0) } }) });
+    }
     if (!this.isEditable || i.getFlag?.(SYSTEM_ID, "cmt") || nurSL) return el("span", { text: zahlText(wert), title: nurSL ? "Praxispunkte trägt die Spielleitung ein" : null });
     return el("input", { type: "number", "data-item": i.id, "data-pfad": pfad, value: wert ?? 0, class: "ma-klein", "aria-label": pfad });
   }
@@ -541,7 +587,10 @@ export class AbenteurerBogen extends ActorSheetV2 {
       s.spezialisierung ? el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Spezialgebiet" }), el("span", { class: "ma-gross-wert klein", text: s.spezialisierung }), el("small", { text: "+2 auf EW:Zaubern" })) : null);
     const pp = el("table", { class: "ma-tabelle ma-zauber-pp" },
       el("thead", {}, el("tr", {}, ZAUBERGRUPPEN.map((g) => el("th", { text: g })))),
-      el("tbody", {}, el("tr", {}, ZAUBERGRUPPEN.map((g) => el("td", { class: "zahl", text: s.zauberPP?.[g] ? String(s.zauberPP[g]) : "–" })))));
+      el("tbody", {}, el("tr", {}, ZAUBERGRUPPEN.map((g) => el("td", { class: "zahl" }, game.user.isGM && this.isEditable
+        ? el("input", { type: "number", min: 0, value: s.zauberPP?.[g] ?? 0, class: "ma-klein", "aria-label": `PP Zaubern ${g}`, title: "Spielleitung: Praxispunkte setzen",
+          onchange: (ev) => this.#slKorrektur({ zauberPP: { gruppe: g, wert: Math.max(0, Number(ev.target.value) || 0) } }) })
+        : el("span", { text: s.zauberPP?.[g] ? String(s.zauberPP[g]) : "–" }))))));
     const gruppen = ZAUBERGRUPPEN.map((g) => [g, zauber.filter((z) => z.system.gruppe === g).sort((a, b) => a.system.stufe - b.system.stufe || a.name.localeCompare(b.name, "de"))]).filter(([, l]) => l.length);
     const sonstige = zauber.filter((z) => !ZAUBERGRUPPEN.includes(z.system.gruppe));
     if (sonstige.length) gruppen.push(["Sonstige", sonstige]);
@@ -663,10 +712,11 @@ export class AbenteurerBogen extends ActorSheetV2 {
       el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Erfahrungsschatz" }), el("span", { class: "ma-gross-wert", text: fmt(s.es) }), el("small", { text: gradNachES > s.grad ? `Grad ${gradNachES} erreicht, Aufstieg noch nicht bestätigt` : `Grad ${naechster} ab ${fmt(esNaechster)} ES` })),
       el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Erfahrungspunkte" }), el("span", { class: "ma-gross-wert", text: fmt(s.ep) })),
       el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Gold" }), el("span", { class: "ma-gross-wert", text: fmt(s.gold) }), el("small", { text: "GS" })));
-    const eingabe = this.#verwaltet ? null : el("div", { class: "ma-zeilen" },
-      el("label", { class: "ma-zeile" }, el("span", { text: "ES" }), this.#feld("system.es", s.es, { typ: "number", nurSL: true })),
-      el("label", { class: "ma-zeile" }, el("span", { text: "EP" }), this.#feld("system.ep", s.ep, { typ: "number", nurSL: true })),
-      el("label", { class: "ma-zeile" }, el("span", { text: "Grad" }), this.#feld("system.grad", s.grad, { typ: "number" })));
+    const eingabe = this.#verwaltet && !game.user.isGM ? null : el("div", { class: "ma-zeilen" },
+      el("label", { class: "ma-zeile" }, el("span", { text: "ES" }), this.#slFeld("es", "ES", s.es, { roh: true })),
+      el("label", { class: "ma-zeile" }, el("span", { text: "EP" }), this.#slFeld("ep", "EP", s.ep, { roh: true })),
+      this.#verwaltet ? el("p", { class: "info", text: "Spielleitung: Änderungen werden im Protokoll von „Erschaffung & Lernen“ gebucht und lassen sich dort rückgängig machen." })
+        : el("label", { class: "ma-zeile" }, el("span", { text: "Grad" }), this.#feld("system.grad", s.grad, { typ: "number" })));
     const tabelle = el("table", { class: "ma-tabelle ma-gradtabelle" },
       el("thead", {}, el("tr", {}, ["Grad", "ab ES", "Abwehr/Resistenz", "Zaubern"].map((t) => el("th", { text: t })))),
       el("tbody", {}, Array.from({ length: Math.min(30, Math.max(s.grad + 3, 6)) }, (_, i) => i + 1).map((g) => el("tr", { class: g === s.grad ? "aktiv" : null },

@@ -16,6 +16,9 @@ import { textPruefen, pruefbericht, woerterbuchLoeschen } from "./pdf/textpruefu
 import { allesVerlinken, REGEL_PACK } from "./verlinken.mjs";
 import { esc } from "./wuerfe.mjs";
 import { eintragBild, bildPfad, slug } from "./bilder.mjs";
+import { bestiariumAusKodex, gegnerAusAbenteuer, abenteuerErkennen } from "./pdf/bestiarium.mjs";
+import { gegnerAusBestiarium } from "./gegner.mjs";
+import { GEGNER_PACK, gegnerPackHolen } from "./kompendien.mjs";
 
 const PFAD = `systems/${SYSTEM_ID}/vendor/pdfjs`;
 let pdfjs = null;
@@ -86,8 +89,18 @@ export async function pdfImportieren(daten, { dateiname = "PDF", ueberschreiben 
     textPruefen(zeilen);
     // Erkennung nur am Inhalt (Dateiname spielt keine Rolle)
     const erkannt = buchErkennen(zeilen, doc.numPages);
+    // Abenteuerband: nur die Gegner (Kästen mit Spieldaten) in das Kompendium „Gegner“, Ordner je Band
+    const abenteuer = erkannt.buch ? null : abenteuerErkennen(zeilen);
+    if (abenteuer) {
+      const gegner = gegnerAusAbenteuer(zeilen);
+      const bericht = { buch: abenteuer.titel, teile: [await gegnerSchreiben(gegner, abenteuer.titel)], dateiname, abenteuer: true };
+      await protokollieren({ datei: dateiname, buch: abenteuer.titel, fingerabdruck: ausgabeFingerabdruck(zeilen, doc.numPages), gepruefteAusgabe: false });
+      Hooks.callAll("midgardKompendienGeaendert");
+      if (!stumm) berichtZeigen(bericht);
+      return bericht;
+    }
     if (!erkannt.buch) {
-      ui.notifications.warn(`${dateiname}: kein unterstütztes Regelwerk erkannt (unterstützt: Der Kodex, Das Arkanum; ${erkannt.treffer} von ${erkannt.gesamt} Merkmalen gefunden).`);
+      ui.notifications.warn(`${dateiname}: kein unterstütztes Regelwerk erkannt (unterstützt: Der Kodex, Das Arkanum und Midgard-Abenteuerbände; ${erkannt.treffer} von ${erkannt.gesamt} Merkmalen gefunden).`);
       return null;
     }
     const fingerabdruck = ausgabeFingerabdruck(zeilen, doc.numPages);
@@ -157,7 +170,39 @@ async function kodexImportieren(zeilen, ueberschreiben) {
   teile.push(await schreiben("rassen", rassen, { ...o, nurPassende: false }));
   // Ausrüstung aus den Preislisten: ohne eigene Beschreibung im Kodex
   teile.push(await schreiben("gegenstaende", [], { ...o, auswahl: (e) => e.system.quelle === "Kodex" }));
+  teile.push(await gegnerSchreiben(bestiariumAusKodex(zeilen), buch));
   return { buch, teile };
+}
+
+/**
+ * Gegner (Bestiarium) in das Akteur-Kompendium: ein Ordner je Quelle, darin alphabetisch sortiert.
+ * Feste IDs je Quelle und Name; erneuter Import aktualisiert die Spieldaten, eigene Notizen bleiben.
+ */
+async function gegnerSchreiben(wesen, buch) {
+  const pack = game.packs.get(`world.${GEGNER_PACK}`) ?? await gegnerPackHolen();
+  const ergebnis = { kategorie: "gegner", gelesen: wesen.length, angelegt: 0, geschrieben: 0, behalten: [], nichtZugeordnet: [], ohne: [] };
+  if (!wesen.length) return ergebnis;
+  const vorhanden = new Map((await pack.getDocuments()).map((d) => [d.id, d]));
+  const gesperrt = pack.locked;
+  if (gesperrt) await pack.configure({ locked: false });
+  try {
+    const ordner = await ordnerPfad(pack, [buch], "Actor", {}, "a");
+    const neu = [], aendern = [];
+    for (const w of [...wesen].sort((a, b) => a.name.localeCompare(b.name, "de"))) {
+      const d = gegnerAusBestiarium(w, { quelle: `${buch}, S. ${w.seite}`, html: alsHtml(w.absaetze, `${buch}, S. ${w.seite}`), img: bildPfad("gegner/gegner") ?? undefined });
+      d._id = stabileId(`gegner:${buch}:${w.name}`);
+      d.folder = ordner;
+      d.flags = { [SYSTEM_ID]: { pdfImport: { buch, seite: w.seite } } };
+      const alt = vorhanden.get(d._id);
+      if (!alt) { neu.push(d); continue; }
+      d.system.notizen = alt.system.notizen ?? "";
+      aendern.push({ _id: d._id, name: d.name, folder: ordner, system: d.system, [`flags.${SYSTEM_ID}.pdfImport`]: d.flags[SYSTEM_ID].pdfImport });
+    }
+    if (neu.length) await Actor.createDocuments(neu, { pack: pack.collection, keepId: true });
+    if (aendern.length) await Actor.updateDocuments(aendern, { pack: pack.collection, recursive: false, diff: false });
+    Object.assign(ergebnis, { angelegt: neu.length, geschrieben: neu.length + aendern.length });
+  } finally { if (gesperrt) await pack.configure({ locked: true }); }
+  return ergebnis;
 }
 
 /**
@@ -252,12 +297,12 @@ export function stabileId(schluessel) {
  * Ordnerpfad in einem Kompendium sicherstellen (z. B. ["Das Arkanum", "Der Konspekt der Zauberer"]).
  * Gibt die ID des innersten Ordners zurück.
  */
-async function ordnerPfad(pack, pfad, typ, flags = {}) {
+async function ordnerPfad(pack, pfad, typ, flags = {}, sortierung = "m") {
   let eltern = null;
   for (const name of pfad.filter(Boolean)) {
     const vorhanden = [...(pack.folders ?? [])].find((f) => f.name === name && (f.folder?.id ?? f.folder ?? null) === eltern);
     if (vorhanden) { eltern = vorhanden.id; continue; }
-    const [neu] = await Folder.createDocuments([{ name, type: typ, folder: eltern, sorting: "m", flags: { [SYSTEM_ID]: flags } }], { pack: pack.collection });
+    const [neu] = await Folder.createDocuments([{ name, type: typ, folder: eltern, sorting: sortierung, flags: { [SYSTEM_ID]: flags } }], { pack: pack.collection });
     eltern = neu.id;
   }
   return eltern;
@@ -341,11 +386,12 @@ function berichtZeigen(b) {
   const liste = (titel, l) => (l.length ? `<details><summary>${esc(titel)} (${l.length})</summary><p>${l.map(esc).join(", ")}</p></details>` : "");
   const inhalt = `<div class="midgard-bericht">
     <p>Aus <strong>${esc(b.dateiname)}</strong> erkannt: <strong>${esc(b.buch)}</strong>.</p>
-    ${b.gepruefteAusgabe ? `<p class="hinweis">Ausgabe ${esc(b.fingerabdruck)}: gegen diese Ausgabe ist der Import geprüft.</p>`
+    ${b.abenteuer ? `<p class="hinweis">Abenteuerband: Die Gegner aus den Spieldatenkästen stehen im Kompendium „Midgard: Gegner“ im Ordner „${esc(b.buch)}“, alphabetisch sortiert. Abenteuertext und Karten werden nicht übernommen.</p>`
+      : b.gepruefteAusgabe ? `<p class="hinweis">Ausgabe ${esc(b.fingerabdruck)}: gegen diese Ausgabe ist der Import geprüft.</p>`
       : `<p class="warnung">Diese Ausgabe (${esc(b.fingerabdruck)}) weicht von der geprüften ab, etwa eine andere Auflage. Bitte die Listen unten prüfen; einzelne Einträge können fehlen oder falsch zugeordnet sein.</p>`}
     <p>Übernommen:</p>
     <ul>${b.teile.map((t) => t.kategorie === "regeln" ? `<li>Regeln: ${t.kapitel ?? 0} Kapitel mit ${t.angelegt} Seiten</li>` : `<li>${esc(t.kategorie)}: ${t.angelegt} neu angelegt, ${t.geschrieben} mit Beschreibung</li>`).join("")}</ul>
-    <p>${b.links ?? 0} Texte mit Verweisen auf Regeln, Zauber, Fertigkeiten und Gegenstände versehen.</p>
+    ${b.abenteuer ? "" : `<p>${b.links ?? 0} Texte mit Verweisen auf Regeln, Zauber, Fertigkeiten und Gegenstände versehen.</p>`}
     ${b.textpruefung ? textpruefungHtml(b.textpruefung) : ""}
     ${b.teile.map((t) => liste(`${t.kategorie}: vorhandener Text behalten`, t.behalten) + liste(`${t.kategorie}: in der PDF gefunden, aber nicht zugeordnet`, t.nichtZugeordnet) + liste(`${t.kategorie}: ohne Beschreibung aus diesem Buch`, t.ohne)).join("")}
     <p class="hinweis">Die Texte stehen nur in den Kompendien dieser Welt. Würfeltabellen, Beispiele und Merkkästen werden erkannt und eigens dargestellt; mehrspaltige Tabellen können unvollständig sein. Bereits auf Charakterbögen liegende Gegenstände behalten ihren alten Stand.</p>

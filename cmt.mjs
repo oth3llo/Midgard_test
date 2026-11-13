@@ -13,6 +13,7 @@ import { KompendiumBrowser, knopfEinbauen } from "./module/browser.mjs";
 import { GegenstandBogen } from "./module/gegenstand-bogen.mjs";
 import { AbenteurerDaten } from "./module/akteur.mjs";
 import { AbenteurerBogen } from "./module/abenteurer-bogen.mjs";
+import { GegnerDaten, GegnerBogen, tokenHookEinrichten, gegnerAuswuerfeln, einstellungenRegistrieren as gegnerEinstellungen } from "./module/gegner.mjs";
 import { pdfImportStarten, pdfImportieren, einstellungenRegistrieren as importEinstellungen } from "./module/pdf-import.mjs";
 import { updatePruefen } from "./module/update.mjs";
 import { einstellungenRegistrieren as wurfEinstellungen } from "./module/wuerfe.mjs";
@@ -29,6 +30,12 @@ Hooks.once("init", () => {
     makeDefault: true,
     label: "MIDGARD.Bogen",
   });
+  CONFIG.Actor.dataModels.gegner = GegnerDaten;
+  foundry.applications.apps.DocumentSheetConfig.registerSheet(Actor, SYSTEM_ID, GegnerBogen, {
+    types: ["gegner"],
+    makeDefault: true,
+    label: "MIDGARD.GegnerBogen",
+  });
   Object.assign(CONFIG.Item.dataModels, GEGENSTAND_MODELLE);
   foundry.applications.apps.DocumentSheetConfig.registerSheet(Item, SYSTEM_ID, GegenstandBogen, {
     types: Object.keys(GEGENSTAND_MODELLE),
@@ -40,7 +47,9 @@ Hooks.once("init", () => {
   wurfEinstellungen();
   importEinstellungen();
   kampfEinstellungen();
-  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, kompendienOhnePdf, angreifen, pdfImport: pdfImportStarten, pdfImportieren, updatePruefen, stand: KOMPENDIUM_STAND,
+  gegnerEinstellungen();
+  tokenHookEinrichten();
+  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, kompendienOhnePdf, angreifen, gegnerAuswuerfeln, pdfImport: pdfImportStarten, pdfImportieren, updatePruefen, stand: KOMPENDIUM_STAND,
     start: () => StartDialog.oeffnen(), regelwerke: () => new RegelwerkeFenster().render({ force: true }),
     epVerteilen: (verteilung, anlass) => (verteilung ? epVerteilen(verteilung, anlass) : new EpFenster().render({ force: true })) };
   console.log(`${SYSTEM_ID} | Midgard-CMT ${game.system.version} geladen`);
