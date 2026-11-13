@@ -30,7 +30,7 @@ export function angriffeZerlegen(text) {
     if (c === "(") tiefe++;
     if (c === ")") tiefe--;
     // „oder“ trennt Angriffe, außer innerhalb eines Zusatzes („nur im Flug oder Handgemenge“)
-    const wort = c === "," ? 1 : t.startsWith(" oder ", i) && !/(?:im|beim)\s+[A-ZÄÖÜ][\wäöüß]+$/.test(akt) ? 6 : t.startsWith(" und ", i) && /^ und (?:\d+×)?[A-ZÄÖÜ]/.test(t.slice(i)) ? 5 : 0;
+    const wort = c === "," || c === ";" ? 1 : t.startsWith(" oder ", i) && !/(?:im|beim)\s+[A-ZÄÖÜ][\wäöüß]+$/.test(akt) ? 6 : t.startsWith(" und ", i) && /^ und (?:\d+×)?[A-ZÄÖÜ]/.test(t.slice(i)) ? 5 : 0;
     if (tiefe === 0 && wort) {
       teile.push(akt.trim()); akt = "";
       i += wort - 1;
@@ -134,7 +134,9 @@ export function bestiariumAusKodex(zeilen) {
 //   Bes.: …   Zaubern+15: …
 // „Abwehr“ und „Resistenz“ stehen in Kapitälchen, die pdf.js als fremde Zeichen liest; gelesen wird
 // deshalb nur Anfangsbuchstabe und Zahl. Die Werte sind fest (keine Würfelformeln).
-const KOMPAKT = /^(\*|\d+)\s*LP,\s*(∞|\*|\d+)\s*AP(?:\s*\([^)]*\))?\s*[-–]\s*(\S+)\s*[-–]\s*St\s+([^,]+),\s*Gw\s+([^,]+),\s*In\s+([^,]+),\s*B\s+(\S+)/;
+// LP, AP und Rüstklasse fest am Anfang; St, Gw, In, B dahinter in beliebiger Reihenfolge („B26“, „MW+12 - Gw 50, St 90, B18“)
+const KOMPAKT = /^(\*|\d+)\s*LP,\s*(∞|\*|\d+)\s*AP(?:\s*\([^)]*\))?\s*[-–]\s*(\S+)\s*[-–]\s*(.*\b(?:St|Gw)\b.*)$/;
+const wertAus = (t, k) => t.match(new RegExp(`\\b${k}\\s*([^,\\s]+)`))?.[1]?.trim() ?? "";
 const ABWEHR = /\s[-–]\s*A[^\d+]{0,14}\+\s*(\d+)\s*(\([^)]*\))?\s*,?\s*R[^\d+]{0,16}\+\s*(\d+|\*)\s*\/\s*\+?(\d+|\*)/;
 /** Text an einem Trenner aufteilen, aber nicht innerhalb von Klammern. */
 function ausserhalbKlammern(text, trenner) {
@@ -154,15 +156,53 @@ function ausserhalbKlammern(text, trenner) {
 const SEITENZAHL = (z) => /^\d{1,3}$/.test(z.text) && z.groesse >= 12;
 const VERTEIDIGUNG = /schild|parier|buckler|kampfgabel/i;
 
-/** Gegner aus einem Abenteuerband (alle Kästen im kompakten Format). */
-export function gegnerAusAbenteuer(zeilen) {
+// Anzahl vor dem Namen („2 Riesenratten“, „Zwölf Opfermesser“): ein Eintrag je Art, die Anzahl als Hinweis
+const ZAHLWORT = { zwei: 2, drei: 3, vier: 4, "fünf": 5, sechs: 6, sieben: 7, acht: 8, neun: 9, zehn: 10, elf: 11, "zwölf": 12, zwanzig: 20 };
+const ANZAHL = new RegExp(`^(\\d+|${Object.keys(ZAHLWORT).join("|")})\\s+(.+)$`, "i");
+
+/** Einzahl eines Wortes: bekannter Kandidat (Kodex, derselbe Band) vor wenigen Regeln; sonst unverändert. */
+export function einzahl(wort, bekannt = new Set()) {
+  const klein = (x) => x.toLocaleLowerCase("de");
+  const bek = new Set([...bekannt].map(klein));
+  const kandidaten = [wort, wort.replace(/äuse$/, "aus"), wort.replace(/ies$/, "ie"), wort.replace(/s$/, ""), wort.replace(/en$/, ""), wort.replace(/n$/, ""), wort.replace(/e$/, ""), `${wort}r`];
+  const treffer = kandidaten.find((k) => k !== wort && bek.has(klein(k)));
+  if (treffer) return treffer;
+  if (bek.has(klein(wort))) return wort;
+  for (const [re, ers] of [[/ratten$/, "ratte"], [/äuse$/, "aus"], [/trolle$/, "troll"], [/aten$/, "at"], [/ies$/, "ie"], [/lette$/, "lett"]]) if (re.test(wort)) return wort.replace(re, ers);
+  return wort;
+}
+
+/** „2 Riesenratten“ → { anzahl: 2, name: "Riesenratte" }; ohne Anzahl unverändert. */
+export function anzahlAbtrennen(text, bekannt = new Set()) {
+  const m = String(text).match(ANZAHL);
+  if (!m) return { anzahl: null, name: text };
+  const anzahl = /^\d+$/.test(m[1]) ? Number(m[1]) : ZAHLWORT[m[1].toLocaleLowerCase("de")];
+  if (!anzahl || anzahl < 2) return { anzahl: null, name: text };
+  const woerter = m[2].split(" ");
+  // führende Adjektive („Albische Seefahrer“) in die Einzahl, dann das erste Hauptwort
+  let i = 0;
+  while (i < woerter.length - 1 && /isch(e)$/.test(woerter[i])) { woerter[i] = `${woerter[i]}r`; i++; }
+  woerter[i] = einzahl(woerter[i], bekannt);
+  return { anzahl, name: woerter.join(" "), plural: m[2] };
+}
+
+/** Gegner aus einem Abenteuerband (alle Kästen im kompakten Format). bekannt: Namen und Arten bereits bekannter Wesen. */
+export function gegnerAusAbenteuer(zeilen, { bekannt = new Set() } = {}) {
+  // Namen ohne Anzahl aus diesem Band helfen bei der Einzahl der übrigen
+  const eigene = new Set(zeilen.map((z) => z.text.match(KOPF)).filter(Boolean).flatMap((m) => [m[1], m[2]]).filter((x) => x && !ANZAHL.test(x)));
+  const alle = new Set([...bekannt, ...eigene]);
   const wesen = [];
   const istKopf = (i) => KOPF.test(zeilen[i]?.text ?? "") && KOMPAKT.test(zeilen[i + 1]?.text ?? "");
   for (let i = 0; i < zeilen.length; i++) {
     if (!istKopf(i)) continue;
     const kopf = zeilen[i], groesse = kopf.groesse;
-    const [, name, art, grad] = kopf.text.match(KOPF);
-    const [, lp, ap, rk, st, gw, inn, b] = zeilen[i + 1].text.match(KOMPAKT);
+    const [, nameRoh, artRoh, grad] = kopf.text.match(KOPF);
+    const { anzahl, name, plural } = anzahlAbtrennen(nameRoh, alle);
+    const art = artRoh && anzahl ? artRoh.split(" ").map((w, k, l) => (k === l.length - 1 ? einzahl(w, alle) : w)).join(" ") : artRoh;
+    const [, lp, ap, rk, rest] = zeilen[i + 1].text.match(KOMPAKT);
+    const [st, gw, inn, b] = [wertAus(rest, "St"), wertAus(rest, "Gw"), wertAus(rest, "In"), wertAus(rest, "B")];
+    // weitere Angaben in der Wertezeile (z. B. „MW+12“) als Fähigkeit
+    const sonst = rest.split(/\s*[-–,]\s+/).map((x) => x.trim()).filter((x) => x && !/^(St|Gw|In|B)(?=\s|\d|\*|t\d|$)/.test(x));
     // Angriffszeile(n) bis einschließlich Abwehr/Resistenz, danach Besonderheiten
     let j = i + 2, angriff = "";
     while (j < zeilen.length && !istKopf(j) && (zeilen[j].groesse === groesse || SEITENZAHL(zeilen[j])) && !ABWEHR.test(angriff)) {
@@ -184,10 +224,11 @@ export function gegnerAusAbenteuer(zeilen) {
     const [angriffText, ...manoever] = ausserhalbKlammern(m ? angriff.slice(0, m.index) : angriff, /^\s+[-–]\s+/);
     // in Bestiarium-Schreibweise übersetzen und mit demselben Leser auswerten
     const werte = spieldatenLesen([
-      `LP ${lp} AP ${ap} ${rk}`, `St ${st.trim()} Gw ${gw.trim()} In ${inn.trim()} B ${b}`,
+      `LP ${lp} AP ${ap} ${rk}`,
       m ? `Abwehr+${m[1]} Resistenz+${m[3]}/${m[4]}` : "Abwehr var Resistenz var",
-      angriffText.trim(), ...extra.map((x) => x.replace(/^\*/, "")),
+      angriffText.trim(), ...sonst, ...extra.map((x) => x.replace(/^\*/, "")),
     ]);
+    Object.assign(werte, { st: wert(st), gw: wert(gw), in: wert(inn), b });
     if (m?.[2]) werte.faehigkeiten.unshift(`Abwehr ${m[2].replace(/[()]/g, "")}`);
     if (manoever.filter(Boolean).length) werte.faehigkeiten.unshift(`Sonderangriffe: ${manoever.filter(Boolean).join(", ")}`);
     // Schilde und Parierwaffen sind keine Angriffe: als Hinweis führen
@@ -197,7 +238,7 @@ export function gegnerAusAbenteuer(zeilen) {
       werte.faehigkeiten.unshift(`Verteidigung: ${vert.map((x) => `${x.name}${x.ew !== null ? `+${x.ew}` : ""}`).join(", ")}`);
     }
     werte.gf ??= Number(grad) + 3;
-    wesen.push({ name, art: art ?? "", grad: Number(grad), seite: kopf.seite, werte, absaetze: absaetze(text, 11) });
+    wesen.push({ name, art: art ?? "", grad: Number(grad), seite: kopf.seite, werte, absaetze: absaetze(text, 11), anzahl, auftritt: anzahl ? `${anzahl} ${plural}` : null });
     i = j - 1;
   }
   // gleicher Name mehrfach im Band (z. B. an mehreren Schauplätzen): Seitenzahl anhängen

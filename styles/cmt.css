@@ -1238,3 +1238,19 @@ img[src*="midgard5-cmt/bilder/"]:not([src*="/textur/"]),
 .midgard-gegner .mg-faehigkeiten ul { margin: 0; padding-left: 1.2rem; }
 .midgard-gegner .mg-block { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
 .midgard-gegner .mg-block textarea { width: 100%; }
+.midgard-gegner .mg-auftritt { margin: 2px 0 0; font-weight: 700; color: var(--gold, #c9a227); }
+
+/* Gegenstandsbogen: Beschreibung formatiert, Bearbeiten auf Knopfdruck */
+.midgard-gegenstand .mg-beschreibung-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.midgard-gegenstand .mg-beschreibung-kopf h3 { margin: 0; }
+.midgard-gegenstand .mg-text-knopf { width: auto; flex: 0 0 auto; padding: 1px 10px; }
+
+/* Entwicklung: „Jetzt lernbar“ als anklickbare Kacheln */
+.midgard-abenteurer .ma-lerngruppe h4 { margin: 8px 0 4px; }
+.midgard-abenteurer .ma-lernbar-liste { display: flex; flex-wrap: wrap; gap: 6px; }
+.midgard-abenteurer .ma-wurzel button.ma-lernbar { display: flex; flex-direction: column; align-items: flex-start; width: auto; height: auto; padding: 3px 8px; text-align: left; line-height: 1.2; border: 1px solid var(--rahmen, #8a7a62); background: color-mix(in srgb, var(--rahmen, #8a7a62) 8%, transparent); }
+.midgard-abenteurer .ma-wurzel button.ma-lernbar small { font-size: .75rem; opacity: .8; }
+.midgard-abenteurer .ma-wurzel button.ma-lernbar:hover, .midgard-abenteurer .ma-wurzel button.ma-lernbar:focus-visible { outline: 2px solid var(--gold, #c9a227); outline-offset: 1px; }
+
+/* Kompendium-Fenster: Knopf „In die Welt übernehmen“ */
+button.midgard-in-welt { display: flex; align-items: center; justify-content: center; gap: 6px; width: calc(100% - 8px); margin: 4px; flex: 0 0 auto; }

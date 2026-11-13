@@ -92,7 +92,10 @@ export async function pdfImportieren(daten, { dateiname = "PDF", ueberschreiben 
     // Abenteuerband: nur die Gegner (Kästen mit Spieldaten) in das Kompendium „Gegner“, Ordner je Band
     const abenteuer = erkannt.buch ? null : abenteuerErkennen(zeilen);
     if (abenteuer) {
-      const gegner = gegnerAusAbenteuer(zeilen);
+      // bekannte Wesen (Kodex-Bestiarium und bereits importierte Bände) helfen bei der Einzahl („2 Riesenratten“)
+      const pack = game.packs.get(`world.${GEGNER_PACK}`);
+      const bekannt = new Set((pack ? await pack.getDocuments() : []).flatMap((d) => [d.name, d.system?.art]).filter(Boolean));
+      const gegner = gegnerAusAbenteuer(zeilen, { bekannt });
       const bericht = { buch: abenteuer.titel, teile: [await gegnerSchreiben(gegner, abenteuer.titel)], dateiname, abenteuer: true };
       await protokollieren({ datei: dateiname, buch: abenteuer.titel, fingerabdruck: ausgabeFingerabdruck(zeilen, doc.numPages), gepruefteAusgabe: false });
       Hooks.callAll("midgardKompendienGeaendert");

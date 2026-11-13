@@ -37,6 +37,8 @@ export class GegenstandBogen extends ItemSheetV2 {
     form: { submitOnChange: true, closeOnSubmit: false },
   };
 
+  #textBearbeiten = false;
+
   async _renderHTML() {
     const item = this.item;
     const bearbeitbar = this.isEditable;
@@ -69,11 +71,18 @@ export class GegenstandBogen extends ItemSheetV2 {
       bearbeitbar ? el("input", { type: "text", name: "system.kurzwirkung", value: item.system.kurzwirkung ?? "", placeholder: "ein Satz in eigenen Worten" })
         : el("p", { text: item.system.kurzwirkung })));
 
-    const beschreibung = el("div", { class: "mg-beschreibung" }, el("h3", { text: FELDNAMEN.beschreibung }));
+    // Beschreibung immer formatiert anzeigen; Bearbeiten (HTML) nur auf Knopfdruck, danach wieder die Ansicht
+    const kopfzeile = el("div", { class: "mg-beschreibung-kopf" }, el("h3", { text: FELDNAMEN.beschreibung }));
+    const beschreibung = el("div", { class: "mg-beschreibung" }, kopfzeile);
     if (bearbeitbar) {
-      const ta = el("textarea", { name: "system.beschreibung", rows: "8" });
+      const knopf = el("button", { type: "button", class: "mg-text-knopf", text: this.#textBearbeiten ? "Fertig" : "Text bearbeiten" });
+      knopf.addEventListener("click", () => { this.#textBearbeiten = !this.#textBearbeiten; this.render(); });
+      kopfzeile.append(knopf);
+    }
+    if (bearbeitbar && this.#textBearbeiten) {
+      const ta = el("textarea", { name: "system.beschreibung", rows: "12" });
       ta.value = item.system.beschreibung ?? "";
-      beschreibung.append(ta);
+      beschreibung.append(el("p", { class: "mg-leer", text: "HTML: Absätze mit <p>…</p>, fett mit <strong>…</strong>." }), ta);
     } else if (item.system.beschreibung) {
       const div = el("div", { class: "mg-text" });
       div.innerHTML = await TextEditorKlasse().enrichHTML(item.system.beschreibung, { relativeTo: item, secrets: item.isOwner });

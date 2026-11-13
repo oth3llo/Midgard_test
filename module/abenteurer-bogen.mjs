@@ -475,7 +475,11 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const a = this.actor, s = a.system, upd = {}, texte = [];
     let schluessel = null, neuPP = null;
     if (es !== undefined && es !== s.es) { upd["system.es"] = es; texte.push(`ES ${fmt(s.es)} → ${fmt(es)}`); }
-    if (ep !== undefined && ep !== s.ep) { upd["system.ep"] = ep; texte.push(`EP ${fmt(s.ep)} → ${fmt(ep)}`); }
+    if (ep !== undefined && ep !== s.ep) {
+      upd["system.ep"] = ep; texte.push(`EP ${fmt(s.ep)} → ${fmt(ep)}`);
+      // mehr EP = erhaltene EP: auch der Erfahrungsschatz steigt (Kodex S. 165); weniger EP ist eine Korrektur
+      if (es === undefined && ep > s.ep) { es = (s.es ?? 0) + (ep - s.ep); upd["system.es"] = es; texte.push(`ES ${fmt(s.es)} → ${fmt(es)}`); }
+    }
     if (pp && pp.wert !== (pp.item.system.pp ?? 0)) { schluessel = pp.item.getFlag(SYSTEM_ID, "cmt"); neuPP = pp.wert; texte.push(`PP für ${pp.item.name} ${pp.item.system.pp ?? 0} → ${pp.wert}`); }
     if (zauberPP && zauberPP.wert !== (s.zauberPP?.[zauberPP.gruppe] ?? 0)) {
       upd[`system.zauberPP.${zauberPP.gruppe}`] = zauberPP.wert; schluessel = `Z:${zauberPP.gruppe}`; neuPP = zauberPP.wert;
@@ -727,8 +731,28 @@ export class AbenteurerBogen extends ActorSheetV2 {
     return [
       karte("Erfahrung und Grad", "ma-k-konto", konto, eingabe,
         this.#verwaltet ? el("p", { class: "info" }, "EP ausgeben, Gold zum Lernen nutzen und Grad bestätigen: ", el("button", { type: "button", class: "ma-knopf", onclick: () => this.#wechseln("werkzeug") }, icon("fa-hammer"), " Erschaffung & Lernen")) : null),
+      this.#lernbarKarte(),
       el("div", { class: "ma-raster-zwei" }, karte("Gradtabelle", "ma-k-grad", tabelle), karte("Protokoll", "ma-k-protokoll", protokoll)),
-    ];
+    ].filter(Boolean);
+  }
+
+  /**
+   * „Jetzt lernbar“: was mit den aktuellen EP und dem Gold bezahlbar ist (aus der Lernliste des Werkzeugs).
+   * Ein Klick fragt nach und bucht wie dort; ohne Werkzeug (von Hand angelegte Figur) entfällt die Karte.
+   */
+  #lernbarKarte() {
+    if (!this.#verwaltet || !game.settings.get(SYSTEM_ID, "kodexImportiert")) return null;
+    if (!this.#werkzeugWurzel) this.#werkzeugStarten();
+    const l = this.#werkzeug?.lernbar?.();
+    if (!l) return null;
+    const kopf = el("p", { class: "info", text: `Mit ${fmt(l.ep)} EP und ${fmt(l.gold)} GS jetzt lernbar. Ein Klick fragt nach und bucht; Praxispunkte werden zuerst verrechnet. Gold statt EP, Belohnungen und Spruchrollen: „Erschaffung & Lernen“.` });
+    if (l.gesperrt) return karte("Jetzt lernbar", "ma-k-lernbar", el("p", { class: "info", text: l.gesperrt }));
+    if (!l.gruppen.length) return karte("Jetzt lernbar", "ma-k-lernbar", el("p", { class: "info", text: `Mit ${fmt(l.ep)} EP und ${fmt(l.gold)} GS ist gerade nichts lernbar.` }));
+    return karte("Jetzt lernbar", "ma-k-lernbar", kopf, l.gruppen.map((g) => el("div", { class: "ma-lerngruppe" },
+      el("h4", { text: `${g.titel} (${g.eintraege.length})` }),
+      el("div", { class: "ma-lernbar-liste" }, g.eintraege.map((e) => el("button", { type: "button", class: "ma-lernbar", title: e.weitere ? `weitere ${e.weitere} Stufe(n) bezahlbar, in der Lernliste auf einmal buchbar` : null, onclick: () => e.aktion() },
+        el("span", { text: e.titel }), el("small", { text: e.kosten })))))),
+      el("button", { type: "button", class: "ma-knopf", onclick: () => { const z = this.#werkzeug?.zustand(); if (z) { z.ansicht = "tabellen"; this.#werkzeug.neuZeichnen(); } this.#wechseln("werkzeug"); } }, icon("fa-list"), " Vollständige Lernliste"));
   }
 
   async _werkzeug() {

@@ -1127,7 +1127,9 @@
       h("input", { type: "number", class: "zahl breit nicht-drucken", value: alt, "aria-label": name, title: "Spielleitung: Wert direkt setzen", onchange: (ev) => {
         const v = zahl(ev.target.value);
         if (v === null || v === alt || !darfVergeben()) return neuZeichnen();
-        buchen(`Spielleitung: ${name} ${fmt(alt)} → ${fmt(v)}`, (sp) => { sp[art] = v; });
+        // mehr EP = erhaltene EP: Erfahrungsschatz steigt mit (Kodex S. 165); weniger EP ist eine Korrektur
+        const esMit = art === "ep" && v > alt ? v - alt : 0;
+        buchen(`Spielleitung: ${name} ${fmt(alt)} → ${fmt(v)}${esMit ? `, ES +${fmt(esMit)}` : ""}`, (sp) => { sp[art] = v; if (esMit) sp.es = (sp.es || 0) + esMit; });
       } }));
   }
   function ppEingabe(schluessel, titel) {
@@ -1948,6 +1950,24 @@
       });
     });
   }
+  /**
+   * Lernbares für den Charakterbogen (Reiter „Entwicklung“): je Fertigkeit die nächste bezahlbare Stufe,
+   * neue Fertigkeiten, Waffenfertigkeiten und Zauber, jeweils mit derselben Rückfrage und Buchung wie in
+   * der Lernliste. Null, solange kein Typ gewählt ist; mit Text, solange das Lernen gesperrt ist.
+   */
+  function lernbarFuerBogen() {
+    if (!klasse()) return null;
+    const gesperrt = sperren().lernen;
+    if (gesperrt) return { gesperrt, ep: S.spiel.ep, gold: S.spiel.gold, gruppen: [] };
+    const d = lernlisteDaten();
+    const pp = (k) => (k.pp ? `, ${k.pp} PP` : "");
+    return { ep: S.spiel.ep, gold: S.spiel.gold, gruppen: [
+      { titel: "Steigern", eintraege: d.steigern.map(({ g, stufen }) => ({ titel: `${g.titel} ${vz(g.wert)} → +${stufen[0].ziel}`, kosten: kostenText(stufen[0]) + pp(stufen[0]), weitere: stufen.length - 1, aktion: () => lernlisteSteigern(g, stufen[0]) })) },
+      { titel: "Neue Fertigkeiten", eintraege: d.fert.map((x) => ({ titel: `${lernAnzeige(x.e.lname)} +${x.start}`, kosten: kostenText(x), aktion: () => lernlisteNeu(x) })) },
+      { titel: "Neue Waffenfertigkeiten", eintraege: d.waffen.map((x) => ({ titel: `${x.e.lname} +${x.start}`, kosten: kostenText(x), aktion: () => lernlisteNeu(x) })) },
+      { titel: "Zauber", eintraege: d.zauber.map((k) => ({ titel: `${k.z.name} (${k.gruppe}, Stufe ${k.z.stufe})`, kosten: kostenText(k) + pp(k), aktion: () => lernlisteZauber(k) })) },
+    ].filter((g) => g.eintraege.length) };
+  }
   function ansichtTabellen() {
     const d = lernlisteDaten(), sp = S.spiel;
     const knopf = (titel, unter, onclick) => h("button", { type: "button", class: "option lernbar", onclick }, h("span", {}, titel), h("small", {}, unter));
@@ -2098,7 +2118,7 @@
       h("main", { class: "cmt-inhalt" })),
   ].filter(Boolean));
   neuZeichnen();
-  return { neuZeichnen, zustand: () => S, auswertung };
+  return { neuZeichnen, zustand: () => S, auswertung, lernbar: lernbarFuerBogen };
   }
 
   window.MidgardCMT = { starte };

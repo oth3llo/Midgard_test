@@ -32,6 +32,8 @@ export class GegnerDaten extends foundry.abstract.TypeDataModel {
     const f = F();
     return {
       art: text(), grad: zahl(0), gf: zahlOderLeer(), quelle: text(),
+      // Auftritt im Abenteuer, z. B. „2 Riesenratten“: ein Eintrag je Art, die Anzahl als Hinweis
+      auftritt: text(), anzahl: zahlOderLeer(),
       lpFormel: text(), apFormel: text(), lp: vorrat(), ap: vorrat(),
       rk: new f.StringField({ required: true, blank: true, initial: "OR" }),
       eigenschaften: new f.SchemaField({ St: text(), Gw: text(), In: text() }),
@@ -192,6 +194,7 @@ export class GegnerBogen extends ActorSheetV2 {
       el("div", { class: "ma-kopf-text" },
         darf ? el("input", { type: "text", class: "ma-name", value: a.name, "aria-label": "Name", onchange: (ev) => a.update({ name: ev.target.value }) }) : el("h1", { class: "ma-name", text: a.name }),
         el("p", { class: "ma-unter", text: unter }),
+        s.auftritt ? el("p", { class: "mg-auftritt", title: "Für jeden Gegner einen eigenen Token auf die Szene ziehen" }, icon("fa-users"), ` Im Abenteuer: ${s.auftritt}`) : null,
         el("p", { class: "mg-formeln", text: `LP ${t(s.lpFormel)} · AP ${t(s.apFormel)}` },
           darf ? el("button", { type: "button", class: "ma-knopf mg-wuerfeln", title: "LP und AP nach der Formel neu würfeln", onclick: () => gegnerAuswuerfeln(a) }, icon("fa-dice"), " LP/AP würfeln") : null,
           game.user.isGM ? el("button", { type: "button", class: "ma-knopf", "aria-pressed": String(this.#bearbeiten), onclick: () => { this.#bearbeiten = !this.#bearbeiten; this.render(); } }, icon("fa-pen"), this.#bearbeiten ? " Fertig" : " Bearbeiten") : null)),
@@ -304,7 +307,10 @@ export function gegnerAusBestiarium(w, { quelle, html, img }) {
     lpFormel: v.lpFormel, apFormel: v.apFormel, rk: v.rk || "OR",
     eigenschaften: { St: String(v.st ?? ""), Gw: String(v.gw ?? ""), In: String(v.in ?? "") }, b: String(v.b ?? ""),
     abwehr: v.abwehr, resistenzGeist: v.resistenzGeist, resistenzKoerper: v.resistenzKoerper, schb: v.schb,
-    angriffe: v.angriffe, raufen: v.raufen ?? {}, faehigkeiten: v.faehigkeiten, beschreibung: html,
+    angriffe: v.angriffe, raufen: v.raufen ?? {}, faehigkeiten: v.faehigkeiten,
+    auftritt: w.auftritt ? `${w.auftritt} (S. ${w.seite})` : "", anzahl: w.anzahl ?? null,
+    // Hinweis am Anfang der Beschreibung: wie viele dieser Gegner das Abenteuer vorsieht
+    beschreibung: (w.auftritt ? `<p class="midgard-hinweis"><strong>Im Abenteuer: ${w.auftritt}</strong> (S. ${w.seite}). Für jeden einen eigenen Token auf die Szene ziehen; jeder würfelt seine LP und AP selbst.</p>` : "") + html,
   };
   // Startwerte: Durchschnitt der Formeln; beim Platzieren eines Tokens wird gewürfelt (Einstellung)
   const lp = /^\*$/.test(s.lpFormel) ? 0 : durchschnitt(s.lpFormel) ?? 0;

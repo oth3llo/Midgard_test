@@ -19,6 +19,7 @@ import { updatePruefen } from "./module/update.mjs";
 import { einstellungenRegistrieren as wurfEinstellungen } from "./module/wuerfe.mjs";
 import { einstellungenRegistrieren as kampfEinstellungen, socketEinrichten, karteEinrichten, angreifen } from "./module/kampf.mjs";
 import { tabellenwurfEinrichten } from "./module/tabellenwurf.mjs";
+import { knopfEinrichten as weltImportEinrichten, packInWelt, importDialog } from "./module/kompendium-import.mjs";
 import { einstellungenRegistrieren as systemEinstellungen, beimStart, journalDarstellen, chatKarteAnpassen, StartDialog, RegelwerkeFenster, EpFenster, epVerteilen } from "./module/einstellungen.mjs";
 
 const SYSTEM_ID = "midgard5-cmt";
@@ -49,7 +50,8 @@ Hooks.once("init", () => {
   kampfEinstellungen();
   gegnerEinstellungen();
   tokenHookEinrichten();
-  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, kompendienOhnePdf, angreifen, gegnerAuswuerfeln, pdfImport: pdfImportStarten, pdfImportieren, updatePruefen, stand: KOMPENDIUM_STAND,
+  weltImportEinrichten();
+  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, kompendienOhnePdf, angreifen, gegnerAuswuerfeln, inWelt: (id, o) => packInWelt(game.packs.get(id), o), inWeltDialog: (id) => importDialog(game.packs.get(id)), pdfImport: pdfImportStarten, pdfImportieren, updatePruefen, stand: KOMPENDIUM_STAND,
     start: () => StartDialog.oeffnen(), regelwerke: () => new RegelwerkeFenster().render({ force: true }),
     epVerteilen: (verteilung, anlass) => (verteilung ? epVerteilen(verteilung, anlass) : new EpFenster().render({ force: true })) };
   console.log(`${SYSTEM_ID} | Midgard-CMT ${game.system.version} geladen`);
