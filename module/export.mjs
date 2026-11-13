@@ -60,11 +60,11 @@ export function blattDaten(actor) {
       b: d.bEffektiv !== null && d.bEffektiv !== s.b ? d.bEffektiv : "", gw: d.gwEffektiv !== null && d.gwEffektiv !== s.eigenschaften.Gw ? d.gwEffektiv : "" },
     waffen: d.waffen.map((w) => [w.name, w.ew === null ? "" : String(w.ew), schadenKurz(w.schaden)]),
     zauberPP: ZAUBERGRUPPEN.map((g) => [g, s.zauberPP?.[g] || ""]),
-    zauber: zauber.map((z) => { const y = z.system; return { ap: y.ap, prozess: y.gruppe + (s.spezialisierung && s.spezialisierung === y.gruppe ? " *" : ""), name: z.name, zd: y.zauberdauer, rw: y.reichweite, wb: y.wirkungsbereich, wd: y.wirkungsdauer, wirkung: y.kurzwirkung ?? "", wz: y.wirkungsziel, art: y.art }; }),
-    mittel: mittel.map((m) => [m.name + (m.system.anzahl > 1 ? ` (${m.system.anzahl})` : ""), m.system.kurzwirkung ?? ""]),
+    zauber: zauber.map((z) => { const y = z.system; return { ap: y.ap, prozess: y.gruppe + (s.spezialisierung && s.spezialisierung === y.gruppe ? " *" : ""), name: z.name, zd: y.zauberdauer, rw: y.reichweite, wb: y.wirkungsbereich, wd: y.wirkungsdauer, wz: y.wirkungsziel, art: y.art }; }),
+    mittel: mittel.map((m) => [m.name + (m.system.anzahl > 1 ? ` (${m.system.anzahl})` : "")]),
     ausruestung: [
-      ...items.filter((i) => i.type === "gegenstand" && !mittel.includes(i)).map((g) => [g.name, t(g.system.anzahl), leer(g.system.gewicht) ? "" : String(g.system.gewicht).replace(".", ","), g.system.kurzwirkung ?? ""]),
-      ...items.filter((i) => i.type === "ruestung" && i.id !== d.ruestung.id).map((r) => [`${r.name} (${r.system.kuerzel}, nicht getragen)`, "1", leer(r.system.gewicht) ? "" : String(r.system.gewicht).replace(".", ","), ""]),
+      ...items.filter((i) => i.type === "gegenstand" && !mittel.includes(i)).map((g) => [g.name, t(g.system.anzahl), leer(g.system.gewicht) ? "" : String(g.system.gewicht).replace(".", ",")]),
+      ...items.filter((i) => i.type === "ruestung" && i.id !== d.ruestung.id).map((r) => [`${r.name} (${r.system.kuerzel}, nicht getragen)`, "1", leer(r.system.gewicht) ? "" : String(r.system.gewicht).replace(".", ",")]),
     ],
     last: `${fmt(d.last.kg)} kg${d.last.normal !== null ? ` (Normallast ${d.last.normal} kg)` : ""}`,
     startAusruestung: s.ausruestungText ?? "",
@@ -109,12 +109,12 @@ export function uebersichtDaten(actor) {
   ] });
   if (D.zauber.length || D.mittel.length || D.zaubern !== null) blaetter.push({ blatt: "Zauberblatt", hinweis: "Figur, Typ und Grad wie auf dem Figurenblatt.", abschnitte: [
     { titel: "Zaubern", paare: D.zaubern === null ? [] : [["Zaubern", vz(D.zaubern)], ...(D.spezialisierung ? [["Spezialisierung", `${D.spezialisierung} (* = +2 auf EW:Zaubern)`]] : [])] },
-    { titel: "Zauber", breit: true, spalten: ["Zauber", "AP", "Prozess", "Zauberdauer", "Reichweite", "Wirkungsbereich", "Wirkungsdauer", "Wirk.ziel", "Art", "Wirkung"],
-      zeilen: D.zauber.map((z) => [z.name, t(z.ap), t(z.prozess), t(z.zd), t(z.rw), t(z.wb), t(z.wd), t(z.wz), t(z.art), z.wirkung || ""]) },
-    { titel: "Wichtige magische Gegenstände, Trünke, Schriftrollen", spalten: ["Gegenstand", "Wirkung, Inhalt"], zeilen: D.mittel },
+    { titel: "Zauber", breit: true, spalten: ["Zauber", "AP", "Prozess", "Zauberdauer", "Reichweite", "Wirkungsbereich", "Wirkungsdauer", "Wirk.ziel", "Art"],
+      zeilen: D.zauber.map((z) => [z.name, t(z.ap), t(z.prozess), t(z.zd), t(z.rw), t(z.wb), t(z.wd), t(z.wz), t(z.art)]) },
+    { titel: "Wichtige magische Gegenstände, Trünke, Schriftrollen", spalten: ["Gegenstand"], zeilen: D.mittel },
   ] });
   blaetter.push({ blatt: "Ausrüstung", hinweis: "Waffen und getragene Rüstung stehen beim Abenteuerblatt, Zaubermittel beim Zauberblatt.", abschnitte: [
-    { titel: "Gegenstände", breit: true, spalten: ["Gegenstand", "Anzahl", "kg", "Wirkung, Inhalt"], zahlen: [1, 2], zeilen: D.ausruestung },
+    { titel: "Gegenstände", breit: true, spalten: ["Gegenstand", "Anzahl", "kg"], zahlen: [1, 2], zeilen: D.ausruestung },
     { titel: "Ausrüstung bei Spielbeginn", text: D.startAusruestung },
     { titel: "Last", text: D.last },
   ] });

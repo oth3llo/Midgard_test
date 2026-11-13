@@ -10,9 +10,9 @@ const html = () => new (f().HTMLField)({ required: true, blank: true, initial: "
 const objekt = () => new (f().ObjectField)({ required: true, initial: {} });
 const liste = (feld) => new (f().ArrayField)(feld, { required: true, initial: [] });
 
-/** Felder, die jeder Gegenstand hat: Kurzwirkung in eigenen Worten, Beschreibung, Fundstelle. */
+/** Felder, die jeder Gegenstand hat: Beschreibung, Fundstelle. */
 function gemeinsam() {
-  return { kurzwirkung: text(), beschreibung: html(), quelle: text() };
+  return { beschreibung: html(), quelle: text() };
 }
 
 class FertigkeitDaten extends foundry.abstract.TypeDataModel {

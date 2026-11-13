@@ -48,7 +48,7 @@ export async function bestaetigungEinholen(dateinamen) {
       window: { title: "Regelwerk importieren" },
       content: `<div class="midgard-dialog"><p>Folgende Datei(en) werden eingelesen:</p><ul>${liste}</ul>
         <p><strong>Ich bestätige, dass ich diese PDF(s) rechtmäßig erworben habe und die Inhalte nur in meiner eigenen Spielrunde nutze.</strong></p>
-        <p class="hinweis">Ist ein Buch oder Abenteuer schon importiert, werden alle seine Einträge (Regeln, Zauber, Fertigkeiten, Waffen, Rüstungen, Typen, Rassen, Ausrüstung, Gegner) gelöscht und neu angelegt; Änderungen von Hand an diesen Kompendium-Einträgen gehen dabei verloren. Gegenstände auf Charakterbögen bleiben unverändert.</p>
+        <p class="hinweis">Ist ein Buch oder Abenteuer schon importiert, werden alle seine Einträge (Regeln, Zauber, Fertigkeiten, Waffen, Rüstungen, Typen, Rassen, Ausrüstung, Gegner) gelöscht und neu angelegt; Änderungen von Hand an diesen Kompendium-Einträgen gehen dabei verloren. Kopien auf Charakterbögen und in der Welt erhalten den neuen Beschreibungstext, ihre Spielwerte bleiben.</p>
         <p class="hinweis">Die Texte werden nur in den Kompendien dieser Welt gespeichert. Die Bestätigung wird mit Datum und Benutzer in der Welt vermerkt.</p></div>`,
       yes: { label: "Bestätigen und importieren" }, no: { label: "Abbrechen" },
       rejectClose: false,
@@ -99,6 +99,7 @@ export async function pdfImportieren(daten, { dateiname = "PDF", stumm = false, 
       const bekannt = new Set((pack ? await pack.getDocuments() : []).flatMap((d) => [d.name, d.system?.art]).filter(Boolean));
       const gegner = gegnerAusAbenteuer(zeilen, { bekannt });
       const bericht = { buch: abenteuer.titel, teile: [await gegnerSchreiben(gegner, abenteuer.titel)], dateiname, abenteuer: true };
+      bericht.kopien = await kopienNachziehen();
       await protokollieren({ datei: dateiname, buch: abenteuer.titel, fingerabdruck: ausgabeFingerabdruck(zeilen, doc.numPages), gepruefteAusgabe: false });
       Hooks.callAll("midgardKompendienGeaendert");
       if (!stumm) berichtZeigen(bericht);
@@ -123,6 +124,7 @@ export async function pdfImportieren(daten, { dateiname = "PDF", stumm = false, 
     bericht.textpruefung = pruefbericht();
     await protokollErgaenzen(bericht.textpruefung.zusammenfassung);
     bericht.links = await allesVerlinken();
+    bericht.kopien = await kopienNachziehen();
     bericht.dateiname = dateiname;
     Hooks.callAll("midgardKompendienGeaendert");
     if (!stumm) berichtZeigen(bericht);
@@ -287,6 +289,50 @@ async function leereOrdnerLoeschen(pack) {
   if (leer.length) await Folder.deleteDocuments(leer, { pack: pack.collection });
 }
 
+/**
+ * Kopien nachziehen: Gegenstände auf Bögen und in der Welt sowie in die Welt übernommene Gegner
+ * bekommen nach einem Import die Beschreibung ihres Kompendium-Eintrags. Nur der Text wird ersetzt;
+ * Spielwerte (Fertigkeitswert, Anzahl, getragen …) bleiben, weil sie zum Charakter gehören.
+ * Zuordnung: fester Schlüssel des Eintrags (flags.midgard5-cmt.schluessel, wird beim Ziehen mitkopiert),
+ * sonst Kompendium-Herkunft, sonst eindeutig gleicher Typ und Name.
+ */
+export async function kopienNachziehen() {
+  const werte = (c) => (c?.values ? [...c.values()] : c?.[Symbol.iterator] ? [...c] : []);
+  const nachSchluessel = new Map(), nachUuid = new Map(), nachName = new Map();
+  for (const pack of werte(game.packs)) {
+    if (!String(pack.collection ?? "").startsWith("world.midgard-") || !["Item", "Actor"].includes(pack.documentName)) continue;
+    for (const d of await pack.getDocuments()) {
+      if (!d.getFlag?.(SYSTEM_ID, "pdfImport")) continue;
+      const text = d.system?.beschreibung ?? "";
+      const schl = d.getFlag(SYSTEM_ID, "schluessel");
+      if (schl) nachSchluessel.set(schl, text);
+      nachUuid.set(d.uuid, text);
+      const k = `${pack.documentName}|${d.type}|${d.name}`;
+      nachName.set(k, nachName.has(k) ? null : text); // null: mehrdeutig, nicht verwenden
+    }
+  }
+  const quelle = (doc, art) => {
+    const schl = doc.flags?.[SYSTEM_ID]?.schluessel;
+    if (schl && nachSchluessel.has(schl)) return nachSchluessel.get(schl);
+    const herkunft = doc._stats?.compendiumSource ?? doc.flags?.core?.sourceId;
+    if (herkunft && nachUuid.has(herkunft)) return nachUuid.get(herkunft);
+    return nachName.get(`${art}|${doc.type}|${doc.name}`) ?? null;
+  };
+  let n = 0;
+  for (const item of werte(game.items)) {
+    const t = quelle(item, "Item");
+    if (t !== null && t !== (item.system?.beschreibung ?? "")) { await item.update({ "system.beschreibung": t }); n++; }
+  }
+  for (const actor of werte(game.actors)) {
+    const t = quelle(actor, "Actor");
+    if (t !== null && t !== (actor.system?.beschreibung ?? "")) { await actor.update({ "system.beschreibung": t }); n++; }
+    const aenderung = werte(actor.items).map((i) => ({ i, t: quelle(i, "Item") })).filter(({ i, t }) => t !== null && t !== (i.system?.beschreibung ?? ""))
+      .map(({ i, t }) => ({ _id: i.id, "system.beschreibung": t }));
+    if (aenderung.length) { await actor.updateEmbeddedDocuments("Item", aenderung, { render: false }); n += aenderung.length; }
+  }
+  return n;
+}
+
 /** Feste ID aus einem Schlüssel (16 Zeichen, base62), damit Verweise bei erneutem Import gültig bleiben. */
 export function stabileId(schluessel) {
   let h = 0xcbf29ce484222325n;
@@ -396,9 +442,10 @@ function berichtZeigen(b) {
     <p>Übernommen:</p>
     <ul>${b.teile.map((t) => t.kategorie === "regeln" ? `<li>Regeln: ${t.kapitel ?? 0} Kapitel mit ${t.angelegt} Seiten</li>` : `<li>${esc(t.kategorie)}: ${t.angelegt} angelegt${t.ersetzt ? ` (${t.ersetzt} vorherige ersetzt)` : ""}, ${t.geschrieben} mit Beschreibung</li>`).join("")}</ul>
     ${b.abenteuer ? "" : `<p>${b.links ?? 0} Texte mit Verweisen auf Regeln, Zauber, Fertigkeiten und Gegenstände versehen.</p>`}
+    ${b.kopien ? `<p>${b.kopien} Kopien auf Charakterbögen und in der Welt mit dem neuen Beschreibungstext versehen (Spielwerte unverändert).</p>` : ""}
     ${b.textpruefung ? textpruefungHtml(b.textpruefung) : ""}
     ${b.teile.map((t) => liste(`${t.kategorie}: in der PDF gefunden, aber nicht zugeordnet`, t.nichtZugeordnet) + liste(`${t.kategorie}: ohne Beschreibung aus diesem Buch`, t.ohne)).join("")}
-    <p class="hinweis">Die Texte stehen nur in den Kompendien dieser Welt. Würfeltabellen, Beispiele und Merkkästen werden erkannt und eigens dargestellt; mehrspaltige Tabellen können unvollständig sein. Ein erneuter Import ersetzt alle Einträge dieses Buches vollständig, auch von Hand geänderte. Bereits auf Charakterbögen liegende Gegenstände und in die Welt übernommene Einträge behalten ihren Stand, bis sie erneut übernommen werden.</p>
+    <p class="hinweis">Die Texte stehen nur in den Kompendien dieser Welt. Würfeltabellen, Beispiele und Merkkästen werden erkannt und eigens dargestellt; mehrspaltige Tabellen können unvollständig sein. Ein erneuter Import ersetzt alle Einträge dieses Buches vollständig, auch von Hand geänderte. Kopien auf Charakterbögen und in der Welt erhalten den neuen Beschreibungstext; ihre Spielwerte bleiben.</p>
   </div>`;
   if (D) D.prompt({ window: { title: "Regelwerk importiert" }, content: inhalt, ok: { label: "OK" }, rejectClose: false }).catch(() => {});
   else ui.notifications.info(`Midgard: ${b.teile.map((t) => `${t.geschrieben} ${t.kategorie}`).join(", ")} importiert.`);

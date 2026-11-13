@@ -61,7 +61,7 @@ export class GegenstandBogen extends ItemSheetV2 {
     // Werte zweispaltig; Reihenfolge aus dem Datenmodell. Gesperrt ohne leere Felder und ohne die Schlagwörter.
     const felderListe = el("dl", { class: "mg-felder" });
     for (const [schluessel, feld] of Object.entries(felder)) {
-      if (["beschreibung", "kurzwirkung", "quelle"].includes(schluessel)) continue;
+      if (["beschreibung", "quelle"].includes(schluessel)) continue;
       const wert = item.system[schluessel];
       if (!bearbeitbar && (leer(wert) || (SCHLAGWORTE[item.type] ?? []).includes(schluessel))) continue;
       const lang = !bearbeitbar && String(detailText(schluessel, wert)).length > 40;
@@ -83,9 +83,6 @@ export class GegenstandBogen extends ItemSheetV2 {
     const details = panel("details", felderListe.children.length ? el("section", { class: "karte mg-werte" }, felderListe) : el("p", { class: "mg-leer", text: "Keine weiteren Werte." }));
 
     const textKarte = el("section", { class: "karte mg-textkarte" });
-    if (bearbeitbar || item.system.kurzwirkung) textKarte.append(el("label", { class: "mg-kurz" }, el("span", { text: FELDNAMEN.kurzwirkung }),
-      bearbeitbar ? el("input", { type: "text", name: "system.kurzwirkung", value: item.system.kurzwirkung ?? "", placeholder: "ein Satz in eigenen Worten" })
-        : el("p", { text: item.system.kurzwirkung })));
 
     // Beschreibung immer formatiert anzeigen; Bearbeiten (HTML) nur auf Knopfdruck, danach wieder die Ansicht
     const kopfzeile = el("div", { class: "mg-beschreibung-kopf" }, el("h3", { text: FELDNAMEN.beschreibung }));

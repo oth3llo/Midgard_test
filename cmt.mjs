@@ -8,6 +8,7 @@ import "./daten/lernkosten.js";
 import "./daten/zauber.js";
 import "./app.js";
 import { GEGENSTAND_MODELLE } from "./module/datenmodelle.mjs";
+import { einstellungRegistrieren as textFormatRegistrieren, texteUmstellen, kaestenAufwerten } from "./module/textformat.mjs";
 import { einstellungenRegistrieren, kompendienAufbauen, kompendienOhnePdf, kodexImportiertPruefen, KOMPENDIUM_STAND } from "./module/kompendien.mjs";
 import { KompendiumBrowser, knopfEinbauen } from "./module/browser.mjs";
 import { GegenstandBogen } from "./module/gegenstand-bogen.mjs";
@@ -51,7 +52,8 @@ Hooks.once("init", () => {
   gegnerEinstellungen();
   tokenHookEinrichten();
   weltImportEinrichten();
-  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, kompendienOhnePdf, angreifen, gegnerAuswuerfeln, inWelt: (id, o) => packInWelt(game.packs.get(id), o), inWeltDialog: (id) => importDialog(game.packs.get(id)), pdfImport: pdfImportStarten, pdfImportieren, updatePruefen, stand: KOMPENDIUM_STAND,
+  textFormatRegistrieren();
+  game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, kompendienOhnePdf, angreifen, gegnerAuswuerfeln, inWelt: (id, o) => packInWelt(game.packs.get(id), o), inWeltDialog: (id) => importDialog(game.packs.get(id)), pdfImport: pdfImportStarten, pdfImportieren, texteUmstellen, kaestenAufwerten, updatePruefen, stand: KOMPENDIUM_STAND,
     start: () => StartDialog.oeffnen(), regelwerke: () => new RegelwerkeFenster().render({ force: true }),
     epVerteilen: (verteilung, anlass) => (verteilung ? epVerteilen(verteilung, anlass) : new EpFenster().render({ force: true })) };
   console.log(`${SYSTEM_ID} | Midgard-CMT ${game.system.version} geladen`);
@@ -64,6 +66,7 @@ Hooks.once("ready", async () => {
   try {
     await kompendienAufbauen();
     await kodexImportiertPruefen();
+    await texteUmstellen();
   } catch (fehler) {
     console.error(`${SYSTEM_ID} | Kompendien konnten nicht eingerichtet werden`, fehler);
     ui.notifications.error("Midgard: Kompendien konnten nicht eingerichtet werden (Details in der Konsole).");

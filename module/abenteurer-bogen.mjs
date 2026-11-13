@@ -634,21 +634,19 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const gruppen = ZAUBERGRUPPEN.map((g) => [g, zauber.filter((z) => z.system.gruppe === g).sort((a, b) => a.system.stufe - b.system.stufe || a.name.localeCompare(b.name, "de"))]).filter(([, l]) => l.length);
     const sonstige = zauber.filter((z) => !ZAUBERGRUPPEN.includes(z.system.gruppe));
     if (sonstige.length) gruppen.push(["Sonstige", sonstige]);
-    // Spalte „Wirkung“ nur, wenn mindestens ein Zauber eine Kurzwirkung hat
-    const mitWirkung = zauber.some((z) => z.system.kurzwirkung);
     const tabelle = el("table", { class: "ma-tabelle ma-zauberblatt" },
-      el("thead", {}, el("tr", {}, ["Zauber", "Stufe", "AP", "Art", "Zauberdauer", "Reichweite", "Wirkungsziel", "Wirkungsbereich", "Wirkungsdauer", ...(mitWirkung ? ["Wirkung"] : []), ""].map((t) => el("th", { text: t })))),
+      el("thead", {}, el("tr", {}, ["Zauber", "Stufe", "AP", "Art", "Zauberdauer", "Reichweite", "Wirkungsziel", "Wirkungsbereich", "Wirkungsdauer", ""].map((t) => el("th", { text: t })))),
       gruppen.map(([g, l]) => el("tbody", {},
-        el("tr", { class: "ma-gruppe" }, el("th", { colspan: mitWirkung ? "11" : "10", text: g })),
+        el("tr", { class: "ma-gruppe" }, el("th", { colspan: "10", text: g })),
         l.map((z) => el("tr", {},
           el("td", {}, this.#itemName({ id: z.id, img: z.img, name: z.name }), d.kannZaubern ? el("a", { class: "ma-wurf ma-zauberwurf", "data-wurf": "zauber", "data-item": z.id, title: `EW:Zaubern ${z.name}`, "aria-label": `EW:Zaubern ${z.name}` }, el("i", { class: "fa-solid fa-dice-d20", "aria-hidden": "true" })) : null), el("td", { class: "zahl", text: z.system.stufe }),
           el("td", { text: z.system.ap }), el("td", { text: z.system.art }), el("td", { text: z.system.zauberdauer }), el("td", { text: z.system.reichweite }),
           el("td", { text: z.system.wirkungsziel }), el("td", { text: z.system.wirkungsbereich }), el("td", { text: z.system.wirkungsdauer }),
-          mitWirkung ? el("td", { class: "ma-wirkung", text: z.system.kurzwirkung || "" }) : null, el("td", {}, this.#loeschKnopf(z.id)))))));
+          el("td", {}, this.#loeschKnopf(z.id)))))));
     // Zaubermittel, Tränke und Spruchrollen aus dem Gepäck: auch für Abenteurer, die selbst nicht zaubern
     const mittel = items.filter((i) => i.type === "gegenstand" && (i.system.kategorie === "Zaubermittel" || /spruchrolle|trank|elixier|amulett|zauber/i.test(i.name)));
     const mittelKarte = karte("Zaubermittel im Gepäck", "ma-k-zaubermittel", mittel.length
-      ? el("ul", { class: "ma-zaubermittel" }, mittel.map((m) => el("li", {}, this.#itemName({ id: m.id, img: m.img, name: m.name }), m.system.anzahl > 1 ? el("span", { class: "ma-anzahl", text: `× ${m.system.anzahl}` }) : null, m.system.kurzwirkung ? el("small", { text: m.system.kurzwirkung }) : null)))
+      ? el("ul", { class: "ma-zaubermittel" }, mittel.map((m) => el("li", {}, this.#itemName({ id: m.id, img: m.img, name: m.name }), m.system.anzahl > 1 ? el("span", { class: "ma-anzahl", text: `× ${m.system.anzahl}` }) : null)))
       : el("p", { class: "info", text: "Keine Zaubermittel. Tränke, Spruchrollen und Amulette aus dem Kompendium Ausrüstung erscheinen hier." }),
       el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("gegenstaende", { neben: this }) }, icon("fa-flask"), " Kompendium: Ausrüstung"));
     if (!d.kannZaubern && !zauber.length) {
@@ -674,12 +672,12 @@ export class AbenteurerBogen extends ActorSheetV2 {
     return [
       karte("Geld", "ma-k-geld", this.#geldFeld(s)),
       karte("Gegenstände", "ma-k-sachen", el("table", { class: "ma-tabelle" },
-        el("thead", {}, el("tr", {}, ["Gegenstand", "Anzahl", "kg", "Wirkung, Inhalt, Erläuterung", ""].map((t) => el("th", { text: t })))),
+        el("thead", {}, el("tr", {}, ["Gegenstand", "Anzahl", "kg", ""].map((t) => el("th", { text: t })))),
         el("tbody", {}, sachen.length ? sachen.map((g) => el("tr", {},
           el("td", {}, this.#itemName({ id: g.id, img: g.img, name: g.name })),
           el("td", { class: "zahl" }, this.#itemWert(g, "system.anzahl", g.system.anzahl)), el("td", { class: "zahl", text: zahlText(g.system.gewicht) }),
-          el("td", { text: g.system.kurzwirkung }), el("td", {}, this.#loeschKnopf(g.id))))
-          : el("tr", {}, el("td", { colspan: "5", class: "info", text: "Keine Gegenstände." })))),
+          el("td", {}, this.#loeschKnopf(g.id))))
+          : el("tr", {}, el("td", { colspan: "4", class: "info", text: "Keine Gegenstände." })))),
         this.#lastAnzeige(s),
         this.isEditable ? el("div", { class: "ma-knopfreihe" },
           el("button", { type: "button", class: "ma-knopf", onclick: () => KompendiumBrowser.oeffnen("gegenstaende", { neben: this }) }, icon("fa-book-open"), " Kompendium: Ausrüstung"),

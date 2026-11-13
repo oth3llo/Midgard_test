@@ -17,7 +17,7 @@ function sollStand() {
 }
 
 const ORDNER = "Midgard 5";
-const BEHALTEN = ["beschreibung", "kurzwirkung"]; // in der Welt nachgetragene Texte
+const BEHALTEN = ["beschreibung"]; // in der Welt nachgetragene Texte
 
 export function einstellungenRegistrieren() {
   game.settings.register(SYSTEM_ID, "kompendiumStand", {
@@ -86,7 +86,7 @@ async function abgleichen(pack, soll, kat) {
     const alt = vorhanden.get(eintrag._id);
     if (!alt) continue; // angelegt wird nur durch den Import
     // aus früheren Versionen: ohne Import angelegt und ohne nachgetragenen Text
-    if (!alt.getFlag?.(SYSTEM_ID, "pdfImport") && !alt.system.beschreibung && !alt.system.kurzwirkung) { loeschen.push(alt.id); continue; }
+    if (!alt.getFlag?.(SYSTEM_ID, "pdfImport") && !alt.system.beschreibung) { loeschen.push(alt.id); continue; }
     const daten = foundry.utils.deepClone(eintrag);
     daten.img = eintragBild(kat, eintrag) ?? daten.img; // eigene Symbole aus bilder/
     for (const k of BEHALTEN) if (!daten.system[k] && alt.system[k]) daten.system[k] = alt.system[k];

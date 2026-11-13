@@ -86,7 +86,7 @@ export const FELDNAMEN = {
   apBonus: "AP-Bonus", standMod: "Stand-Modifikator", freiWaffen: "Freie Waffen", le: "Lerneinheiten",
   waffenLE: "Waffen-LE", zauberLE: "Zauber-LE", zauberGruppen: "Zaubergruppen", typisch: "Typische Fertigkeiten",
   typischerZauber: "Typischer Zauber", ausruestung: "Ausrüstung", zauberKosten: "Zauberkosten",
-  kurzwirkung: "Kurzwirkung", beschreibung: "Beschreibung", quelle: "Quelle", preisText: "Preis", kategorie: "Kategorie", unterkategorie: "Art",
+  beschreibung: "Beschreibung", quelle: "Quelle", preisText: "Preis", kategorie: "Kategorie", unterkategorie: "Art",
 };
 
 /** Anzeigetext für verschachtelte Regeldaten (Startlisten, typische Fertigkeiten, Fähigkeiten). */

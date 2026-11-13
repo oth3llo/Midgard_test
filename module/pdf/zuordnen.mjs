@@ -106,7 +106,7 @@ function zeilenMitStrichen(zeilen) {
  * einen zweiten Teil mit eigener Kopfleiste (Fälschen: Einsatz und Widerstand). Ohne Stufen: Titel, dann
  * Strichaufzählung, Aufzählung oder Absätze; „Begriff: Erklärung“ mit fettem Begriff.
  */
-function kastenHtml(zeilen) {
+export function kastenHtml(zeilen) {
   const STUFE = /^(.*?)\s*\(([+–-]\d+)\)$/;
   const istTitel = (z) => z.length < 60 && !/[.,;:]$/.test(z) && !STUFE.test(z);
   if (zeilen.some((z) => STUFE.test(z))) {

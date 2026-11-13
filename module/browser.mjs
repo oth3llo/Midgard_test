@@ -100,7 +100,7 @@ export class KompendiumBrowser extends ApplicationV2 {
         }
       }
       if (!worte.length) return true;
-      const heu = normal([e.name, ...def.spalten.map(([f]) => anzeige(feld(e.system, f))), e.system.kurzwirkung].join(" "));
+      const heu = normal([e.name, ...def.spalten.map(([f]) => anzeige(feld(e.system, f)))].join(" "));
       return worte.every((w) => heu.includes(w));
     });
     const sort = this.#sortierung[this.#kat];
@@ -230,11 +230,10 @@ export class KompendiumBrowser extends ApplicationV2 {
       ziel.replaceChildren(el("p", { class: "mb-leer", text: "Eintrag anklicken für Details. Doppelklick öffnet ihn, Ziehen legt ihn auf einen Bogen." }));
       return;
     }
-    const zeilen = Object.entries(e.system).filter(([k, v]) => !["beschreibung", "kurzwirkung"].includes(k) && v !== "" && v !== null && !(Array.isArray(v) && !v.length) && !(typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length));
+    const zeilen = Object.entries(e.system).filter(([k, v]) => k !== "beschreibung" && v !== "" && v !== null && !(Array.isArray(v) && !v.length) && !(typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length));
     ziel.replaceChildren(...[
       el("h3", {}, el("img", { src: e.img, alt: "" }), e.name),
       e.uuid ? el("button", { type: "button", class: "mb-oeffnen", onclick: () => this.#oeffnen(e) }, el("i", { class: "fa-solid fa-up-right-from-square", "aria-hidden": "true" }), " Öffnen") : null,
-      e.system.kurzwirkung ? el("p", { class: "mb-kurz", text: e.system.kurzwirkung }) : null,
       el("dl", {}, zeilen.map(([k, v]) => [el("dt", { text: FELDNAMEN[k] ?? k }), el("dd", { text: detailText(k, v) })])),
       e.system.beschreibung ? (() => {
         // Verweise (@UUID) als anklickbare Links darstellen
