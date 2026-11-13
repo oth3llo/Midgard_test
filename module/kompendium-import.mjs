@@ -1,7 +1,8 @@
 // „In die Welt übernehmen“: Knopf in jedem Midgard-Kompendium (nur Spielleitung). Übernimmt alles oder
 // einen Ordner samt Unterordnern in den passenden Bereich der Welt (Gegner → Akteure, Regeln → Journale,
 // Ausrüstung und Zauber → Gegenstände) und baut die Ordnerstruktur nach. Bereits übernommene Einträge
-// (gleiche Kompendium-Herkunft) werden übersprungen, damit ein zweiter Klick nichts verdoppelt.
+// (gleiche Kompendium-Herkunft) werden vollständig ersetzt: gelöscht und mit derselben ID neu angelegt,
+// damit ein zweiter Klick nichts verdoppelt, den aktuellen Stand bringt und Verweise gültig bleiben.
 import { SYSTEM_ID } from "./kategorien.mjs";
 
 const BEREICH = { Actor: "Akteure", Item: "Gegenstände", JournalEntry: "Journale", RollTable: "Tabellen", Scene: "Szenen" };
@@ -23,7 +24,7 @@ const herkunft = (d) => d._stats?.compendiumSource ?? d.flags?.core?.sourceId ??
  * Übernimmt ein Kompendium (oder einen Ordner daraus) in die Welt.
  * @param {CompendiumCollection} pack
  * @param {object} o  ordnerId: nur dieser Ordner samt Unterordnern (sonst alles)
- * @returns {{angelegt: number, uebersprungen: number, ordner: number, bereich: string}}
+ * @returns {{angelegt: number, ersetzt: number, ordner: number, bereich: string}}
  */
 export async function packInWelt(pack, { ordnerId = null } = {}) {
   const art = pack.documentName;
@@ -59,19 +60,21 @@ export async function packInWelt(pack, { ordnerId = null } = {}) {
     weltId.set(packFolderId, id);
     return id;
   };
-  // bereits übernommene Einträge überspringen
-  const vorhanden = new Set([...welt].map(herkunft).filter(Boolean));
-  const neu = [];
-  let uebersprungen = 0;
+  // bereits übernommene Einträge: löschen und mit derselben ID neu anlegen
+  const vorhanden = new Map();
+  for (const w of welt) { const h = herkunft(w); if (h) vorhanden.set(h, w.id); }
+  const neu = [], alt = [];
   for (const d of docs) {
-    if (vorhanden.has(d.uuid)) { uebersprungen++; continue; }
     const daten = welt.fromCompendium ? welt.fromCompendium(d, { keepId: false }) : (() => { const o = d.toObject(); delete o._id; return o; })();
+    const altId = vorhanden.get(d.uuid);
+    if (altId) { alt.push(altId); daten._id = altId; }
     daten.folder = await ziel(d.folder?.id ?? d.folder);
     daten._stats = { ...(daten._stats ?? {}), compendiumSource: d.uuid };
     neu.push(daten);
   }
-  for (let i = 0; i < neu.length; i += 100) await Klasse.createDocuments(neu.slice(i, i + 100));
-  return { angelegt: neu.length, uebersprungen, ordner: neueOrdner, bereich: BEREICH[art] ?? art };
+  for (let i = 0; i < alt.length; i += 100) await Klasse.deleteDocuments(alt.slice(i, i + 100));
+  for (let i = 0; i < neu.length; i += 100) await Klasse.createDocuments(neu.slice(i, i + 100), { keepId: true });
+  return { angelegt: neu.length, ersetzt: alt.length, ordner: neueOrdner, bereich: BEREICH[art] ?? art };
 }
 
 /** Rückfrage (alles oder ein Ordner), dann übernehmen und das Ergebnis melden. */
@@ -86,7 +89,7 @@ export async function importDialog(pack) {
     const optionen = [`<option value="">Alles (${anzahl} Einträge)</option>`, ...liste.map((o) => `<option value="${esc(o.id)}">${"  ".repeat(o.pfad.length - 1)}${esc(o.pfad.at(-1))}</option>`)].join("");
     const wahl = await D.prompt({
       window: { title: `${pack.metadata?.label ?? pack.title}: in die Welt übernehmen` },
-      content: `<div class="midgard-dialog"><p>Übernimmt die Einträge mit ihrer Ordnerstruktur in die ${esc(BEREICH[pack.documentName] ?? pack.documentName)} der Welt. Bereits übernommene werden übersprungen.</p>
+      content: `<div class="midgard-dialog"><p>Übernimmt die Einträge mit ihrer Ordnerstruktur in die ${esc(BEREICH[pack.documentName] ?? pack.documentName)} der Welt. Bereits übernommene werden vollständig ersetzt (Änderungen daran gehen verloren).</p>
         ${liste.length ? `<label>Was übernehmen? <select name="ordner">${optionen}</select></label>` : ""}</div>`,
       ok: { label: "Übernehmen", callback: (_ev, knopf) => knopf.form?.elements?.ordner?.value ?? "" },
       rejectClose: false,
@@ -97,7 +100,7 @@ export async function importDialog(pack) {
   const hinweis = ui.notifications.info("Midgard: Einträge werden übernommen …", { permanent: true });
   try {
     const e = await packInWelt(pack, { ordnerId });
-    ui.notifications.info(`Midgard: ${e.angelegt} Einträge in die ${e.bereich} übernommen${e.uebersprungen ? `, ${e.uebersprungen} schon vorhanden` : ""}${e.ordner ? `, ${e.ordner} Ordner angelegt` : ""}.`);
+    ui.notifications.info(`Midgard: ${e.angelegt} Einträge in die ${e.bereich} übernommen${e.ersetzt ? `, davon ${e.ersetzt} ersetzt` : ""}${e.ordner ? `, ${e.ordner} Ordner angelegt` : ""}.`);
     return e;
   } catch (fehler) {
     console.error(`${SYSTEM_ID} | Übernehmen`, fehler);

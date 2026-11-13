@@ -268,12 +268,25 @@ export function absaetze(zeilen, zeilenabstand) {
       let j = i;
       let k = i;
       while (k < zeilen.length && (zeilen[k].einzug ?? 0) >= 8 && (zeilen[k].spalten?.length ?? 1) < 2) k++;
-      const rechts = Math.max(...zeilen.slice(i, k).map((x) => x.ende ?? 0));
+      // rechter Rand je Seite und Spalte (ein Kasten kann über eine Spalte hinauslaufen)
+      const rechts = new Map();
+      for (const x of zeilen.slice(i, k)) { const sp = `${x.seite}/${x.spalte}`; rechts.set(sp, Math.max(rechts.get(sp) ?? 0, x.ende ?? 0)); }
+      const kurzZeile = (x) => (x.ende ?? 0) < rechts.get(`${x.seite}/${x.spalte}`) - 15 && !/-$/.test(x.text);
+      const STUFE = /\([+–-]\d+\)$/;
+      // Stufenkasten oder Liste (überwiegend kurze Zeilen): jede Zeile, die vor dem Rand endet, schließt
+      // einen Eintrag ab, auch wenn die nächste klein beginnt („starke Windböen“, „überstürzter Angriff“).
+      // In Prosa-Kästen beginnt ein neuer Absatz nur zusätzlich mit Großbuchstaben.
+      const teil = zeilen.slice(i, k);
+      const stufen = teil.some((x) => STUFE.test(x.text));
+      const liste = !stufen && teil.length >= 3 && teil.filter(kurzZeile).length >= teil.length * 0.6;
       for (; j < k; j++) {
-        const t = zeilen[j].text, letzte = kasten.at(-1), vorige = zeilen[j - 1];
-        // neuer Eintrag nach einer Stufe „(+4)“ oder wenn die vorige Zeile nicht bis zum rechten Rand reichte
-        const kurz = vorige && (vorige.ende ?? rechts) < rechts - 15;
-        const neueZeile = !letzte || /\([+–-]\d+\)$/.test(t) || /\([+–-]\d+\)$/.test(letzte) || (kurz && /^[A-ZÄÖÜ„(]/.test(t));
+        const t = zeilen[j].text, letzte = kasten.at(-1), vorige = j > i ? zeilen[j - 1] : null;
+        const kurz = vorige && kurzZeile(vorige);
+        const gross = /^[A-ZÄÖÜ„(]/.test(t) && !/-$/.test(letzte ?? "");
+        // Titelzeile in eigener Schrift („Wirkungsziel Körper“ über „Reagens …“)
+        const titel = j === i + 1 && kurz && vorige.schrift !== zeilen[j].schrift;
+        const neueZeile = !letzte || titel || STUFE.test(t) || STUFE.test(letzte)
+          || (stufen ? kurz : liste ? kurz || /^- /.test(t) || (gross && /^[A-ZÄÖÜ]/.test(t)) : kurz && gross);
         if (neueZeile) kasten.push(t); else kasten[kasten.length - 1] = verbinden(letzte, t);
       }
       if (kasten.length > 1) { out.push({ kasten }); i = j - 1; continue; }

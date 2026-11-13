@@ -48,6 +48,7 @@ export async function bestaetigungEinholen(dateinamen) {
       window: { title: "Regelwerk importieren" },
       content: `<div class="midgard-dialog"><p>Folgende Datei(en) werden eingelesen:</p><ul>${liste}</ul>
         <p><strong>Ich bestätige, dass ich diese PDF(s) rechtmäßig erworben habe und die Inhalte nur in meiner eigenen Spielrunde nutze.</strong></p>
+        <p class="hinweis">Ist ein Buch oder Abenteuer schon importiert, werden alle seine Einträge (Regeln, Zauber, Fertigkeiten, Waffen, Rüstungen, Typen, Rassen, Ausrüstung, Gegner) gelöscht und neu angelegt; Änderungen von Hand an diesen Kompendium-Einträgen gehen dabei verloren. Gegenstände auf Charakterbögen bleiben unverändert.</p>
         <p class="hinweis">Die Texte werden nur in den Kompendien dieser Welt gespeichert. Die Bestätigung wird mit Datum und Benutzer in der Welt vermerkt.</p></div>`,
       yes: { label: "Bestätigen und importieren" }, no: { label: "Abbrechen" },
       rejectClose: false,
@@ -76,9 +77,10 @@ export async function pdfImportStarten() {
 /**
  * Liest eine Regelwerk-PDF und schreibt die Beschreibungen in die Kompendien.
  * @param {ArrayBuffer} daten
- * @param {object} o  dateiname, ueberschreiben (auch vorhandene, nicht importierte Texte ersetzen), stumm (kein Berichtsfenster)
+ * @param {object} o  dateiname, stumm (kein Berichtsfenster), bestaetigt (ohne Rückfrage).
+ *   Ein erneuter Import ersetzt alles, was zum erkannten Buch oder Abenteuer gehört, vollständig.
  */
-export async function pdfImportieren(daten, { dateiname = "PDF", ueberschreiben = false, stumm = false, bestaetigt = false } = {}) {
+export async function pdfImportieren(daten, { dateiname = "PDF", stumm = false, bestaetigt = false } = {}) {
   if (!bestaetigt && !(await bestaetigungEinholen([dateiname]))) { ui.notifications.info("Midgard: Import abgebrochen."); return null; }
   const fortschritt = ui.notifications.info(`Midgard: ${dateiname} wird gelesen …`, { permanent: true });
   try {
@@ -109,9 +111,9 @@ export async function pdfImportieren(daten, { dateiname = "PDF", ueberschreiben 
     const fingerabdruck = ausgabeFingerabdruck(zeilen, doc.numPages);
     const gepruefteAusgabe = (GEPRUEFTE_AUSGABEN[erkannt.buch] ?? []).includes(fingerabdruck);
     let bericht;
-    if (erkannt.buch === "Das Arkanum") bericht = await arkanumImportieren(zeilen, ueberschreiben);
+    if (erkannt.buch === "Das Arkanum") bericht = await arkanumImportieren(zeilen);
     else {
-      bericht = await kodexImportieren(zeilen, ueberschreiben);
+      bericht = await kodexImportieren(zeilen);
       await game.settings.set(SYSTEM_ID, "kodexImportiert", true); // Assistent freigeben
     }
     bericht.fingerabdruck = fingerabdruck;
@@ -143,16 +145,16 @@ async function protokollErgaenzen(text) {
   await game.settings.set(SYSTEM_ID, "importProtokoll", alt);
 }
 
-async function arkanumImportieren(zeilen, ueberschreiben) {
+async function arkanumImportieren(zeilen) {
   const gelesen = zauberAusArkanum(zeilen).map((z) => ({ ...z, gruppe: z.kategorie ?? z.gruppe }));
-  const teil = await schreiben("zauber", gelesen, { gruppeVon: (z) => z.system.gruppe, buch: "Das Arkanum", ueberschreiben });
+  const teil = await schreiben("zauber", gelesen, { gruppeVon: (z) => z.system.gruppe, buch: "Das Arkanum" });
   const ausArkanum = (e) => e.system.quelle === "Arkanum";
   const mittel = zaubermittelAusArkanum(zeilen, KOMPENDIUM.kategorien.gegenstaende.filter(ausArkanum).map((e) => e.name));
-  const teil2 = await schreiben("gegenstaende", mittel, { buch: "Das Arkanum", ueberschreiben, auswahl: ausArkanum });
+  const teil2 = await schreiben("gegenstaende", mittel, { buch: "Das Arkanum", auswahl: ausArkanum });
   return { buch: "Das Arkanum", teile: [teil, teil2] };
 }
 
-async function kodexImportieren(zeilen, ueberschreiben) {
+async function kodexImportieren(zeilen) {
   const K = window.KODEX;
   const aliase = { ...K.lernName };
   const D = KOMPENDIUM.kategorien;
@@ -160,7 +162,7 @@ async function kodexImportieren(zeilen, ueberschreiben) {
   const fert = fertigkeitenAusKodex(zeilen, [...namen, ...Object.keys(aliase)]);
   const { typen, rassen } = typenUndRassenAusKodex(zeilen);
   const ruestungen = ruestungenAusKodex(zeilen);
-  const buch = "Der Kodex", o = { buch, ueberschreiben, nurPassende: true };
+  const buch = "Der Kodex", o = { buch, nurPassende: true };
   const teile = [];
   teile.push(await schreiben("fertigkeiten", fert, { ...o, aliase }));
   teile.push(await schreiben("waffenfertigkeiten", fert, { ...o, aliase }));
@@ -178,41 +180,43 @@ async function kodexImportieren(zeilen, ueberschreiben) {
 }
 
 /**
- * Gegner (Bestiarium) in das Akteur-Kompendium: ein Ordner je Quelle, darin alphabetisch sortiert.
- * Feste IDs je Quelle und Name; erneuter Import aktualisiert die Spieldaten, eigene Notizen bleiben.
+ * Gegner (Bestiarium, Abenteuerbände) in das Akteur-Kompendium: ein Ordner je Quelle, darin
+ * alphabetisch sortiert. Feste IDs je Quelle und Name. Ein erneuter Import ersetzt alle Gegner dieser
+ * Quelle vollständig (auch von Hand geänderte und eigene Notizen); Gegner anderer Quellen bleiben.
  */
 async function gegnerSchreiben(wesen, buch) {
   const pack = game.packs.get(`world.${GEGNER_PACK}`) ?? await gegnerPackHolen();
-  const ergebnis = { kategorie: "gegner", gelesen: wesen.length, angelegt: 0, geschrieben: 0, behalten: [], nichtZugeordnet: [], ohne: [] };
+  const ergebnis = { kategorie: "gegner", gelesen: wesen.length, angelegt: 0, ersetzt: 0, geschrieben: 0, nichtZugeordnet: [], ohne: [] };
   if (!wesen.length) return ergebnis;
-  const vorhanden = new Map((await pack.getDocuments()).map((d) => [d.id, d]));
   const gesperrt = pack.locked;
   if (gesperrt) await pack.configure({ locked: false });
   try {
-    const ordner = await ordnerPfad(pack, [buch], "Actor", {}, "a");
-    const neu = [], aendern = [];
+    const neu = [];
     for (const w of [...wesen].sort((a, b) => a.name.localeCompare(b.name, "de"))) {
       const d = gegnerAusBestiarium(w, { quelle: `${buch}, S. ${w.seite}`, html: alsHtml(w.absaetze, `${buch}, S. ${w.seite}`), img: bildPfad("gegner/gegner") ?? undefined });
       d._id = stabileId(`gegner:${buch}:${w.name}`);
-      d.folder = ordner;
       d.flags = { [SYSTEM_ID]: { pdfImport: { buch, seite: w.seite } } };
-      const alt = vorhanden.get(d._id);
-      if (!alt) { neu.push(d); continue; }
-      d.system.notizen = alt.system.notizen ?? "";
-      aendern.push({ _id: d._id, name: d.name, folder: ordner, system: d.system, [`flags.${SYSTEM_ID}.pdfImport`]: d.flags[SYSTEM_ID].pdfImport });
+      neu.push(d);
     }
-    if (neu.length) await Actor.createDocuments(neu, { pack: pack.collection, keepId: true });
-    if (aendern.length) await Actor.updateDocuments(aendern, { pack: pack.collection, recursive: false, diff: false });
-    Object.assign(ergebnis, { angelegt: neu.length, geschrieben: neu.length + aendern.length });
+    const ids = new Set(neu.map((d) => d._id));
+    const alt = (await pack.getDocuments()).filter((d) => ids.has(d.id) || d.getFlag(SYSTEM_ID, "pdfImport")?.buch === buch).map((d) => d.id);
+    if (alt.length) await Actor.deleteDocuments(alt, { pack: pack.collection });
+    const ordner = await ordnerPfad(pack, [buch], "Actor", {}, "a");
+    for (const d of neu) d.folder = ordner;
+    await Actor.createDocuments(neu, { pack: pack.collection, keepId: true });
+    await leereOrdnerLoeschen(pack);
+    Object.assign(ergebnis, { angelegt: neu.length, ersetzt: alt.length, geschrieben: neu.length });
   } finally { if (gesperrt) await pack.configure({ locked: true }); }
   return ergebnis;
 }
 
 /**
- * Legt die Einträge einer Kategorie im Welt-Kompendium an bzw. ergänzt sie: Spielwerte aus dem
- * geprüften Datensatz (daten/kompendium.js), Beschreibung aus der PDF. Einträge des Datensatzes,
- * zu denen das Buch keinen Text hat, werden ohne Beschreibung angelegt, damit die Kategorie
- * vollständig ist (z. B. Mensch, Schilde).
+ * Legt die Einträge einer Kategorie im Welt-Kompendium neu an: Spielwerte aus dem geprüften
+ * Datensatz (daten/kompendium.js), Beschreibung aus der PDF. Ein erneuter Import ersetzt alles,
+ * was zu diesem Buch gehört, vollständig: vorhandene Einträge werden gelöscht und mit derselben ID
+ * neu angelegt (Verweise bleiben gültig), auch von Hand geänderte. Einträge des Datensatzes, zu denen
+ * das Buch keinen Text hat, werden ohne Beschreibung angelegt, damit die Kategorie vollständig ist
+ * (z. B. Mensch, Schilde). Einträge anderer Bücher im selben Kompendium bleiben unberührt.
  */
 // Unterordner je Kategorie: Zauber nach Gruppe, Waffen nach Fertigkeit, Ausrüstung nach Kategorie und Art, Typen nach Art
 const ORDNER_VON = {
@@ -222,68 +226,65 @@ const ORDNER_VON = {
   typen: (e) => [e.system.artName],
 };
 
-async function schreiben(kat, gelesen, { aliase, gruppeVon, nameVon, buch, ueberschreiben, nurPassende = false, auswahl = () => true }) {
+async function schreiben(kat, gelesen, { aliase, gruppeVon, nameVon, buch, nurPassende = false, auswahl = () => true }) {
   const pack = game.packs.get(packId(kat));
   if (!pack) throw new Error(`Kompendium ${kat} fehlt; zuerst die Welt als Spielleiter laden.`);
-  const vorhanden = new Map((await pack.getDocuments()).map((d) => [d.id, d]));
   const satz = KOMPENDIUM.kategorien[kat].filter(auswahl); // nur Einträge dieses Buches
   const ziele = satz.map((e) => ({ _id: e._id, name: nameVon ? nameVon(e) : e.name, system: e.system, eintrag: e }));
   const gv = gruppeVon && ((z) => gruppeVon(z.eintrag));
   const { paare, nichtZugeordnet } = zuordnen(gelesen, ziele, { aliase, gruppeVon: gv });
   const text = new Map(paare.map(([g, z]) => [z._id, g]));
-  const neu = [], aenderungen = [], behalten = [], ohne = [];
+  const neu = [], ohne = [];
   for (const e of satz) {
     const g = text.get(e._id);
-    const html = g ? alsHtml(g.absaetze, `${buch}, S. ${g.seite}`) : "";
-    const flag = g ? { buch, seite: g.seite } : { buch, seite: null };
     if (!g) ohne.push(e.name);
-    const doc = vorhanden.get(e._id);
+    const d = foundry.utils.deepClone(e);
     const bild = eintragBild(kat, e); // eigenes Symbol aus bilder/, sonst das Foundry-Symbol des Datensatzes
-    if (!doc) {
-      const d = foundry.utils.deepClone(e);
-      if (bild) d.img = bild;
-      d.system.beschreibung = html;
-      d.flags[SYSTEM_ID].pdfImport = flag;
-      neu.push(d);
-      continue;
-    }
-    if (bild && doc.img !== bild) aenderungen.push({ _id: e._id, img: bild });
-    if (!g) continue;
-    // selbst geschriebener Text (Eintrag ohne Importmarke) bleibt, außer auf ausdrücklichen Wunsch
-    if (doc.system.beschreibung && !doc.getFlag(SYSTEM_ID, "pdfImport") && !ueberschreiben) { behalten.push(e.name); continue; }
-    const vorhandeneAenderung = aenderungen.find((x) => x._id === e._id);
-    if (vorhandeneAenderung) Object.assign(vorhandeneAenderung, { "system.beschreibung": html, [`flags.${SYSTEM_ID}.pdfImport`]: flag });
-    else aenderungen.push({ _id: e._id, "system.beschreibung": html, [`flags.${SYSTEM_ID}.pdfImport`]: flag });
+    if (bild) d.img = bild;
+    d.system.beschreibung = g ? alsHtml(g.absaetze, `${buch}, S. ${g.seite}`) : "";
+    d.flags[SYSTEM_ID].pdfImport = g ? { buch, seite: g.seite } : { buch, seite: null };
+    neu.push(d);
   }
-  if (neu.length || aenderungen.length || ORDNER_VON[kat]) {
-    const gesperrt = pack.locked;
-    if (gesperrt) await pack.configure({ locked: false });
-    try {
-      if (ORDNER_VON[kat]) {
-        const ordnerId = new Map();
-        for (const e of satz) {
-          const pfad = ORDNER_VON[kat](e).filter(Boolean);
-          const schl = pfad.join("/");
-          if (!ordnerId.has(schl)) ordnerId.set(schl, pfad.length ? await ordnerPfad(pack, pfad, "Item") : null);
-          const f = ordnerId.get(schl);
-          const d = neu.find((x) => x._id === e._id);
-          if (d) d.folder = f;
-          else if (vorhanden.get(e._id) && (vorhanden.get(e._id).folder?.id ?? vorhanden.get(e._id).folder ?? null) !== f) {
-            const a = aenderungen.find((x) => x._id === e._id);
-            if (a) a.folder = f; else aenderungen.push({ _id: e._id, folder: f });
-          }
-        }
+  // zu ersetzen: alle Einträge dieses Buches (aus dem Datensatz oder mit seiner Importmarke)
+  const ids = new Set(satz.map((e) => e._id));
+  const alt = (await pack.getDocuments()).filter((d) => ids.has(d.id) || d.getFlag(SYSTEM_ID, "pdfImport")?.buch === buch).map((d) => d.id);
+  const gesperrt = pack.locked;
+  if (gesperrt) await pack.configure({ locked: false });
+  try {
+    if (alt.length) await Item.deleteDocuments(alt, { pack: pack.collection });
+    if (ORDNER_VON[kat]) {
+      const ordnerId = new Map();
+      for (const d of neu) {
+        const pfad = ORDNER_VON[kat](d).filter(Boolean);
+        const schl = pfad.join("/");
+        if (!ordnerId.has(schl)) ordnerId.set(schl, pfad.length ? await ordnerPfad(pack, pfad, "Item") : null);
+        d.folder = ordnerId.get(schl);
       }
-      if (neu.length) await Item.createDocuments(neu, { pack: pack.collection, keepId: true });
-      if (aenderungen.length) await Item.updateDocuments(aenderungen, { pack: pack.collection });
-    } finally { if (gesperrt) await pack.configure({ locked: true }); }
-  }
+    }
+    if (neu.length) await Item.createDocuments(neu, { pack: pack.collection, keepId: true });
+    await leereOrdnerLoeschen(pack);
+  } finally { if (gesperrt) await pack.configure({ locked: true }); }
   return {
-    kategorie: kat, gelesen: gelesen.length, angelegt: neu.length, geschrieben: paare.length - behalten.length, behalten,
+    kategorie: kat, gelesen: gelesen.length, angelegt: neu.length, ersetzt: alt.length, geschrieben: paare.length,
     // beim Kodex gehören nicht zugeordnete Einträge meist in die andere Kategorie
     nichtZugeordnet: nurPassende ? [] : nichtZugeordnet.map((g) => g.name),
     ohne,
   };
+}
+
+/** Ordner ohne Einträge und ohne nichtleere Unterordner entfernen (Reste früherer Importe). */
+async function leereOrdnerLoeschen(pack) {
+  const ordner = [...(pack.folders ?? [])];
+  if (!ordner.length) return;
+  const belegt = new Set((await pack.getIndex({ fields: ["folder"] })).map((e) => e.folder?.id ?? e.folder).filter(Boolean));
+  const eltern = (f) => f.folder?.id ?? f.folder ?? null;
+  let weiter = true;
+  while (weiter) { // Eltern belegter Ordner sind ebenfalls belegt
+    weiter = false;
+    for (const f of ordner) if (belegt.has(f.id) && eltern(f) && !belegt.has(eltern(f))) { belegt.add(eltern(f)); weiter = true; }
+  }
+  const leer = ordner.filter((f) => !belegt.has(f.id)).map((f) => f.id);
+  if (leer.length) await Folder.deleteDocuments(leer, { pack: pack.collection });
 }
 
 /** Feste ID aus einem Schlüssel (16 Zeichen, base62), damit Verweise bei erneutem Import gültig bleiben. */
@@ -319,7 +320,7 @@ async function ordnerPfad(pack, pfad, typ, flags = {}, sortierung = "m") {
  */
 async function regelnSchreiben(zeilen, buch) {
   const pack = game.packs.get(`world.${REGEL_PACK}`);
-  if (!pack || !REGELBEREICHE[buch]) return { kategorie: "regeln", angelegt: 0, geschrieben: 0, behalten: [], nichtZugeordnet: [], ohne: [] };
+  if (!pack || !REGELBEREICHE[buch]) return { kategorie: "regeln", angelegt: 0, geschrieben: 0, nichtZugeordnet: [], ohne: [] };
   const kapitel = regelnAusBuch(zeilen, REGELBEREICHE[buch]);
   const gesperrt = pack.locked;
   if (gesperrt) await pack.configure({ locked: false });
@@ -371,7 +372,7 @@ async function regelnSchreiben(zeilen, buch) {
     journale = neu.length;
     seitenZahl = neu.reduce((n, j) => n + j.pages.length, 0);
   } finally { if (gesperrt) await pack.configure({ locked: true }); }
-  return { kategorie: "regeln", angelegt: seitenZahl, geschrieben: seitenZahl, behalten: [], nichtZugeordnet: [], ohne: [], kapitel: journale };
+  return { kategorie: "regeln", angelegt: seitenZahl, geschrieben: seitenZahl, nichtZugeordnet: [], ohne: [], kapitel: journale };
 }
 
 /** Ergebnis der Textprüfung für den Bericht: Zusammenfassung, Beispiele, verdächtige Stellen zum Nachsehen. */
@@ -393,11 +394,11 @@ function berichtZeigen(b) {
       : b.gepruefteAusgabe ? `<p class="hinweis">Ausgabe ${esc(b.fingerabdruck)}: gegen diese Ausgabe ist der Import geprüft.</p>`
       : `<p class="warnung">Diese Ausgabe (${esc(b.fingerabdruck)}) weicht von der geprüften ab, etwa eine andere Auflage. Bitte die Listen unten prüfen; einzelne Einträge können fehlen oder falsch zugeordnet sein.</p>`}
     <p>Übernommen:</p>
-    <ul>${b.teile.map((t) => t.kategorie === "regeln" ? `<li>Regeln: ${t.kapitel ?? 0} Kapitel mit ${t.angelegt} Seiten</li>` : `<li>${esc(t.kategorie)}: ${t.angelegt} neu angelegt, ${t.geschrieben} mit Beschreibung</li>`).join("")}</ul>
+    <ul>${b.teile.map((t) => t.kategorie === "regeln" ? `<li>Regeln: ${t.kapitel ?? 0} Kapitel mit ${t.angelegt} Seiten</li>` : `<li>${esc(t.kategorie)}: ${t.angelegt} angelegt${t.ersetzt ? ` (${t.ersetzt} vorherige ersetzt)` : ""}, ${t.geschrieben} mit Beschreibung</li>`).join("")}</ul>
     ${b.abenteuer ? "" : `<p>${b.links ?? 0} Texte mit Verweisen auf Regeln, Zauber, Fertigkeiten und Gegenstände versehen.</p>`}
     ${b.textpruefung ? textpruefungHtml(b.textpruefung) : ""}
-    ${b.teile.map((t) => liste(`${t.kategorie}: vorhandener Text behalten`, t.behalten) + liste(`${t.kategorie}: in der PDF gefunden, aber nicht zugeordnet`, t.nichtZugeordnet) + liste(`${t.kategorie}: ohne Beschreibung aus diesem Buch`, t.ohne)).join("")}
-    <p class="hinweis">Die Texte stehen nur in den Kompendien dieser Welt. Würfeltabellen, Beispiele und Merkkästen werden erkannt und eigens dargestellt; mehrspaltige Tabellen können unvollständig sein. Bereits auf Charakterbögen liegende Gegenstände behalten ihren alten Stand.</p>
+    ${b.teile.map((t) => liste(`${t.kategorie}: in der PDF gefunden, aber nicht zugeordnet`, t.nichtZugeordnet) + liste(`${t.kategorie}: ohne Beschreibung aus diesem Buch`, t.ohne)).join("")}
+    <p class="hinweis">Die Texte stehen nur in den Kompendien dieser Welt. Würfeltabellen, Beispiele und Merkkästen werden erkannt und eigens dargestellt; mehrspaltige Tabellen können unvollständig sein. Ein erneuter Import ersetzt alle Einträge dieses Buches vollständig, auch von Hand geänderte. Bereits auf Charakterbögen liegende Gegenstände und in die Welt übernommene Einträge behalten ihren Stand, bis sie erneut übernommen werden.</p>
   </div>`;
   if (D) D.prompt({ window: { title: "Regelwerk importiert" }, content: inhalt, ok: { label: "OK" }, rejectClose: false }).catch(() => {});
   else ui.notifications.info(`Midgard: ${b.teile.map((t) => `${t.geschrieben} ${t.kategorie}`).join(", ")} importiert.`);

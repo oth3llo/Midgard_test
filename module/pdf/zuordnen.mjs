@@ -68,28 +68,75 @@ function tabelleHtml(reihen, { titel, kopfSpalte } = {}) {
 
 const schrittHtml = (punkte) => `<ol class="midgard-schritte">${punkte.map((p) => `<li><span class="marke">${esc(p.marke)}</span> ${esc(p.text)}${p.unter.length ? schrittHtml(p.unter) : ""}</li>`).join("")}</ol>`;
 
+/** „Begriff: Erklärung“ am Anfang: Begriff fett (kurz, ohne Satzzeichen, nicht „EW:Angriff“). */
+function begriff(text, maxWoerter = 6) {
+  const m = String(text).match(/^([A-ZÄÖÜ„(][^.:;!?]{1,40}?):\s+(\S.*)$/s);
+  if (!m || m[1].split(/\s+/).length > maxWoerter || /^(EW|WW|PW)\b/.test(m[1])) return esc(text);
+  return `<strong>${esc(m[1])}:</strong> ${esc(m[2])}`;
+}
+
+/**
+ * Zeilen in Absätze und Listenpunkte zerlegen: „- Punkt“ am Zeilenanfang oder mitten in der Zeile
+ * („Scheuen und Durchgehen - EW–4 … - Durchgehendes …“) wird zum Listenpunkt, wenn es mindestens
+ * zwei solche Punkte gibt; ein einzelner Strich mitten in der Zeile („Adlergilde - Schwerpunkt
+ * Erkennen“) bleibt Text, außer die Liste geht in der nächsten Zeile mit „- “ weiter.
+ */
+function zeilenMitStrichen(zeilen) {
+  const STRICH = /(?:^|\s)-\s+(?=[A-ZÄÖÜ„(])/;
+  const stuecke = [];
+  zeilen.forEach((z, k) => {
+    const teile = z.split(STRICH);
+    if (teile.length === 2 && teile[0].trim() && !/^- /.test(zeilen[k + 1] ?? "")) { stuecke.push({ li: false, text: z.trim() }); return; }
+    teile.forEach((t, n) => { if (t.trim()) stuecke.push({ li: n > 0, text: t.trim() }); });
+  });
+  if (stuecke.filter((x) => x.li).length < 2) return null;
+  let html = "", offen = false;
+  for (const x of stuecke) {
+    if (x.li && !offen) { html += "<ul>"; offen = true; }
+    if (!x.li && offen) { html += "</ul>"; offen = false; }
+    html += x.li ? `<li>${begriff(x.text)}</li>` : `<p class="midgard-kasten-zwischen">${begriff(x.text)}</p>`;
+  }
+  return html + (offen ? "</ul>" : "");
+}
+
 /**
  * Kasten aus einzelnen Zeilen. Mit Stufen wie „sehr leicht (+4)“: Titel als Kopfleiste, jede Stufe als
- * farbige Marke (Zuschlag grün, Abzug rot), die Fälle darunter eingerückt als Aufzählung. Ohne Stufen:
- * Titel und Aufzählung.
+ * farbige Marke (Zuschlag grün, Abzug rot), die Fälle darunter eingerückt als Aufzählung. Zeilen vor der
+ * ersten Stufe gehören zum (umbrochenen) Titel; eine Zeile „Schwierigkeit …“ zwischen den Stufen beginnt
+ * einen zweiten Teil mit eigener Kopfleiste (Fälschen: Einsatz und Widerstand). Ohne Stufen: Titel, dann
+ * Strichaufzählung, Aufzählung oder Absätze; „Begriff: Erklärung“ mit fettem Begriff.
  */
 function kastenHtml(zeilen) {
   const STUFE = /^(.*?)\s*\(([+–-]\d+)\)$/;
   const istTitel = (z) => z.length < 60 && !/[.,;:]$/.test(z) && !STUFE.test(z);
-  const titel = zeilen.length > 1 && istTitel(zeilen[0]) ? zeilen[0] : null;
-  const rest = titel ? zeilen.slice(1) : zeilen;
-  const kopf = titel ? `<p class="midgard-kasten-titel">${esc(titel)}</p>` : "";
-  if (rest.some((z) => STUFE.test(z))) {
-    const gruppen = [];
-    for (const z of rest) {
+  if (zeilen.some((z) => STUFE.test(z))) {
+    const teile = [];
+    let teil = null;
+    for (const z of zeilen) {
       const m = z.match(STUFE);
-      if (m) gruppen.push({ name: m[1], wert: m[2], faelle: [] });
-      else if (gruppen.length) gruppen.at(-1).faelle.push(z);
-      else gruppen.push({ name: null, wert: null, faelle: [z] });
+      if (m) {
+        if (!teil) { teil = { titel: "", gruppen: [] }; teile.push(teil); }
+        teil.gruppen.push({ name: m[1], wert: m[2], faelle: [] });
+      } else if (!teil || (!teil.gruppen.length && istTitel(z))) {
+        if (!teil) { teil = { titel: "", gruppen: [] }; teile.push(teil); }
+        teil.titel = teil.titel ? `${teil.titel} ${z}` : z; // umbrochener Titel („… einer Spur mit“ / „Spurensuche“)
+      } else if (/^Schwierigkeit\b/.test(z) && istTitel(z)) {
+        teil = { titel: z, gruppen: [] };
+        teile.push(teil);
+      } else if (teil.gruppen.length) teil.gruppen.at(-1).faelle.push(z);
+      else teil.titel += ` ${z}`;
     }
-    return `<div class="midgard-kasten midgard-stufen">${kopf}<dl>${gruppen.map((g) => `${g.name !== null ? `<dt><span class="midgard-stufe ${/^\+/.test(g.wert) ? "plus" : "minus"}">${esc(g.wert)}</span> ${esc(g.name)}</dt>` : ""}<dd>${g.faelle.length ? `<ul>${g.faelle.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}</dd>`).join("")}</dl></div>`;
+    return `<div class="midgard-kasten midgard-stufen">${teile.map((t) => `${t.titel ? `<p class="midgard-kasten-titel">${esc(t.titel)}</p>` : ""}<dl>${t.gruppen.map((g) => `<dt><span class="midgard-stufe ${/^\+/.test(g.wert) ? "plus" : "minus"}">${esc(g.wert)}</span> ${esc(g.name)}</dt><dd>${g.faelle.length ? `<ul>${g.faelle.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}</dd>`).join("")}</dl>`).join("")}</div>`;
   }
-  return `<div class="midgard-kasten">${kopf}${rest.length > 1 ? `<ul>${rest.map((z) => `<li>${esc(z)}</li>`).join("")}</ul>` : rest.map((z) => `<p>${esc(z)}</p>`).join("")}</div>`;
+  let titel = zeilen.length > 1 && istTitel(zeilen[0]) && !/\s-\s/.test(zeilen[0]) ? zeilen[0] : null;
+  let rest = titel ? zeilen.slice(1) : zeilen;
+  // Titel, der mit der ersten Strichliste in einer Zeile steht („Reiten als ungelernte Fertigkeit - Bei …“)
+  const m = !titel && rest[0]?.match(/^([A-ZÄÖÜ][^.:;!?-]{2,48}?)\s-\s+(?=[A-ZÄÖÜ])/);
+  if (m && !/\d/.test(m[1])) { titel = m[1]; rest = [`- ${rest[0].slice(m[0].length)}`, ...rest.slice(1)]; }
+  const kopf = titel ? `<p class="midgard-kasten-titel">${esc(titel)}</p>` : "";
+  const inhalt = zeilenMitStrichen(rest)
+    ?? (rest.length > 1 ? `<ul>${rest.map((z) => `<li>${begriff(z)}</li>`).join("")}</ul>` : rest.map((z) => `<p>${begriff(z)}</p>`).join(""));
+  return `<div class="midgard-kasten">${kopf}${inhalt}</div>`;
 }
 
 /** Ein Block als HTML (Absatz, Tabelle, Kasten …; Blocktypen aus absaetze() und gliedern()). */
@@ -102,7 +149,7 @@ export function blockHtml(a) {
     return `<table class="midgard-tabelle midgard-wurftabelle" data-wuerfel="${w.wuerfel}"><caption><span class="midgard-tabellenkopf">${w.titel ? `<span class="midgard-tabellentitel">${esc(w.titel)}</span> ` : "<span></span>"}<a class="midgard-tabellenwurf" data-wuerfel="${w.wuerfel}" role="button" tabindex="0" title="Würfeln und Ergebnis in den Chat"><i class="fa-solid fa-dice-d20"></i> ${WUERFEL_NAME[w.wuerfel]} würfeln</a></span></caption>`
       + `<thead><tr><th>${WUERFEL_NAME[w.wuerfel]}</th><th>Ergebnis</th></tr></thead><tbody>${w.zeilen.map(([b, t, d]) => `<tr><td class="bereich">${esc(b)}</td><td>${d ? `<strong>${esc(t)}</strong> ${esc(d)}` : esc(t)}</td></tr>`).join("")}</tbody></table>`;
   }
-  if (a.liste) return `<ul class="midgard-liste">${a.liste.map((z) => `<li>${esc(z)}</li>`).join("")}</ul>`;
+  if (a.liste) return `<ul class="midgard-liste">${a.liste.map((z) => `<li>${begriff(z)}</li>`).join("")}</ul>`;
   if (a.schritte) return schrittHtml(a.schritte);
   if (a.wert) return `<p class="midgard-wert"><span>Wert</span> ${esc(a.wert)}</p>`;
   if (a.merk) return `<div class="midgard-merk"><p class="midgard-merk-titel">${esc(a.titel ?? "Auf einen Blick")}</p><dl>${a.merk.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>`;

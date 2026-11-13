@@ -33,6 +33,9 @@ const el = (tag, attrs = {}, ...kinder) => {
 const karte = (titel, klasse, ...inhalt) => el("section", { class: ["karte", klasse] }, titel ? el("h3", { text: titel }) : null, ...inhalt);
 const zahlText = (w) => (w === null || w === undefined || w === "" ? "–" : String(w));
 const fmt = (n) => Number(n || 0).toLocaleString("de-DE");
+// Geld in GS (Dezimalstellen = SS und KS): 12,35 GS → [12, 3, 5]; Text „12 GS 3 SS 5 KS“
+const geldTeile = (gold) => { const ks = Math.round((Number(gold) || 0) * 100); return [Math.floor(ks / 100), Math.floor((ks % 100) / 10), ks % 10]; };
+const geldText = (gold) => { const [g, s, k] = geldTeile(gold); return [`${fmt(g)} GS`, s ? `${s} SS` : null, k ? `${k} KS` : null].filter(Boolean).join(" "); };
 const icon = (name, klasse = "") => el("i", { class: `fa-solid ${name} ${klasse}`.trim(), "aria-hidden": "true" });
 
 export const REITER = [
@@ -331,7 +334,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
       el("div", { class: "ma-kopf-text" },
         this.isEditable && !this.#verwaltet ? el("input", { type: "text", class: "ma-name", "data-pfad": "name", value: a.name, "aria-label": "Name" }) : el("h1", { class: "ma-name", text: a.name }),
         el("p", { class: "ma-unter", text: unter }),
-        el("p", { class: "ma-konto" }, this.#slFeld("es", "ES", s.es), this.#slFeld("ep", "EP", s.ep), el("span", { text: `Gold ${fmt(s.gold)} GS` }),
+        el("p", { class: "ma-konto" }, this.#slFeld("es", "ES", s.es), this.#slFeld("ep", "EP", s.ep), el("span", { title: "Geld (1 GS = 10 SS = 100 KS); ändern im Reiter Ausrüstung", text: geldText(s.gold) }),
           this.#verwaltet ? el("span", { class: "ma-marke", title: "Eigenschaften, Fertigkeiten, Zauber und Konto werden mit „Erschaffung & Lernen“ geändert; hier sind sie gesperrt." }, icon("fa-lock"), " vom Werkzeug verwaltet") : null,
           el("button", { type: "button", class: ["ma-werkzeug-knopf", this.#reiter === "werkzeug" && "aktiv"], "data-reiter": "werkzeug", "aria-pressed": String(this.#reiter === "werkzeug"), onclick: () => this.#wechseln("werkzeug") }, icon("fa-hammer"), " Erschaffung & Lernen"),
           el("button", { type: "button", class: "ma-export-knopf", title: "Alle Werte übersichtlich zum Abschreiben in den Papierbogen, geordnet nach Figuren-, Abenteuer- und Zauberblatt", onclick: () => exportOeffnen(this.actor) }, icon("fa-file-export"), " Export"))),
@@ -456,6 +459,39 @@ export class AbenteurerBogen extends ActorSheetV2 {
       const ok = D ? await D.confirm({ window: { title: "Entfernen" }, content: `<p>${item.name} vom Bogen entfernen?</p>` }) : true;
       if (ok) await item.delete();
     } });
+  }
+
+  /**
+   * Geld als Gold-, Silber- und Kupferstücke (1 GS = 10 SS = 100 KS), bearbeitbar für alle, die die Figur führen.
+   * Gespeichert wird ein Wert in GS; bei Charakteren aus dem Werkzeug über dessen Zustand und Protokoll.
+   */
+  #geldFeld(s) {
+    const [gs, ss, ks] = geldTeile(s.gold);
+    if (!this.isEditable) return el("p", { class: "ma-geld", text: geldText(s.gold) });
+    const feld = (wert, name, titel) => el("label", { class: "ma-geld-teil", title: titel }, el("input", { type: "number", min: 0, step: 1, value: wert, "data-geld": name, "aria-label": titel }), el("span", { text: name }));
+    const wurzel = el("div", { class: "ma-geld" }, feld(gs, "GS", "Goldstücke"), feld(ss, "SS", "Silberstücke"), feld(ks, "KS", "Kupferstücke"),
+      el("span", { class: "info", text: "1 GS = 10 SS = 100 KS. Einkäufe und Belohnungen direkt hier eintragen." }));
+    wurzel.addEventListener("change", (ev) => {
+      if (!ev.target.dataset.geld) return;
+      const wert = (n) => Math.max(0, Math.trunc(Number(wurzel.querySelector(`[data-geld=${n}]`).value) || 0));
+      this.#geldSetzen(Math.round((wert("GS") + wert("SS") / 10 + wert("KS") / 100) * 100) / 100);
+    });
+    return wurzel;
+  }
+
+  async #geldSetzen(neu) {
+    const a = this.actor, s = a.system;
+    if (neu === s.gold) return;
+    const text = `Geld ${geldText(s.gold)} → ${geldText(neu)}`;
+    if (!s.zustand) return a.update({ "system.gold": neu });
+    // vom Werkzeug verwaltet: im Zustand und Protokoll buchen (sonst überschreibt der nächste Abgleich), mit Rückgängig
+    const z = JSON.parse(s.zustand);
+    z.spiel ??= {}; z.spiel.protokoll ??= [];
+    const vorher = JSON.parse(JSON.stringify({ spiel: { ...z.spiel, protokoll: undefined }, eig: z.eig, pAwurf: z.pAwurf, Wkwurf: z.Wkwurf, Au: z.Au, festPA: z.festPA ?? null, festWk: z.festWk ?? null }));
+    z.spiel.gold = neu;
+    const eintrag = { zeit: new Date().toISOString(), text };
+    z.spiel.protokoll.unshift({ ...eintrag, vorher });
+    await a.update({ "system.gold": neu, "system.zustand": JSON.stringify(z), "system.protokoll": [eintrag, ...(s.protokoll ?? [])] });
   }
 
   /** ES oder EP: für die Spielleitung als Eingabe, sonst als Text. */
@@ -636,8 +672,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
       doc?.sheet.render({ force: true });
     };
     return [
-      karte("Geld", "ma-k-geld", el("p", {}, "Gold ", this.#feld("system.gold", s.gold, { typ: "number", werkzeug: true, breite: "7em" }), " GS",
-        el("span", { class: "info", text: "  (1 GS = 10 SS = 100 KS)" }))),
+      karte("Geld", "ma-k-geld", this.#geldFeld(s)),
       karte("Gegenstände", "ma-k-sachen", el("table", { class: "ma-tabelle" },
         el("thead", {}, el("tr", {}, ["Gegenstand", "Anzahl", "kg", "Wirkung, Inhalt, Erläuterung", ""].map((t) => el("th", { text: t })))),
         el("tbody", {}, sachen.length ? sachen.map((g) => el("tr", {},
