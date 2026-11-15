@@ -77,6 +77,21 @@ export async function gegnerPackHolen() {
   return pack;
 }
 
+/** Journal-Kompendien für Bildmaterial aus Abenteuern (Ordner je Abenteuer, Reihenfolge wie im Dokument). */
+export const HANDOUT_PACK = "midgard-handouts", KARTEN_PACK = "midgard-karten";
+export async function bildPacksHolen() {
+  const ziel = await ordner();
+  const out = {};
+  for (const [name, label] of [[HANDOUT_PACK, "Midgard: Handouts"], [KARTEN_PACK, "Midgard: Karten"]]) {
+    let pack = game.packs.get(`world.${name}`);
+    if (!pack) pack = await Sammlung().createCompendium({ name, label, type: "JournalEntry" });
+    if (ziel && pack.folder?.id !== ziel.id && typeof pack.setFolder === "function") await pack.setFolder(ziel).catch(() => {});
+    if (!pack.locked) await pack.configure({ locked: true });
+    out[name] = pack;
+  }
+  return out;
+}
+
 /** Gleicht ein Kompendium mit den Solldaten ab. Gibt die Zahl der Änderungen zurück. */
 async function abgleichen(pack, soll, kat) {
   const vorhanden = new Map((await pack.getDocuments()).map((d) => [d.id, d]));
@@ -112,13 +127,15 @@ async function abgleichen(pack, soll, kat) {
 export async function kompendienAufbauen(erzwingen = false) {
   const gm = game.users.activeGM ?? game.users.find((u) => u.isGM && u.active);
   if (!game.user.isGM || (gm && gm.id !== game.user.id)) return false;
-  const fehlt = Object.keys(KATEGORIEN).some((k) => !game.packs.get(packId(k))) || !game.packs.get("world.midgard-regeln") || !game.packs.get(`world.${GEGNER_PACK}`);
+  const fehlt = Object.keys(KATEGORIEN).some((k) => !game.packs.get(packId(k))) || !game.packs.get("world.midgard-regeln") || !game.packs.get(`world.${GEGNER_PACK}`)
+    || !game.packs.get(`world.${HANDOUT_PACK}`) || !game.packs.get(`world.${KARTEN_PACK}`);
   const stand = game.settings.get(SYSTEM_ID, "kompendiumStand");
   const modell = game.settings.get(SYSTEM_ID, "kompendiumModell");
   if (!erzwingen && !fehlt && stand === sollStand() && modell === 2) return false;
 
   await regelPackHolen();
   await gegnerPackHolen();
+  await bildPacksHolen();
   if (fehlt) ui.notifications.info("Midgard: Kompendien werden angelegt. Gefüllt werden sie über „Regelwerk-PDF importieren“ im Kompendium-Reiter.");
   const ziel = await ordner();
   for (const [kat, soll] of Object.entries(KOMPENDIUM.kategorien)) {

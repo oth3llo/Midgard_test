@@ -151,7 +151,7 @@ export function blockHtml(a) {
   }
   if (a.liste) return `<ul class="midgard-liste">${a.liste.map((z) => `<li>${begriff(z)}</li>`).join("")}</ul>`;
   if (a.schritte) return schrittHtml(a.schritte);
-  if (a.wert) return `<p class="midgard-wert"><span>Wert</span> ${esc(a.wert)}</p>`;
+  if (a.wert) return `<p class="midgard-wert"><span>${esc(a.label ?? "Wert")}</span> ${esc(a.wert)}</p>`;
   if (a.merk) return `<div class="midgard-merk"><p class="midgard-merk-titel">${esc(a.titel ?? "Auf einen Blick")}</p><dl>${a.merk.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>`;
   if (a.beispiel) return `<details class="midgard-beispiel"><summary>Beispiel</summary><p>${esc(a.beispiel)}</p></details>`;
   if (a.randnotiz) return `<aside class="midgard-randnotiz"><p>${esc(a.randnotiz)}</p></aside>`;
@@ -160,6 +160,7 @@ export function blockHtml(a) {
   if (a.kasten) return kastenHtml(a.kasten);
   if (a.box) return `<aside class="midgard-box">${a.box.titel ? `<p class="midgard-box-titel">${esc(a.box.titel)}</p>` : ""}<div class="midgard-box-inhalt">${a.box.bloecke.map(blockHtml).join("")}</div></aside>`;
   if (a.einschub) return blockHtml(a.klein ? { beispiel: a.einschub } : { randnotiz: a.einschub });
+  if (a.zitat) return `<blockquote class="midgard-zitat"><p>${esc(a.zitat)}</p>${a.quelle ? `<footer>${esc(a.quelle)}</footer>` : ""}</blockquote>`;
   return "";
 }
 

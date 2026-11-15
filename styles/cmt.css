@@ -925,6 +925,12 @@ div.midgard-kasten p { margin: 2px 0; }
 :is(.midgard-regelwerk, .midgard-gegenstand, .midgard-browser) details.midgard-beispiel > p { margin: 6px 0 4px; font-style: italic; }
 :is(.midgard-regelwerk, .midgard-gegenstand, .midgard-browser) aside.midgard-randnotiz { border-left: 4px solid var(--a3); background: var(--a3h); padding: 6px 12px; }
 :is(.midgard-regelwerk, .midgard-gegenstand, .midgard-browser) aside.midgard-randnotiz p { margin: 0; }
+.midgard-leise { color: var(--leise); font-size: .9em; }
+/* Zitate aus der Spielwelt (Bestiarium, Quellenbücher): kursiv, mit Quelle rechtsbündig */
+:is(.midgard-regelwerk, .midgard-gegenstand, .midgard-browser, .midgard-gegner) blockquote.midgard-zitat { margin: 4px 0 10px; padding: 6px 14px; border-left: 4px solid var(--a5, #8a7a62); background: var(--a5h, transparent); font-style: italic; }
+:is(.midgard-regelwerk, .midgard-gegenstand, .midgard-browser, .midgard-gegner) blockquote.midgard-zitat p { margin: 0; }
+:is(.midgard-regelwerk, .midgard-gegenstand, .midgard-browser, .midgard-gegner) blockquote.midgard-zitat footer { margin-top: 4px; text-align: right; font-style: normal; font-size: .9em; color: var(--leise); }
+:is(.midgard-regelwerk, .midgard-gegenstand, .midgard-browser, .midgard-gegner) blockquote.midgard-zitat footer::before { content: "\2013\00a0"; }
 :is(.midgard-regelwerk, .midgard-gegenstand, .midgard-browser) div.midgard-kasten { border-left: 4px solid var(--a7); background: var(--a7h); color: var(--text); }
 :is(.midgard-regelwerk, .midgard-gegenstand, .midgard-browser) .midgard-wert { display: inline-flex; align-self: flex-start; gap: 8px; align-items: baseline; padding: 2px 10px; border: 2px solid var(--rand); background: var(--flaeche); box-shadow: var(--hebung); font-weight: 700; }
 :is(.midgard-regelwerk, .midgard-gegenstand, .midgard-browser) .midgard-wert span { font-weight: 400; color: var(--leise); font-size: .85em; text-transform: uppercase; letter-spacing: .05em; }
@@ -1240,6 +1246,13 @@ img[src*="midgard5-cmt/bilder/"]:not([src*="/textur/"]),
 .midgard-gegner .mg-faehigkeiten ul { margin: 0; padding-left: 1.2rem; }
 .midgard-gegner .mg-block { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
 .midgard-gegner .mg-block textarea { width: 100%; }
+.midgard-gegner .mg-faehigkeiten li + li { margin-top: 3px; }
+.midgard-gegner .mg-vorkommen p { margin: 0; }
+.midgard-gegner .mg-vorkommen i { color: var(--leise); }
+.midgard-gegner .mg-besondere-tabelle { width: auto; min-width: 60%; }
+.midgard-gegner .mg-besondere-tabelle th:first-child { text-align: left; padding-right: 18px; }
+.midgard-gegner .mg-besondere-tabelle td.zahl, .midgard-gegner .mg-besondere-tabelle thead th { text-align: center; }
+.midgard-gegner .mg-besondere-tabelle tbody th { font-weight: 700; }
 .midgard-gegner .mg-auftritt { margin: 2px 0 0; font-weight: 700; color: var(--gold, #c9a227); }
 
 /* Gegenstandsbogen: Beschreibung formatiert, Bearbeiten auf Knopfdruck */

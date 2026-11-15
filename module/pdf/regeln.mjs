@@ -9,6 +9,11 @@ import { anfangMelden } from "./textpruefung.mjs";
 export const REGELBEREICHE = {
   "Der Kodex": [[50, 94, "Das Buch der Gesetze"], [96, 100, "Das Buch der Begabungen"], [148, 157, "Das Buch des Ruhmes"], [165, 168, "Das Buch des Ruhmes"]],
   "Das Arkanum": [[9, 24, "Die Regeln der Magie"], [26, 36, "Die Welt der Magie"], [37, 61, "Der Konspekt der Zauberer"]],
+  // Quellenbücher: die ganzen Buchteile; Zauber und Spieldaten der Gegner sind vorher herausgefiltert
+  "Das Bestiarium": [[7, 20, "Von Tieren und Fabelwesen"], [21, 32, "Mit Zähnen und Klauen"], [33, 42, "Der Stoff für Legenden"], [256, 261, "Anhang"]],
+  "Dunkle Mächte": [[7, 35, "Dunkle Zauberer"], [36, 60, "Nekromantie"], [61, 80, "Das Dunkle Arkanum"], [81, 98, "Zauber der Finsteren Magie"], [99, 144, "Nekromantisches Bestiarium"]],
+  "Das Mysterium": [[7, 23, "Die Welt der Thaumaturgie"], [24, 33, "Zauberkundige Abenteurer"], [43, 94, "Thaumaturgischer Almanach"], [95, 118, "Das Thaumaturgium"], [119, 134, "Die Zauberwerkstatt"]],
+  "Ars Armorum": [[7, 44, "Meister des Kampfes"], [53, 112, "Das Manual der Kampfkunst"], [113, 148, "Neue Fähigkeiten"]],
 };
 
 /**
@@ -73,9 +78,10 @@ export function regelnAusBuch(zeilen, bereiche) {
     seite.absaetze = absaetze(seite.text.filter((l) => !l.leer), abstand);
     // Absatz beginnt klein mitten im Satz: Anfang verloren (Textprüfung meldet die Stelle)
     if (typeof seite.absaetze[0] === "string" && /^[a-zäöüß]/.test(seite.absaetze[0])) anfangMelden(seite.titel, seite.absaetze[0], seite.seite);
-    if (seite.wert) seite.absaetze.unshift({ wert: seite.wert });
+    if (seite.wert) seite.absaetze.unshift(seite.wertLabel ? { wert: seite.wert, label: seite.wertLabel } : { wert: seite.wert });
     delete seite.text;
     delete seite.wert;
+    delete seite.wertLabel;
     const laenge = seite.absaetze.reduce((n, a) => n + (typeof a === "string" ? a.length : JSON.stringify(a).length), 0);
     if (laenge >= 40 || seite.kinder?.length) kap.seiten.push(seite);
     else if (laenge && kap.seiten.length) kap.seiten.at(-1).absaetze.push(...seite.absaetze); // Splitter anhängen
@@ -103,7 +109,8 @@ export function regelnAusBuch(zeilen, bereiche) {
     if (z.groesse >= 14 && vorher?.kopf && folge && Math.abs(vorher.groesse - z.groesse) < 0.5 && (z.abstand ?? 99) < z.groesse * 1.8
       && `${vorher.kopf.seite.titel} ${z.text}`.length <= 60) {
       const k = vorher.kopf;
-      k.seite.titel = `${k.seite.titel} ${z.text}`.replace(/\s+/g, " ");
+      // Trennstrich am Zeilenende („Nichtmenschliche Zivili-“ / „sationen Midgards“) ohne Leerzeichen verbinden
+      k.seite.titel = (/\p{Ll}-$/u.test(k.seite.titel) && /^\p{Ll}/u.test(z.text) ? `${k.seite.titel.slice(0, -1)}${z.text}` : `${k.seite.titel} ${z.text}`).replace(/\s+/g, " ");
       if (k.kapitel) k.kapitel.titel = k.seite.titel;
       vorher = { ...z, kopf: k };
       continue;
@@ -134,6 +141,14 @@ export function regelnAusBuch(zeilen, bereiche) {
     // zweite Zeile einer Unterüberschrift, wenn die erste erkennbar weiterläuft („Wurfwaffen bei“ / „Sturmangriffen“)
     if (vorher?.unterKopf && folge && /\s(bei|und|von|der|des|im|mit|für|aus|in|zu|gegen)$/.test(seite.titel) && (z.abstand ?? 99) < abstand * 1.5 && z.text.length < 40 && !/[.,;]$/.test(z.text)) {
       seite.titel = `${seite.titel} ${z.text}`;
+      vorher = { ...z, unterKopf: true };
+      continue;
+    }
+    // Überschrift in Spalten („Aderlasser   EP0   Attackieren“, Ars Armorum): Name als Titel, der Rest als Wertzeile
+    if (unter && (z.spalten?.length ?? 0) >= 2 && z.spalten[0].text.length >= 3 && !/[+–-]\s?[(\d]/.test(z.spalten[0].text)) {
+      neueSeite(zierschrift(z.spalten[0].text), 3, z);
+      seite.wert = z.spalten.slice(1).map((x) => x.text).join(" · ");
+      seite.wertLabel = "Einordnung";
       vorher = { ...z, unterKopf: true };
       continue;
     }

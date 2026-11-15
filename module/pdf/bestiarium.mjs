@@ -3,6 +3,8 @@
 // „Adler (Greifvogel, Grad 2)“, gefolgt von den Spieldaten (LP/AP/RK, St/Gw/In/B, Abwehr/Resistenz,
 // Angriff, weitere Fähigkeiten) und der Beschreibung. Läuft rein auf Daten (Node und Browser).
 import { absaetze, verbinden } from "./textzeilen.mjs";
+import { unlesbar } from "./arkanum.mjs";
+import { woerterVerbinden } from "./textpruefung.mjs";
 
 const KOPF = /^(.+?) \((?:(.+?), )?Grad (\d+)\)$/;
 const STAT = /^(?:(?:LP|St|Abwehr|Angriff|SchB|Gf)\b|Bes\.|»?Zaubern)/;
@@ -11,7 +13,7 @@ const FERT = /^[A-ZÄÖÜ][\wäöüßÄÖÜ\/ ]*[+–-]\d+(\s*\([^)]*\))?(,\s*[A
 const offen = (t) => (t.match(/\(/g) || []).length > (t.match(/\)/g) || []).length;
 const unfertig = (t) => /[-–,;:]$|\b(oder|und|im|nur|zusätzlich|auch)$/.test(t) || offen(t);
 // Zusatz vor einem Angriff: „im Flug“, „nur beim Anspringen“, „im Handgemenge zusätzlich“, „nur im Flug oder Handgemenge“
-const ZUSATZ = /^((?:nur\s+)?(?:im|beim|nach)\s+[A-ZÄÖÜ][\wäöüß]+(?:\s+oder\s+[A-ZÄÖÜ][\wäöüß]+)?(?:\s+(?:zusätzlich|auch))?|gleichzeitig|selten|zusätzlich)\s+/;
+const ZUSATZ = /^((?:nur\s+)?(?:im|beim|nach)\s+[A-ZÄÖÜ][\wäöüß]+(?:\s+oder\s+[A-ZÄÖÜ][\wäöüß]+)?(?:\s+(?:zusätzlich|auch))?|gegen\s+(?:[\wäöüß-]+\s+){0,4}?(?:Gegner|Geg\s?ner|Opfer|Liegende)|gleichzeitig|selten|zusätzlich)\s+/;
 
 /** „Angriff: …“ in einzelne Angriffe und Raufen zerlegen. */
 export function angriffeZerlegen(text) {
@@ -41,6 +43,9 @@ export function angriffeZerlegen(text) {
   teile.push(akt.trim());
   const angriffe = [];
   for (const teil of teile.filter(Boolean)) {
+    // Raufen mit Komma in der Angriffsliste („Kurzschwert+10 (1W6+1), Raufen+5 (1W6–3)“)
+    const rf = teil.match(/^Raufen\s*\+\s*(\d+)\s*(?:\(([^)]*)\))?$/);
+    if (rf) { raufen ??= { ew: Number(rf[1]), schaden: (rf[2] ?? "").trim() }; continue; }
     const z = teil.match(ZUSATZ);
     const rest = z ? teil.slice(z[0].length) : teil;
     const m = rest.match(/^(?:(\d+)×)?([^+(]*?)\s*(?:\+\s*(\d+)%?)?\s*(?:\(([^)]*)\))?$/);
@@ -63,13 +68,14 @@ const formel = (t) => String(t ?? "").replace(/\s+(?=[+–-]\s*\d)/g, "").replac
 
 /** Spieldaten aus den Zeilen eines Eintrags. */
 export function spieldatenLesen(zeilen) {
-  const s = { lpFormel: "", apFormel: "", rk: "", gf: null, st: "", gw: "", in: "", b: "", abwehr: null, resistenzGeist: null, resistenzKoerper: null, schb: null, angriffe: [], raufen: null, faehigkeiten: [] };
+  const s = { vorkommen: "", lpFormel: "", apFormel: "", rk: "", gf: null, st: "", gw: "", in: "", b: "", abwehr: null, resistenzGeist: null, resistenzKoerper: null, schb: null, angriffe: [], raufen: null, faehigkeiten: [] };
   for (const z of zeilen) {
     if (/^LP\s/.test(z)) {
       const m = z.match(/^LP\s+(.+?)\s+AP\s+(.+?)\s+(\S*R)\b(?:\s+Gf\s+(\d+))?/);
       if (m) { s.lpFormel = formel(m[1]); s.apFormel = formel(m[2]); s.rk = m[3]; s.gf = m[4] ? Number(m[4]) : null; }
     } else if (/^St\s/.test(z)) {
-      const m = z.match(/^St\s+(\S+)\s+Gw\s+(\S+)\s+In\s+(\S+)\s+B\s+(\S+)/);
+      // „St 90 Gw 60 In 50 B30“, „B 12/120“ (Bestiarium auch ohne Leerzeichen)
+      const m = z.match(/^St\s*(\S+)\s+Gw\s*(\S+)\s+In\s*(\S+)\s+B\s*(\S+)/);
       if (m) Object.assign(s, { st: wert(m[1]), gw: wert(m[2]), in: wert(m[3]), b: m[4] });
       const sb = z.match(/SchB\s*([+–-]\s*\d+)/); if (sb) s.schb = Number(sb[1].replace("–", "-").replace(/\s/g, ""));
     } else if (/^Abwehr/.test(z)) {
@@ -77,9 +83,21 @@ export function spieldatenLesen(zeilen) {
       const r = z.match(/Resistenz\s*\+?\s*(\d+|\*)\s*\/\s*(\d+|\*)/);
       if (r) { s.resistenzGeist = r[1] === "*" ? null : Number(r[1]); s.resistenzKoerper = r[2] === "*" ? null : Number(r[2]); }
       if (!a || !r) s.faehigkeiten.push(z);   // „Abwehr var Resistenz var“
+      else {
+        // weitere Angaben dahinter, z. B. „MW+18“ (Bestiarium)
+        const rest = z.slice(r.index + r[0].length).trim();
+        if (rest) s.faehigkeiten.push(rest);
+      }
     } else if (/^Angriff/.test(z)) {
-      Object.assign(s, angriffeZerlegen(z));
-    } else s.faehigkeiten.push(z.replace(/^»(Zaubern[^«]*)«/, "$1"));
+      // nach Angriffen und Raufen können Sondermanöver folgen („- Raufen+9 (1W6) - Klammern“)
+      const [erst, ...rest] = ausserhalbKlammern(z, /^\s+[-–]\s+(?=[A-ZÄÖÜ])/);
+      const raufen = rest.find((x) => /^Raufen\s*\+/.test(x));
+      const manoever = rest.filter((x) => x !== raufen && x);
+      Object.assign(s, angriffeZerlegen(raufen ? `${erst} - ${raufen}` : erst));
+      if (manoever.length) s.faehigkeiten.push(`Sonderangriffe: ${manoever.join(", ")}`);
+    } else if (/^Vorkommen\s*:/.test(z)) {
+      s.vorkommen = z.replace(/^Vorkommen\s*:\s*/, "");
+    } else s.faehigkeiten.push(z.replace(/^»(Zaubern[^«]*)«/, "$1").replace(/^»(Zaubern[^:]*:)«/, "$1"));
   }
   if (s.gf === null && s.grad !== undefined) s.gf = s.grad + 3;
   return s;
@@ -168,7 +186,8 @@ export function einzahl(wort, bekannt = new Set()) {
   const treffer = kandidaten.find((k) => k !== wort && bek.has(klein(k)));
   if (treffer) return treffer;
   if (bek.has(klein(wort))) return wort;
-  for (const [re, ers] of [[/ratten$/, "ratte"], [/äuse$/, "aus"], [/trolle$/, "troll"], [/aten$/, "at"], [/ies$/, "ie"], [/lette$/, "lett"]]) if (re.test(wort)) return wort.replace(re, ers);
+  for (const [re, ers] of [[/ratten$/, "ratte"], [/äuse$/, "aus"], [/trolle$/, "troll"], [/aten$/, "at"], [/ies$/, "ie"], [/lette$/, "lett"],
+    [/linge$/, "ling"], [/wölfe$/, "wolf"], [/Wölfe$/, "Wolf"], [/bären$/, "bär"], [/Bären$/, "Bär"], [/knechte$/, "knecht"], [/^Orcs$/, "Orc"], [/^Orks$/, "Ork"]]) if (re.test(wort)) return wort.replace(re, ers);
   return wort;
 }
 
@@ -274,3 +293,201 @@ export function abenteuerErkennen(zeilen) {
   return { titel: kampagne ? `${kampagne[1]} ${kampagne[2] ?? 0}: ${titel}` : titel };
 }
 
+
+// ------------------------------------------------------------------ Bestiarium und Quellenbücher
+// Format wie im Kodex, aber ohne Art in der Kopfzeile und mit Größenklasse: „Mammut (Grad 29 - groß)“.
+// Die Spieldaten stehen mitten im Text der Art; Beschreibung ist der Text unter der Überschrift der Art
+// (Bestiarium 18 pt, Dunkle Mächte 11-12 pt) ohne die Spieldaten. Dazu „Vorkommen“ und „Besondere Wesen“
+// (erfahrene, herausragende, legendäre Vertreter: e/h/l, teils als kleine Tabelle mit Zuschlägen).
+const KOPF_BUCH = /^(.+?)\s+\((?:([^()]+?), )?Grad (\d+)(?:\s*-\s*([a-zäöüß]+))?\)$/;
+const STAT_BUCH = /^(?:(?:LP|St|Abwehr|Angriff|SchB|Gf|Vorkommen|Besondere Wesen|MW)\b|Bes\.?:|»?Zaubern)/;
+// beginnt immer eine neue Angabe, auch wenn die vorige Zeile unvollständig wirkt („…zu verletzen;“ / „Vorkommen: …“)
+const NEUE_ANGABE = /^(?:(?:LP|Abwehr|Angriff|Vorkommen|Besondere Wesen)\b|St\s*\d|Bes\.?:|»?Zaubern)/;
+const BW_ZEILE = /^(Grad|Gf|St|Gw|In|B|LP|AP|Angriff|Abwehr|Resistenz|Schaden|RK)\s+(.+)$/;
+const SEITENZAHL14 = (z) => /^(\d{1,3})\1?$/.test(z.text) && z.groesse >= 14;
+// Zitat am Anfang einer Beschreibung (kursiv, kleiner), endet mit der Quelle in Klammern
+const ZITAT_QUELLE = /\s*\(([^()]{3,80})\)$/;
+
+/** Kopfzeile der besonderen Wesen: „e h l“ oder „e (groß) h (groß) l (riesig)“. */
+function stufenLesen(t) {
+  const st = [...t.matchAll(/(?:^|\s)([ehl])(?:\s*\(([^)]*)\))?(?=\s|$)/g)].map((m) => (m[2] ? `${m[1]} (${m[2]})` : m[1]));
+  return st.length && t.replace(/(?:^|\s)[ehl](?:\s*\([^)]*\))?(?=\s|$)/g, "").trim() === "" ? st : null;
+}
+const STUFE_NAME = { e: "erfahren", h: "herausragend", l: "legendär" };
+/** Zeile der Tabelle besonderer Wesen: Bezeichnung und genau n Werte („Stoßzahnschaden +1 +3 +5“). */
+function bwZeile(t, n) {
+  const teile = t.trim().split(/\s+/);
+  const werte = [];
+  while (teile.length > 1 && /^[+–-]?\d|^[+–-]\d*W\d/.test(teile.at(-1))) werte.unshift(teile.pop());
+  return werte.length === n && /^[A-ZÄÖÜ][\p{L}\- ]*$/u.test(teile.join(" ")) ? [teile.join(" "), ...werte] : null;
+}
+
+/** Text einer Art in Absätze; kleiner gesetzte Zitate am Anfang als eigener Block. */
+function beschreibungLesen(text, abstand) {
+  const out = [];
+  let lauf = [], klein = null;
+  const fertig = () => {
+    if (!lauf.length) return;
+    if (klein) {
+      const t = absaetze(lauf, abstand).filter((x) => typeof x === "string").join(" ");
+      const q = t.match(ZITAT_QUELLE);
+      out.push({ zitat: q ? t.slice(0, q.index).trim() : t, quelle: q ? q[1] : null });
+    } else out.push(...absaetze(lauf, abstand));
+    lauf = [];
+  };
+  for (const z of text) {
+    const k = z.groesse < 9.6;
+    if (k !== klein) { fertig(); klein = k; }
+    lauf.push(z);
+  }
+  fertig();
+  return out;
+}
+
+/**
+ * Gegner aus einem Bestiarium oder Quellenbuch.
+ * @param {Array} zeilen  Ergebnis von textzeilen() über das ganze Buch
+ * @param {object} o  bereiche: Seitenbereiche [[von, bis]], kopfGroesse: Schriftgröße der Überschrift je Art
+ * @returns {Array<{name, art, grad, groesse, familie, seite, werte, absaetze}>}
+ */
+export function gegnerAusBuch(zeilen, { bereiche, kopfGroesse = 18 }) {
+  const im = (s) => bereiche.some(([a, b]) => s >= a && s <= b);
+  const teil = [];
+  for (const z of zeilen) {
+    if (!im(z.seite) || SEITENZAHL14(z)) continue;
+    const vor = teil.at(-1);
+    // umbrochene Kopfzeile („Flammendrache, alter, 301-700 Jahre (Grad 32 -“ / „riesig)“)
+    if (vor && /\(Grad \d+\s*-?$/.test(vor.text) && /^[a-zäöüß]*\)$/.test(z.text)) { teil[teil.length - 1] = { ...vor, text: `${vor.text} ${z.text}`.replace(/\s+/g, " ") }; continue; }
+    teil.push(z);
+  }
+  const abstand = median(teil.filter((z) => z.groesse === 10).map((z) => z.abstand).filter((a) => a > 5 && a < 20)) || 12;
+  const istKopf = (i) => {
+    const z = teil[i];
+    return !!z && z.groesse <= 11.5 && z.groesse >= 8.5 && KOPF_BUCH.test(z.text.replace(/\s+/g, " ")) && /^LP\s/.test(teil[i + 1]?.text ?? "");
+  };
+  const verbraucht = new Set();
+  const bloecke = [];
+  for (let i = 0; i < teil.length; i++) {
+    if (!istKopf(i)) continue;
+    const [, name, art, grad, groesse] = teil[i].text.replace(/\s+/g, " ").match(KOPF_BUCH);
+    verbraucht.add(i);
+    const stat = [];
+    let bw = null, j = i + 1;
+    for (; j < teil.length && !istKopf(j); j++) {
+      const z = teil[j], t = z.text, v = teil[j - 1];
+      const nah = z.seite === v.seite && z.spalte === v.spalte && (z.abstand ?? 99) < 18.5;
+      if (bw && nah && (z.abstand ?? 99) < 15) {
+        // Tabelle der besonderen Wesen: „Grad 32 35 40“; überdruckte Zeilen ohne Muster entfallen
+        const m = bwZeile(t, bw.stufen.length);
+        if (m) bw.zeilen.push(m);
+        if (m || BW_ZEILE.test(t) || /(\p{L}{2,})\1/u.test(t) || !/^[A-ZÄÖÜ]\p{Ll}/u.test(t)) { verbraucht.add(j); continue; }
+      }
+      const letzte = stat.at(-1);
+      if (nah && (NEUE_ANGABE.test(t) || (FERT.test(t) && letzte !== undefined && !unfertig(letzte)))) {
+        const b = t.match(/^Besondere Wesen\s*:\s*(.*)$/);
+        const stufen = b && stufenLesen(b[1]);
+        if (stufen) bw = { stufen, zeilen: [] };
+        else stat.push(t.replace(/^Bes:/, "Bes.:"));
+        verbraucht.add(j);
+        continue;
+      }
+      if (letzte !== undefined && ((nah && (unfertig(letzte) || /^[(a-zäöüß&]/.test(t) || (/\s(?:St|Gw|In|B)$/.test(letzte) && /^[\dt*]/.test(t)))) || (!nah && unfertig(letzte) && z.groesse >= 9.5 && z.groesse <= 10.5))) {
+        stat[stat.length - 1] = verbinden(letzte, t); verbraucht.add(j); continue;
+      }
+      // lange Angaben laufen über mehrere Zeilen weiter, auch groß beginnend („… Geg ner“ / „Trampeln+12 …“)
+      if (letzte !== undefined && nah && (z.abstand ?? 99) < 15.5 && /^(Angriff|Bes\.|»?Zaubern)/.test(letzte) && !STAT_BUCH.test(t)) {
+        stat[stat.length - 1] = verbinden(letzte, t); verbraucht.add(j); continue;
+      }
+      if ((nah || !stat.length) && (STAT_BUCH.test(t) || FERT.test(t))) {
+        const b = t.match(/^Besondere Wesen\s*:\s*(.*)$/);
+        const stufen = b && stufenLesen(b[1]);
+        if (stufen) bw = { stufen, zeilen: [] };
+        else stat.push(t);
+        verbraucht.add(j);
+        continue;
+      }
+      break;
+    }
+    // Gf der besonderen Wesen als Zeile („Besondere Wesen: Gf e6 / h13 / l17“)
+    const bwText = stat.find((x) => /^Besondere Wesen\s*:/.test(x));
+    // zerrissene Wörter („Geg ner“) mit dem Wörterbuch des Buches verbinden (nur beim Import vorhanden)
+    const werte = spieldatenLesen(stat.filter((x) => x !== bwText).map((x) => woerterVerbinden(x)));
+    werte.gf ??= Number(grad) + 3;
+    // Schilde und Parierwaffen sind keine Angriffe: als Hinweis führen
+    const vert = werte.angriffe.filter((x) => VERTEIDIGUNG.test(x.name));
+    if (vert.length) {
+      werte.angriffe = werte.angriffe.filter((x) => !vert.includes(x));
+      werte.faehigkeiten.unshift(`Verteidigung: ${vert.map((x) => `${x.name}${x.ew !== null ? `+${x.ew}` : ""}`).join(", ")}`);
+    }
+    const besondere = bw ? { stufen: bw.stufen.map((x) => x.replace(/^([ehl])\b/, (c) => STUFE_NAME[c])), zeilen: bw.zeilen }
+      : bwText ? { text: bwText.replace(/^Besondere Wesen\s*:\s*/, "").replace(/\b([ehl])(\d)/g, (_, c, d) => `${STUFE_NAME[c]} ${d}`) } : null;
+    // Bestiarium: magische Wesen tragen hinter dem Namen ein Zeichen in Symbolschrift (U+F076)
+    if (/\uF076/.test(name)) werte.faehigkeiten.unshift("Magisches Wesen");
+    bloecke.push({ i, name: name.replace(/[\uE000-\uF8FF]/g, "").trim().replace(/\s+/g, " "), art: art ?? null, grad: Number(grad), groesse: groesse ?? null, seite: teil[i].seite, werte, besondere });
+    i = j - 1;
+  }
+  // Abschnitte: Überschrift einer Art bis zur nächsten Überschrift gleicher oder größerer Schrift;
+  // der Einleitungstext einer Familie („Insekten“) ist ein eigener Abschnitt
+  const abschnitte = [];
+  const familieBei = new Map();
+  let familie = null, akt = null;
+  for (let i = 0; i < teil.length; i++) {
+    const z = teil[i];
+    familieBei.set(i, familie);
+    if (verbraucht.has(i)) continue;
+    if (z.groesse >= 30 && z.text.length <= 2) continue;
+    if (z.groesse >= 24) {
+      // mehrzeilige Kapitelüberschrift zusammenführen
+      const v = teil[i - 1];
+      if (v && v.groesse === z.groesse && v.seite === z.seite && akt?.familieKopf) { familie = `${familie} ${z.text}`; akt.titel = familie; akt.familie = familie; continue; }
+      familie = z.text;
+      akt = { titel: familie, familie, seite: z.seite, start: i, text: [], familieKopf: true };
+      abschnitte.push(akt);
+      continue;
+    }
+    if (z.groesse >= kopfGroesse - 0.5 && z.groesse < 24 && z.text.length <= 60 && !unlesbar(z.text)) {
+      akt = { titel: z.text, familie, seite: z.seite, start: i, text: [] };
+      abschnitte.push(akt);
+      continue;
+    }
+    if (akt && z.groesse >= 8.5 && z.groesse <= 10.5 && !unlesbar(z.text)) akt.text.push(z);
+  }
+  for (const a of abschnitte) a.absaetze = beschreibungLesen(a.text, abstand);
+  // Zuordnung: Abschnitt davor, außer der folgende trägt den Namen des Wesens (Spieldaten vor der
+  // Überschrift, z. B. Cornmorwyn)
+  const nn = (x) => String(x).toLowerCase().replace(/[^a-zäöüß]/g, "");
+  const passt = (titel, name) => {
+    const n = nn(name.split(/[ ,]/)[0]), t = nn(titel);
+    const k = Math.max(4, Math.min(n.length, t.length) - 2);
+    return n.length >= 3 && t.length >= 3 && (n.slice(0, k) === t.slice(0, k));
+  };
+  for (const b of bloecke) {
+    const vor = abschnitte.filter((a) => a.start < b.i).at(-1), nach = abschnitte.find((a) => a.start > b.i);
+    b.abschnitt = vor && passt(vor.titel, b.name) ? vor : nach && nach.seite - b.seite <= 1 && passt(nach.titel, b.name) ? nach : vor && vor.text.length ? vor : nach ?? vor;
+    b.familie = familieBei.get(b.i) ?? b.abschnitt?.familie ?? null;
+  }
+  // gleiche Namen im Buch: Grad anhängen, bei gleichem Grad zusätzlich die Seite
+  const zaehl = {};
+  for (const b of bloecke) zaehl[b.name] = (zaehl[b.name] || 0) + 1;
+  const familienText = new Map(abschnitte.filter((a) => a.familieKopf).map((a) => [a.familie, a]));
+  const ergebnis = bloecke.map((b) => {
+    const gleich = bloecke.filter((x) => x.name === b.name);
+    let name = b.name;
+    if (zaehl[b.name] > 1) name = gleich.filter((x) => x.grad === b.grad).length > 1 ? `${b.name} (Grad ${b.grad}, S. ${b.seite})` : `${b.name} (Grad ${b.grad})`;
+    const fam = b.familie;
+    return {
+      name, art: b.art ?? fam ?? "", grad: b.grad, groesse: b.groesse, familie: fam, abschnitt: b.abschnitt?.titel ?? null, seite: b.seite,
+      werte: { ...b.werte, groesse: b.groesse }, besondere: b.besondere, absaetze: b.abschnitt?.absaetze ?? [],
+      familieText: familienText.get(fam)?.absaetze ?? [], familieSeite: familienText.get(fam)?.seite ?? null,
+    };
+  });
+  // gelesene Spieldaten-Zeilen, damit die Regeltexte sie nicht noch einmal führen
+  ergebnis.verbraucht = new Set([...verbraucht].map((i) => teil[i]));
+  return ergebnis;
+}
+
+function median(werte) {
+  if (!werte.length) return null;
+  const s = [...werte].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+}

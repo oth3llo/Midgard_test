@@ -10,6 +10,14 @@ export const MERKMALE = {
     "Kritische Kampfereignisse", "Erfolgswurf: 1W20 + Fertigkeitswert", "Waffenfertigkeiten", "Lern- und Trainingslisten"],
   "Das Arkanum": ["Die Regeln der Magie", "Zauberduelle", "Zaubersprüche", "Wundertaten", "Dweomer", "Zauberlieder der Barden",
     "Das Thaumaturgium", "Der Zauberladen", "Der Konspekt der Zauberer"],
+  "Das Bestiarium": ["Von Tieren und Fabelwesen", "Mit Zähnen und Klauen", "Kreaturen im Kampf", "Besondere Angriffsweisen",
+    "Der Stoff für Legenden", "Außergewöhnliche Wesen", "Schleimmonster", "Wendehäuter", "Die Geschöpfe aus arkaner Sicht"],
+  "Dunkle Mächte": ["Dunkle Götter und wilde Natur", "Diener der Finsternis", "Schwarze Hexenzirkel", "Der Almanach der Nekromantie",
+    "Nekromantisches Thaumaturgium", "Das Dunkle Arkanum", "Chaoswunder", "Schwarze Ritualzauber", "Nekromantisches Bestiarium"],
+  "Das Mysterium": ["Die Welt der Thaumaturgie", "Die Regeln der Thaumaturgie", "Thaumaturgischer Almanach", "Mit Runenstab und Zauberklinge",
+    "Zauberrunen", "Thaumatherapie", "Vigilsignien", "Thaumagrale", "Die Zauberwerkstatt"],
+  "Ars Armorum": ["Meister des Kampfes", "Das Manual der Kampfkunst", "Kampfkunsttechniken", "Schusstechniken", "Fechttechniken",
+    "Der Weg der inneren Kraft", "Kampfspezialisten", "Die Kunst der Verse", "Blutswaffen"],
 };
 const MINDEST = { treffer: 6, seiten: 120 };
 
@@ -52,4 +60,8 @@ export function ausgabeFingerabdruck(zeilen, seiten) {
 export const GEPRUEFTE_AUSGABEN = {
   "Der Kodex": ["212-89c8495c"],
   "Das Arkanum": ["212-78bd874b"],
+  "Das Bestiarium": ["266-655b1c40"],
+  "Dunkle Mächte": ["146-8c63669f"],
+  "Das Mysterium": ["148-eb13dddf"],
+  "Ars Armorum": ["154-16cf7394"],
 };

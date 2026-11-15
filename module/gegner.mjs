@@ -32,6 +32,10 @@ export class GegnerDaten extends foundry.abstract.TypeDataModel {
     const f = F();
     return {
       art: text(), grad: zahl(0), gf: zahlOderLeer(), quelle: text(),
+      // Größenklasse („groß“, „riesig“) und Lebensraum (Bestiarium, Quellenbücher)
+      groesse: text(), vorkommen: text(),
+      // erfahrene, herausragende, legendäre Vertreter: { stufen: [...], zeilen: [[Bezeichnung, ...Werte]] } oder { text }
+      besondere: new f.ObjectField({ required: true, initial: {} }),
       // Auftritt im Abenteuer, z. B. „2 Riesenratten“: ein Eintrag je Art, die Anzahl als Hinweis
       auftritt: text(), anzahl: zahlOderLeer(),
       lpFormel: text(), apFormel: text(), lp: vorrat(), ap: vorrat(),
@@ -167,6 +171,23 @@ const karte = (titel, klasse, ...inhalt) => el("section", { class: ["karte", kla
 const icon = (n) => el("i", { class: `fa-solid ${n}`, "aria-hidden": "true" });
 const t = (w) => (w === null || w === undefined || w === "" ? "–" : String(w));
 
+// „Bes.: spurtstark; Sehen+4“ → Begriff fett, Teile als eigene Punkte
+const BEGRIFF = { "Bes.": "Besonderheiten", "Bes": "Besonderheiten" };
+function faehigkeitEl(f) {
+  const m = String(f).match(/^([^:]{2,40}?):\s*(.+)$/);
+  if (!m || /\d$/.test(m[1]) && !/^Zaubern/.test(m[1])) return el("li", { text: f });
+  return el("li", {}, el("strong", { text: `${BEGRIFF[m[1]] ?? m[1]}: ` }), m[2]);
+}
+/** Besondere Wesen (e/h/l): Tabelle mit Zuschlägen oder Textzeile. */
+function besondereEl(b) {
+  if (b?.zeilen?.length) return karte("Besondere Wesen", "mg-besondere", el("table", { class: "ma-tabelle mg-besondere-tabelle" },
+    el("thead", {}, el("tr", {}, el("th", { text: "" }), b.stufen.map((x) => el("th", { text: x })))),
+    el("tbody", {}, b.zeilen.map(([n, ...w]) => el("tr", {}, el("th", { text: n }), w.map((x) => el("td", { class: "zahl", text: x })))))),
+    el("p", { class: "info", text: "Erfahrene, herausragende und legendäre Vertreter: Werte bzw. Zuschläge auf die Grundwerte." }));
+  if (b?.text) return karte("Besondere Wesen", "mg-besondere", el("p", { text: b.text }));
+  return null;
+}
+
 export class GegnerBogen extends ActorSheetV2 {
   static DEFAULT_OPTIONS = {
     classes: ["midgard-abenteurer", "midgard-gegner"],
@@ -188,7 +209,7 @@ export class GegnerBogen extends ActorSheetV2 {
         el("span", { class: "ma-vorrat-wert" }, darf ? el("input", { type: "number", value: v.wert, "aria-label": `${kurz} aktuell`, onchange: (ev) => a.update({ [pfad]: Number(ev.target.value) || 0 }) }) : String(v.wert), el("small", { text: ` / ${v.max}` })),
         darf ? el("button", { type: "button", class: "ma-plus", text: "+", title: `${kurz} +1`, onclick: () => a.update({ [pfad]: v.wert + 1 }) }) : null,
         el("span", { class: "ma-balken" }, el("span", { style: `width:${v.max ? Math.max(0, Math.min(100, (v.wert / v.max) * 100)) : 0}%` }))]);
-    const unter = [s.art !== a.name ? s.art : null, `Grad ${s.grad}`, s.gf !== null ? `Gf ${s.gf}` : null, s.quelle].filter(Boolean).join(" · ");
+    const unter = [s.art !== a.name ? s.art : null, `Grad ${s.grad}`, s.groesse || null, s.gf !== null ? `Gf ${s.gf}` : null, s.quelle].filter(Boolean).join(" · ");
     wurzel.append(el("header", { class: "ma-kopf mg-kopf" },
       el("img", { class: "ma-portrait", src: a.img, alt: "" }),
       el("div", { class: "ma-kopf-text" },
@@ -223,7 +244,9 @@ export class GegnerBogen extends ActorSheetV2 {
             el("td", { text: w.schaden && !/^\d*W\d+([+–-]\d+)?$/.test(w.schaden.replace(/\s/g, "")) ? w.schaden : w.formel ? wNotation(w.formel) : w.schaden || "–" })))))
           : el("p", { class: "info", text: "Keine Angriffe (nur Magie oder harmlos)." }),
           el("p", { class: "info", text: "Ziel anvisieren und den EW anklicken: Das Ziel erhält in der Chatkarte die Aufforderung zum WW:Abwehr." })),
-        s.faehigkeiten.length ? karte("Fähigkeiten und Besonderheiten", "mg-faehigkeiten", el("ul", {}, s.faehigkeiten.map((f) => el("li", { text: f })))) : null,
+        s.faehigkeiten.length ? karte("Fähigkeiten und Besonderheiten", "mg-faehigkeiten", el("ul", {}, s.faehigkeiten.map(faehigkeitEl))) : null,
+        s.vorkommen ? karte("Vorkommen", "mg-vorkommen", el("p", {}, icon("fa-map-location-dot"), ` ${s.vorkommen}`)) : null,
+        besondereEl(s.besondere),
         karte("Zustände", "ma-k-zustaende", el("div", { class: "ma-zustand-knoepfe" }, ZUSTAENDE.map((z) => {
           const an = d.zustaende[z.id];
           return el("button", { type: "button", class: ["ma-zustand", an && "an"], "aria-pressed": String(an), title: z.text, disabled: !darf, onclick: () => a.update({ [`system.zustaende.${z.id}`]: !an }) }, icon(z.icon), el("span", { text: z.name }));
@@ -254,12 +277,13 @@ export class GegnerBogen extends ActorSheetV2 {
     return karte("Spieldaten bearbeiten", "mg-bearbeiten",
       el("div", { class: "ma-raster-zwei" },
         el("div", {}, feld("Art", "system.art", s.art), feld("Grad", "system.grad", s.grad, "number"), feld("Gefährlichkeit (Gf)", "system.gf", s.gf, "number"),
-          feld("LP-Formel", "system.lpFormel", s.lpFormel), feld("AP-Formel", "system.apFormel", s.apFormel), feld("Rüstklasse", "system.rk", s.rk), feld("Quelle", "system.quelle", s.quelle)),
+          feld("LP-Formel", "system.lpFormel", s.lpFormel), feld("AP-Formel", "system.apFormel", s.apFormel), feld("Rüstklasse", "system.rk", s.rk), feld("Größe", "system.groesse", s.groesse), feld("Quelle", "system.quelle", s.quelle)),
         el("div", {}, feld("St", "system.eigenschaften.St", s.eigenschaften.St), feld("Gw", "system.eigenschaften.Gw", s.eigenschaften.Gw), feld("In", "system.eigenschaften.In", s.eigenschaften.In),
           feld("B", "system.b", s.b), feld("Abwehr", "system.abwehr", s.abwehr, "number"), feld("Resistenz Geist", "system.resistenzGeist", s.resistenzGeist, "number"),
           feld("Resistenz Körper", "system.resistenzKoerper", s.resistenzKoerper, "number"), feld("Schadensbonus", "system.schb", s.schb, "number"))),
       el("label", { class: "ma-zeile mg-block" }, el("span", { text: "Angriffe (wie im Kodex: „Biss+7 (1W6), Klaue+7 (1W6–2) - Raufen+5 (1W6–4)“)" }), angriff),
-      el("label", { class: "ma-zeile mg-block" }, el("span", { text: "Fähigkeiten (eine je Zeile)" }), faeh));
+      el("label", { class: "ma-zeile mg-block" }, el("span", { text: "Fähigkeiten (eine je Zeile)" }), faeh),
+      feld("Vorkommen", "system.vorkommen", s.vorkommen));
   }
 
   _replaceHTML(result, content) { content.replaceChildren(result); }
@@ -304,6 +328,7 @@ export function gegnerAusBestiarium(w, { quelle, html, img }) {
   const v = w.werte;
   const s = {
     art: w.art, grad: w.grad, gf: v.gf, quelle,
+    groesse: w.groesse ?? v.groesse ?? "", vorkommen: v.vorkommen ?? "", besondere: w.besondere ?? {},
     lpFormel: v.lpFormel, apFormel: v.apFormel, rk: v.rk || "OR",
     eigenschaften: { St: String(v.st ?? ""), Gw: String(v.gw ?? ""), In: String(v.in ?? "") }, b: String(v.b ?? ""),
     abwehr: v.abwehr, resistenzGeist: v.resistenzGeist, resistenzKoerper: v.resistenzKoerper, schb: v.schb,

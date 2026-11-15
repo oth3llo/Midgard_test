@@ -27,13 +27,17 @@ const get = (k) => game.settings.get(SYSTEM_ID, k);
 export const REGELWERKE = [
   { buch: "Der Kodex", inhalt: "Fertigkeiten, Waffen, Rüstungen, Typen, Rassen, Ausrüstung und die Regelkapitel", pflicht: true },
   { buch: "Das Arkanum", inhalt: "Zauber, Zaubermittel und die Regeln der Magie", pflicht: false },
+  { buch: "Das Bestiarium", inhalt: "312 Gegner in 40 Familien, Regeln zu Kreaturen und Kampftaktiken", pflicht: false },
+  { buch: "Dunkle Mächte", inhalt: "Nekromantie, Chaoswunder, Finstere Magie (161 Zauber), 75 Untote und Geisterwesen, Regeln", pflicht: false },
+  { buch: "Das Mysterium", inhalt: "Thaumaturgie: 265 Zaubersalze, Runen, Siegel, Runenstäbe, Thaumatherapie, Regeln", pflicht: false },
+  { buch: "Ars Armorum", inhalt: "Kampfkünste, Techniken, Kampfspezialisten, 27 Kampfverse, Regeln", pflicht: false },
 ];
 
 export function einstellungenRegistrieren() {
   // Regelwerke: Menü mit Status und Import-Knopf (nur Spielleiter)
   game.settings.registerMenu(SYSTEM_ID, "regelwerke", {
     name: "Regelwerke", label: "Regelwerke importieren", icon: "fa-solid fa-file-import", type: RegelwerkeFenster, restricted: true,
-    hint: "Eigene Regelwerk-PDFs (Der Kodex, Das Arkanum) einlesen und den Stand der Kompendien prüfen.",
+    hint: "Eigene Regelwerk-PDFs (Der Kodex, Das Arkanum, Das Bestiarium, Dunkle Mächte, Das Mysterium, Ars Armorum) einlesen und den Stand der Kompendien prüfen.",
   });
   // --- Charaktererschaffung (Welt)
   game.settings.register(SYSTEM_ID, "erschaffungWuerfel", {

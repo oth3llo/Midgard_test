@@ -123,7 +123,7 @@ export class KompendiumBrowser extends ApplicationV2 {
     const wurzel = el("div", { class: "mb-wurzel midgard-cmt" });
     wurzel.append(this.#reiter(), el("div", { class: "mb-haupt" }, this.#filterleiste(eintraege), el("div", { class: "mb-liste" }), el("aside", { class: "mb-detail" })));
     if (this.#ausKompendium[this.#kat] && !eintraege.length) {
-      wurzel.insertBefore(el("p", { class: "mb-hinweis" }, "Dieses Kompendium ist noch leer. Es wird durch den Import der eigenen Regelwerk-PDF gefüllt (Der Kodex, Das Arkanum)",
+      wurzel.insertBefore(el("p", { class: "mb-hinweis" }, "Dieses Kompendium ist noch leer. Es wird durch den Import der eigenen Regelwerk-PDF gefüllt (Der Kodex, Das Arkanum, Bestiarium und weitere Quellenbücher)",
         game.user.isGM ? [": ", el("button", { type: "button", text: "Regelwerk-PDF importieren", onclick: () => pdfImportStarten() })] : ", das macht der Spielleiter."), wurzel.children[1]);
     }
     if (this.#ziel && eintraege.length) {
@@ -146,7 +146,7 @@ export class KompendiumBrowser extends ApplicationV2 {
         type: "button", class: kat === this.#kat ? "aktiv" : null, "data-kat": kat, text: def.label, "aria-pressed": String(kat === this.#kat),
         onclick: () => { this.#kat = kat; this.#auswahl = null; this.render(); },
       })),
-      game.user.isGM ? el("button", { type: "button", class: "mb-pdf", title: "Beschreibungen aus Kodex oder Arkanum (eigene PDF) in die Kompendien dieser Welt übernehmen", onclick: () => pdfImportStarten() },
+      game.user.isGM ? el("button", { type: "button", class: "mb-pdf", title: "Beschreibungen aus Kodex, Arkanum oder Quellenbüchern (eigene PDF) in die Kompendien dieser Welt übernehmen", onclick: () => pdfImportStarten() },
         el("i", { class: "fa-solid fa-file-pdf", "aria-hidden": "true" }), " Regelwerk-PDF importieren") : null);
   }
 
@@ -262,7 +262,7 @@ export function knopfEinbauen(_app, html) {
   const ort = wurzel.querySelector(".header-actions") ?? wurzel.querySelector(".directory-header") ?? wurzel;
   ort.append(knopf);
   if (game.user.isGM) {
-    const pdf = el("button", { type: "button", class: "midgard-browser-knopf midgard-pdf-knopf", title: "Beschreibungen aus Kodex oder Arkanum (eigene PDF) übernehmen" }, el("i", { class: "fa-solid fa-file-pdf" }), " Regelwerk-PDF importieren");
+    const pdf = el("button", { type: "button", class: "midgard-browser-knopf midgard-pdf-knopf", title: "Beschreibungen aus Kodex, Arkanum oder Quellenbüchern (eigene PDF) übernehmen" }, el("i", { class: "fa-solid fa-file-pdf" }), " Regelwerk-PDF importieren");
     pdf.addEventListener("click", () => pdfImportStarten());
     ort.append(pdf);
   }

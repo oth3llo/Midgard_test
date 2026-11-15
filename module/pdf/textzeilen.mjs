@@ -8,6 +8,29 @@ import { trennstelle, woerterVerbinden } from "./textpruefung.mjs";
  * @param {number} von, bis   Seitennummern (1-basiert, einschließlich)
  * @returns {Promise<Array<{text, x, y, groesse, schrift, seite, spalte, abstand}>>}
  */
+/**
+ * Überdruckter Text (Konturschrift, z. B. Überschriften im Bestiarium) steht mehrfach an derselben Stelle,
+ * teils in Bruchstücken („In“, „dr“, „uw“ über „Indruwal I“). Ein Stück, das ganz in einem früheren
+ * Stück derselben Grundlinie liegt und dessen Buchstaben dort in derselben Folge vorkommen („r d“ in
+ * „(Grad 6)“), entfällt.
+ */
+const folgeIn = (teil, ganz) => { let i = 0; for (const c of ganz) if (c === teil[i]) i++; return i === teil.length; };
+function nichtUeberdruckt() {
+  const proZeile = new Map();
+  return (s) => {
+    const t = s.text.trim();
+    if (!t) return true;
+    const schl = Math.round(s.y);
+    const kandidaten = [...(proZeile.get(schl - 1) ?? []), ...(proZeile.get(schl) ?? []), ...(proZeile.get(schl + 1) ?? [])];
+    const doppelt = kandidaten.some((v) => Math.abs(v.y - s.y) < 0.6 && v.groesse === s.groesse && v.x - 0.6 <= s.x
+      && s.x + (s.breite ?? 0) <= v.x + (v.breite ?? 0) + 0.6 && folgeIn(t.replace(/\s+/g, ""), v.text.replace(/\s+/g, "")));
+    if (doppelt) return false;
+    if (!proZeile.has(schl)) proZeile.set(schl, []);
+    proZeile.get(schl).push(s);
+    return true;
+  };
+}
+
 export async function textzeilen(doc, von = 1, bis = doc.numPages) {
   const alle = [];
   for (let n = von; n <= Math.min(bis, doc.numPages); n++) {
@@ -18,7 +41,7 @@ export async function textzeilen(doc, von = 1, bis = doc.numPages) {
     const stuecke = inhalt.items.filter((i) => i.str !== undefined && (i.str.trim() || i.hasEOL)).map((i) => ({
       text: i.str, x: i.transform[4], y: i.transform[5], groesse: Math.round(Math.hypot(i.transform[2], i.transform[3]) * 10) / 10,
       schrift: i.fontName, breite: i.width,
-    }));
+    })).filter(nichtUeberdruckt());
     const mitte = breite / 2;
     // Grundschrift der Seite: die Schrift mit dem meisten Text
     const menge = new Map();

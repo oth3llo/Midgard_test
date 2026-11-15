@@ -1,11 +1,13 @@
 // Ein-Klick-Import der Beschreibungstexte aus den eigenen Regelwerk-PDFs in die Welt-Kompendien.
 // Die PDF wird nur im Browser des Spielleiters gelesen (pdf.js); die Texte landen ausschließlich
-// in den Kompendien dieser Welt, nicht im System. Erkannt werden „Das Arkanum“ (Zauber) und
-// „Der Kodex“ (Fertigkeiten, Waffenfertigkeiten, Waffen, Rüstungen, Abenteurertypen, Rassen).
+// in den Kompendien dieser Welt, nicht im System. Erkannt werden „Das Arkanum“ (Zauber), „Der Kodex“
+// (Fertigkeiten, Waffenfertigkeiten, Waffen, Rüstungen, Abenteurertypen, Rassen, Gegner) und die
+// Quellenbücher „Das Bestiarium“, „Dunkle Mächte“, „Das Mysterium“ und „Ars Armorum“ (Gegner, Zauber
+// mit allen Spieldaten aus dem Buch, Regeln).
 // Die Kompendien sind bis zum Import leer; der Import legt die Einträge an.
 import { SYSTEM_ID, packId } from "./kategorien.mjs";
 import { textzeilen } from "./pdf/textzeilen.mjs";
-import { zauberAusArkanum, zaubermittelAusArkanum } from "./pdf/arkanum.mjs";
+import { zauberAusArkanum, zaubermittelAusArkanum, zauberAusBuch } from "./pdf/arkanum.mjs";
 import { fertigkeitenAusKodex, typenUndRassenAusKodex, ruestungenAusKodex } from "./pdf/kodex.mjs";
 import { buchErkennen, ausgabeFingerabdruck, GEPRUEFTE_AUSGABEN } from "./pdf/erkennung.mjs";
 import KOMPENDIUM from "../daten/kompendium.js";
@@ -16,9 +18,11 @@ import { textPruefen, pruefbericht, woerterbuchLoeschen } from "./pdf/textpruefu
 import { allesVerlinken, REGEL_PACK } from "./verlinken.mjs";
 import { esc } from "./wuerfe.mjs";
 import { eintragBild, bildPfad, slug } from "./bilder.mjs";
-import { bestiariumAusKodex, gegnerAusAbenteuer, abenteuerErkennen } from "./pdf/bestiarium.mjs";
+import { bestiariumAusKodex, gegnerAusAbenteuer, abenteuerErkennen, gegnerAusBuch } from "./pdf/bestiarium.mjs";
 import { gegnerAusBestiarium } from "./gegner.mjs";
-import { GEGNER_PACK, gegnerPackHolen } from "./kompendien.mjs";
+import { GEGNER_PACK, gegnerPackHolen, HANDOUT_PACK, KARTEN_PACK } from "./kompendien.mjs";
+import { materialDokument, handoutImNamen } from "./pdf/abbildungen.mjs";
+import { bildmaterialImportieren } from "./bildmaterial.mjs";
 
 const PFAD = `systems/${SYSTEM_ID}/vendor/pdfjs`;
 let pdfjs = null;
@@ -91,14 +95,26 @@ export async function pdfImportieren(daten, { dateiname = "PDF", stumm = false, 
     textPruefen(zeilen);
     // Erkennung nur am Inhalt (Dateiname spielt keine Rolle)
     const erkannt = buchErkennen(zeilen, doc.numPages);
-    // Abenteuerband: nur die Gegner (Kästen mit Spieldaten) in das Kompendium „Gegner“, Ordner je Band
-    const abenteuer = erkannt.buch ? null : abenteuerErkennen(zeilen);
+    // Abenteuerband: Gegner (Kästen mit Spieldaten) in das Kompendium „Gegner“, Bildmaterial in „Handouts“
+    // und „Karten“, je Band ein Ordner. Eigenes Handout- oder Karten-Dokument: nur das Bildmaterial.
+    // „Handout“ im Dateinamen: alle Inhalte sind Handouts (keine Karten, Gegner oder Regeln), auch wenn die
+    // PDF einem Buch oder Abenteuerband gleicht
+    const abenteuer = erkannt.buch && !handoutImNamen(dateiname) ? null : abenteuerErkennen(zeilen);
+    const material = handoutImNamen(dateiname) ? "handouts" : erkannt.buch ? null : materialDokument(zeilen, dateiname);
+    if (material) {
+      const titel = abenteuer?.titel ?? await materialTitel(zeilen, dateiname);
+      const bericht = { buch: titel, teile: [await bildmaterialImportieren(doc, { titel, dokument: material })], dateiname, abenteuer: true, material };
+      await protokollieren({ datei: dateiname, buch: `${titel} (${material === "handouts" ? "Handouts" : "Karten"})`, fingerabdruck: ausgabeFingerabdruck(zeilen, doc.numPages), gepruefteAusgabe: false });
+      Hooks.callAll("midgardKompendienGeaendert");
+      if (!stumm) berichtZeigen(bericht);
+      return bericht;
+    }
     if (abenteuer) {
       // bekannte Wesen (Kodex-Bestiarium und bereits importierte Bände) helfen bei der Einzahl („2 Riesenratten“)
       const pack = game.packs.get(`world.${GEGNER_PACK}`);
       const bekannt = new Set((pack ? await pack.getDocuments() : []).flatMap((d) => [d.name, d.system?.art]).filter(Boolean));
       const gegner = gegnerAusAbenteuer(zeilen, { bekannt });
-      const bericht = { buch: abenteuer.titel, teile: [await gegnerSchreiben(gegner, abenteuer.titel)], dateiname, abenteuer: true };
+      const bericht = { buch: abenteuer.titel, teile: [await gegnerSchreiben(gegner, abenteuer.titel), await bildmaterialImportieren(doc, { titel: abenteuer.titel })], dateiname, abenteuer: true };
       bericht.kopien = await kopienNachziehen();
       await protokollieren({ datei: dateiname, buch: abenteuer.titel, fingerabdruck: ausgabeFingerabdruck(zeilen, doc.numPages), gepruefteAusgabe: false });
       Hooks.callAll("midgardKompendienGeaendert");
@@ -106,13 +122,14 @@ export async function pdfImportieren(daten, { dateiname = "PDF", stumm = false, 
       return bericht;
     }
     if (!erkannt.buch) {
-      ui.notifications.warn(`${dateiname}: kein unterstütztes Regelwerk erkannt (unterstützt: Der Kodex, Das Arkanum und Midgard-Abenteuerbände; ${erkannt.treffer} von ${erkannt.gesamt} Merkmalen gefunden).`);
+      ui.notifications.warn(`${dateiname}: kein unterstütztes Regelwerk erkannt (unterstützt: Der Kodex, Das Arkanum, Das Bestiarium, Dunkle Mächte, Das Mysterium, Ars Armorum und Midgard-Abenteuerbände; ${erkannt.treffer} von ${erkannt.gesamt} Merkmalen gefunden).`);
       return null;
     }
     const fingerabdruck = ausgabeFingerabdruck(zeilen, doc.numPages);
     const gepruefteAusgabe = (GEPRUEFTE_AUSGABEN[erkannt.buch] ?? []).includes(fingerabdruck);
     let bericht;
     if (erkannt.buch === "Das Arkanum") bericht = await arkanumImportieren(zeilen);
+    else if (QUELLENBUECHER[erkannt.buch]) bericht = await quellenbuchImportieren(zeilen, erkannt.buch);
     else {
       bericht = await kodexImportieren(zeilen);
       await game.settings.set(SYSTEM_ID, "kodexImportiert", true); // Assistent freigeben
@@ -120,7 +137,11 @@ export async function pdfImportieren(daten, { dateiname = "PDF", stumm = false, 
     bericht.fingerabdruck = fingerabdruck;
     bericht.gepruefteAusgabe = gepruefteAusgabe;
     await protokollieren({ datei: dateiname, buch: erkannt.buch, fingerabdruck, gepruefteAusgabe });
-    bericht.teile.push(await regelnSchreiben(zeilen, bericht.buch));
+    // Regeltexte ohne Zeilen, die schon als Zauber oder Gegner übernommen sind
+    const regelZeilen = bericht.verbraucht ? zeilen.filter((z) => !bericht.verbraucht.has(z)) : zeilen;
+    bericht.teile.push(await regelnSchreiben(regelZeilen, bericht.buch, { zusatz: bericht.zusatzJournale }));
+    delete bericht.verbraucht;
+    delete bericht.zusatzJournale;
     bericht.textpruefung = pruefbericht();
     await protokollErgaenzen(bericht.textpruefung.zusammenfassung);
     bericht.links = await allesVerlinken();
@@ -139,6 +160,24 @@ export async function pdfImportieren(daten, { dateiname = "PDF", stumm = false, 
   }
 }
 
+/**
+ * Abenteuer eines eigenen Handout- oder Karten-Dokuments: ein bereits bekanntes Abenteuer (Ordner in Gegner,
+ * Handouts, Karten), dessen Titel im Text der ersten Seiten oder im Dateinamen vorkommt; sonst der Dateiname
+ * ohne „Handouts“, „Karten“ und Ähnliches.
+ */
+async function materialTitel(zeilen, dateiname) {
+  const norm = (t) => String(t).toLowerCase().normalize("NFC").replace(/[^a-zäöüß0-9]+/g, " ").trim();
+  const bekannt = new Set();
+  for (const name of [GEGNER_PACK, HANDOUT_PACK, KARTEN_PACK]) for (const f of game.packs.get(`world.${name}`)?.folders ?? []) if (!(f.folder?.id ?? f.folder)) bekannt.add(f.name);
+  const text = ` ${norm(zeilen.filter((z) => z.seite <= 3).map((z) => z.text).join(" "))} ${norm(dateiname)} `;
+  // längster Treffer zuerst („Karmodin 1: Weißer Wolf …“ vor „Karmodin“); auch nur der Teil hinter dem Doppelpunkt
+  const treffer = [...bekannt].sort((a, b) => b.length - a.length).find((t) => [t, t.split(":").pop(), t.split(":")[0]].some((x) => norm(x).length >= 4 && text.includes(` ${norm(x)} `)));
+  if (treffer) return treffer;
+  const name = String(dateiname).normalize("NFC").replace(/\.pdf$/i, "").replace(/[_]+/g, " ")
+    .replace(/\b(spieler[- ]?)?(handouts?|karten?|pläne|plaene|lagepläne|lageplaene|material|unterlagen)\b/gi, "").replace(/\s*[-–,]\s*$|^\s*[-–,]\s*/g, "").replace(/\s+/g, " ").trim();
+  return name || "Abenteuermaterial";
+}
+
 /** Ergebnis der Textprüfung am letzten Protokolleintrag vermerken. */
 async function protokollErgaenzen(text) {
   const alt = [...(game.settings.get(SYSTEM_ID, "importProtokoll") ?? [])];
@@ -154,6 +193,116 @@ async function arkanumImportieren(zeilen) {
   const mittel = zaubermittelAusArkanum(zeilen, KOMPENDIUM.kategorien.gegenstaende.filter(ausArkanum).map((e) => e.name));
   const teil2 = await schreiben("gegenstaende", mittel, { buch: "Das Arkanum", auswahl: ausArkanum });
   return { buch: "Das Arkanum", teile: [teil, teil2] };
+}
+
+/**
+ * Quellenbücher ohne Datensatz: Gegner und Zauber entstehen vollständig aus der PDF.
+ * gegner: Seitenbereich und Schriftgröße der Überschrift je Art; zauber: Kurzname für gleichnamige Sprüche;
+ * familien: Einleitung je Wesensfamilie als Journal mit Verweisen auf die Gegner.
+ */
+export const QUELLENBUECHER = {
+  "Das Bestiarium": { gegner: { bereiche: [[43, 255]], kopfGroesse: 18 }, familien: true },
+  "Dunkle Mächte": { gegner: { bereiche: [[99, 146]], kopfGroesse: 11 }, zauber: "Dunkle Mächte" },
+  "Das Mysterium": { zauber: "Mysterium" },
+  "Ars Armorum": { zauber: "Ars Armorum" },
+};
+
+async function quellenbuchImportieren(zeilen, buch) {
+  const q = QUELLENBUECHER[buch];
+  const teile = [], verbraucht = new Set();
+  let zusatzJournale = null;
+  if (q.zauber) {
+    const bekannt = new Set(KOMPENDIUM.kategorien.zauber.map((z) => z.name));
+    const zauber = zauberAusBuch(zeilen, { bekannt, buchKurz: q.zauber });
+    for (const z of zauber.verbraucht) verbraucht.add(z);
+    teile.push(await zauberSchreiben(zauber, buch));
+  }
+  if (q.gegner) {
+    const gegner = gegnerAusBuch(zeilen, q.gegner);
+    // Bestiarium: der Teil „Bestiarium“ ist vollständig Gegner (die Regeln stehen davor und im Anhang)
+    for (const z of gegner.verbraucht ?? []) verbraucht.add(z);
+    teile.push(await gegnerSchreiben(gegner, buch, { ordnerVon: (w) => [buch, w.familie] }));
+    if (q.familien) zusatzJournale = (pack) => familienJournal(pack, buch, gegner);
+  }
+  return { buch, teile, verbraucht, zusatzJournale };
+}
+
+/** Einleitung jeder Wesensfamilie („Affen“, „Drachen“ …) mit Verweisen auf ihre Gegner im Kompendium. */
+function familienJournal(pack, buch, gegner) {
+  const familien = new Map();
+  for (const w of gegner) {
+    if (!w.familie) continue;
+    if (!familien.has(w.familie)) familien.set(w.familie, { seite: w.familieSeite ?? w.seite, einleitung: w.familieText ?? [], wesen: [] });
+    familien.get(w.familie).wesen.push(w);
+  }
+  const gegnerPack = `world.${GEGNER_PACK}`;
+  const seiten = [...familien].map(([name, f], i) => {
+    const liste = [...f.wesen].sort((a, b) => a.name.localeCompare(b.name, "de"))
+      .map((w) => `<li>@UUID[Compendium.${gegnerPack}.Actor.${stabileId(`gegner:${buch}:${w.name}`)}]{${w.name}} <span class="midgard-leise">Grad ${w.grad}${w.groesse ? `, ${w.groesse}` : ""}</span></li>`).join("");
+    return {
+      _id: stabileId(`${buch}|Familien|${name}`), name, type: "text", sort: i * 100, title: { show: true, level: 1 },
+      text: { format: 1, content: `${gegliedertAlsHtml(gliedern(f.einleitung))}<h3>Wesen dieser Familie</h3><ul class="midgard-verweise">${liste}</ul><p class="midgard-fundstelle"><em>${esc(buch)}, S. ${f.seite}</em></p>` },
+      flags: { [SYSTEM_ID]: { seite: f.seite, ebene: 2 } },
+    };
+  });
+  return [{ name: "Die Familien des Bestiariums", teil: "Bestiarium", seite: 43, pages: seiten }];
+}
+
+// Kapitel mit festen Spieldaten, die im Buch nur in der Einleitung stehen
+const ZAUBER_VORGABE = {
+  "Zauber der Finsteren Magie": { Ursprung: "schwarzmagisch" },
+  "Zauberrunen": { Ursprung: "göttlich", Zauberdauer: "30 min" },
+};
+const ZAUBER_BILD = { Beherrschen: "icons/svg/eye.svg", Bewegen: "icons/svg/wing.svg", Erkennen: "icons/svg/eye.svg", Erschaffen: "icons/svg/fire.svg",
+  Formen: "icons/svg/upgrade.svg", "Verändern": "icons/svg/aura.svg", "Zerstören": "icons/svg/explosion.svg", Wundertaten: "icons/svg/holy-shield.svg",
+  Dweomer: "icons/svg/oak.svg", Zauberlieder: "icons/svg/sound.svg" };
+
+/**
+ * Zauber eines Quellenbuchs in das Zauber-Kompendium: Spieldaten und Text aus der PDF, Ordner Buch › Kapitel.
+ * Ein erneuter Import ersetzt alle Zauber dieses Buches; Zauber anderer Bücher bleiben.
+ */
+async function zauberSchreiben(liste, buch) {
+  const pack = game.packs.get(packId("zauber"));
+  if (!pack) throw new Error("Kompendium zauber fehlt; zuerst die Welt als Spielleiter laden.");
+  const ergebnis = { kategorie: "zauber", gelesen: liste.length, angelegt: 0, ersetzt: 0, geschrieben: 0, nichtZugeordnet: [], ohne: [] };
+  if (!liste.length) return ergebnis;
+  const neu = liste.map((z) => {
+    const d = { ...(ZAUBER_VORGABE[z.kapitel] ?? {}), ...z.daten };
+    // Angaben ohne eigenes Feld als Merkkasten über dem Text
+    const merk = [z.vz !== null ? ["Verdammniszahl", String(z.vz)] : null, d.Zielgruppe ? ["Zielgruppe", d.Zielgruppe] : null, d.Auftragen ? ["Auftragen", d.Auftragen] : null].filter(Boolean);
+    const bloecke = merk.length ? [{ merk, titel: "Weitere Angaben" }, ...z.absaetze] : z.absaetze;
+    const quelle = `${buch}, S. ${z.seite}`;
+    const e = {
+      _id: stabileId(`zauber:${buch}:${z.name}`), name: z.name, type: "zauber", img: ZAUBER_BILD[z.gruppe] ?? "icons/svg/daze.svg",
+      system: {
+        gruppe: z.gruppe, stufe: z.stufe ?? 0, art: z.art, ursprung: d.Ursprung ?? "", ap: d["AP-Verbrauch"] ?? "", zauberdauer: d.Zauberdauer ?? "",
+        reichweite: d.Reichweite ?? "", wirkungsziel: d.Wirkungsziel ?? "", wirkungsbereich: d.Wirkungsbereich ?? "", wirkungsdauer: d.Wirkungsdauer ?? "",
+        agens: z.agens, reagens: z.reagens, material: z.material ?? "", beschreibung: alsHtml(bloecke, quelle), quelle: buch,
+      },
+      flags: { [SYSTEM_ID]: { schluessel: `zauber:${buch}:${z.name}`, quelle, pdfImport: { buch, seite: z.seite } } },
+    };
+    const bild = eintragBild("zauber", e);
+    if (bild) e.img = bild;
+    return e;
+  });
+  const ids = new Set(neu.map((d) => d._id));
+  const gesperrt = pack.locked;
+  if (gesperrt) await pack.configure({ locked: false });
+  try {
+    const alt = (await pack.getDocuments()).filter((d) => ids.has(d.id) || d.getFlag(SYSTEM_ID, "pdfImport")?.buch === buch).map((d) => d.id);
+    if (alt.length) await Item.deleteDocuments(alt, { pack: pack.collection });
+    const ordnerId = new Map();
+    for (const [d, z] of neu.map((d, i) => [d, liste[i]])) {
+      const pfad = [buch, z.kapitel].filter(Boolean);
+      const schl = pfad.join("/");
+      if (!ordnerId.has(schl)) ordnerId.set(schl, await ordnerPfad(pack, pfad, "Item"));
+      d.folder = ordnerId.get(schl);
+    }
+    await Item.createDocuments(neu, { pack: pack.collection, keepId: true });
+    await leereOrdnerLoeschen(pack);
+    Object.assign(ergebnis, { angelegt: neu.length, ersetzt: alt.length, geschrieben: neu.filter((d) => d.system.beschreibung).length });
+  } finally { if (gesperrt) await pack.configure({ locked: true }); }
+  return ergebnis;
 }
 
 async function kodexImportieren(zeilen) {
@@ -186,7 +335,7 @@ async function kodexImportieren(zeilen) {
  * alphabetisch sortiert. Feste IDs je Quelle und Name. Ein erneuter Import ersetzt alle Gegner dieser
  * Quelle vollständig (auch von Hand geänderte und eigene Notizen); Gegner anderer Quellen bleiben.
  */
-async function gegnerSchreiben(wesen, buch) {
+async function gegnerSchreiben(wesen, buch, { ordnerVon = () => [buch] } = {}) {
   const pack = game.packs.get(`world.${GEGNER_PACK}`) ?? await gegnerPackHolen();
   const ergebnis = { kategorie: "gegner", gelesen: wesen.length, angelegt: 0, ersetzt: 0, geschrieben: 0, nichtZugeordnet: [], ohne: [] };
   if (!wesen.length) return ergebnis;
@@ -203,8 +352,15 @@ async function gegnerSchreiben(wesen, buch) {
     const ids = new Set(neu.map((d) => d._id));
     const alt = (await pack.getDocuments()).filter((d) => ids.has(d.id) || d.getFlag(SYSTEM_ID, "pdfImport")?.buch === buch).map((d) => d.id);
     if (alt.length) await Actor.deleteDocuments(alt, { pack: pack.collection });
-    const ordner = await ordnerPfad(pack, [buch], "Actor", {}, "a");
-    for (const d of neu) d.folder = ordner;
+    // Ordner je Quelle, im Bestiarium und in Quellenbüchern darunter je Wesensfamilie
+    const ordnerId = new Map();
+    const nachName = new Map(wesen.map((w) => [w.name, w]));
+    for (const d of neu) {
+      const pfad = ordnerVon(nachName.get(d.name)).filter(Boolean);
+      const schl = pfad.join("/");
+      if (!ordnerId.has(schl)) ordnerId.set(schl, await ordnerPfad(pack, pfad, "Actor", {}, "a"));
+      d.folder = ordnerId.get(schl);
+    }
     await Actor.createDocuments(neu, { pack: pack.collection, keepId: true });
     await leereOrdnerLoeschen(pack);
     Object.assign(ergebnis, { angelegt: neu.length, ersetzt: alt.length, geschrieben: neu.length });
@@ -364,7 +520,7 @@ async function ordnerPfad(pack, pfad, typ, flags = {}, sortierung = "m") {
  * Einträgen (Götter, Magiergilden, Verletzungen …) werden ein eigenes Journal mit einer Seite je
  * Eintrag, auf das der Abschnitt im Kapitel verweist.
  */
-async function regelnSchreiben(zeilen, buch) {
+async function regelnSchreiben(zeilen, buch, { zusatz = null } = {}) {
   const pack = game.packs.get(`world.${REGEL_PACK}`);
   if (!pack || !REGELBEREICHE[buch]) return { kategorie: "regeln", angelegt: 0, geschrieben: 0, nichtZugeordnet: [], ohne: [] };
   const kapitel = regelnAusBuch(zeilen, REGELBEREICHE[buch]);
@@ -414,6 +570,11 @@ async function regelnSchreiben(zeilen, buch) {
       if (kapitelBild && seiten[0]) seiten[0].text.content = `<img class="midgard-kapitelbild" src="${kapitelBild}" alt="">${seiten[0].text.content}`;
       neu.push({ _id: kapId, name: k.titel, folder: ordner, sort: (nr++) * 100, flags: { [SYSTEM_ID]: { buch, seite: k.seite } }, pages: seiten });
     }
+    // zusätzliche Journale (z. B. die Wesensfamilien des Bestiariums), Ordner Buch › Teil
+    for (const j of zusatz ? zusatz(pack) : []) {
+      neu.push({ _id: stabileId(`${buch}|${j.name}`), name: j.name, folder: await ordnerPfad(pack, [buch, j.teil], "JournalEntry", { buch }),
+        sort: (nr++) * 100, flags: { [SYSTEM_ID]: { buch, seite: j.seite } }, pages: j.pages });
+    }
     if (neu.length) await JournalEntry.createDocuments(neu, { pack: pack.collection, keepId: true });
     journale = neu.length;
     seitenZahl = neu.reduce((n, j) => n + j.pages.length, 0);
@@ -436,15 +597,16 @@ function berichtZeigen(b) {
   const liste = (titel, l) => (l.length ? `<details><summary>${esc(titel)} (${l.length})</summary><p>${l.map(esc).join(", ")}</p></details>` : "");
   const inhalt = `<div class="midgard-bericht">
     <p>Aus <strong>${esc(b.dateiname)}</strong> erkannt: <strong>${esc(b.buch)}</strong>.</p>
-    ${b.abenteuer ? `<p class="hinweis">Abenteuerband: Die Gegner aus den Spieldatenkästen stehen im Kompendium „Midgard: Gegner“ im Ordner „${esc(b.buch)}“, alphabetisch sortiert. Abenteuertext und Karten werden nicht übernommen.</p>`
+    ${b.material ? `<p class="hinweis">${b.material === "handouts" ? "Handout-Dokument: Alle Abbildungen und Seiten stehen im Kompendium „Midgard: Handouts“, auch Karten daraus" : "Karten-Dokument: Alle Abbildungen und Seiten stehen im Kompendium „Midgard: Karten“"}, Ordner „${esc(b.buch)}“, in der Reihenfolge des Dokuments.</p>`
+      : b.abenteuer ? `<p class="hinweis">Abenteuerband: Die Gegner aus den Spieldatenkästen stehen im Kompendium „Midgard: Gegner“ im Ordner „${esc(b.buch)}“, alphabetisch sortiert. Abbildungen stehen in „Midgard: Handouts“ und „Midgard: Karten“ (Ordner „${esc(b.buch)}“, Reihenfolge wie im Band); falsch eingeordnete lassen sich im Journal mit „Nach Karten verschieben“ bzw. „Nach Handouts verschieben“ umräumen. Der Abenteuertext wird nicht übernommen.</p>`
       : b.gepruefteAusgabe ? `<p class="hinweis">Ausgabe ${esc(b.fingerabdruck)}: gegen diese Ausgabe ist der Import geprüft.</p>`
       : `<p class="warnung">Diese Ausgabe (${esc(b.fingerabdruck)}) weicht von der geprüften ab, etwa eine andere Auflage. Bitte die Listen unten prüfen; einzelne Einträge können fehlen oder falsch zugeordnet sein.</p>`}
     <p>Übernommen:</p>
-    <ul>${b.teile.map((t) => t.kategorie === "regeln" ? `<li>Regeln: ${t.kapitel ?? 0} Kapitel mit ${t.angelegt} Seiten</li>` : `<li>${esc(t.kategorie)}: ${t.angelegt} angelegt${t.ersetzt ? ` (${t.ersetzt} vorherige ersetzt)` : ""}, ${t.geschrieben} mit Beschreibung</li>`).join("")}</ul>
+    <ul>${b.teile.map((t) => t.kategorie === "bildmaterial" ? `<li>Bildmaterial: ${t.handouts} Handouts, ${t.karten} Karten${t.ersetzt ? ` (${t.ersetzt} vorherige ersetzt)` : ""}</li>` : t.kategorie === "regeln" ? `<li>Regeln: ${t.kapitel ?? 0} Kapitel mit ${t.angelegt} Seiten</li>` : `<li>${esc(t.kategorie)}: ${t.angelegt} angelegt${t.ersetzt ? ` (${t.ersetzt} vorherige ersetzt)` : ""}, ${t.geschrieben} mit Beschreibung</li>`).join("")}</ul>
     ${b.abenteuer ? "" : `<p>${b.links ?? 0} Texte mit Verweisen auf Regeln, Zauber, Fertigkeiten und Gegenstände versehen.</p>`}
     ${b.kopien ? `<p>${b.kopien} Kopien auf Charakterbögen und in der Welt mit dem neuen Beschreibungstext versehen (Spielwerte unverändert).</p>` : ""}
     ${b.textpruefung ? textpruefungHtml(b.textpruefung) : ""}
-    ${b.teile.map((t) => liste(`${t.kategorie}: in der PDF gefunden, aber nicht zugeordnet`, t.nichtZugeordnet) + liste(`${t.kategorie}: ohne Beschreibung aus diesem Buch`, t.ohne)).join("")}
+    ${b.teile.filter((t) => t.kategorie !== "bildmaterial").map((t) => liste(`${t.kategorie}: in der PDF gefunden, aber nicht zugeordnet`, t.nichtZugeordnet) + liste(`${t.kategorie}: ohne Beschreibung aus diesem Buch`, t.ohne)).join("")}
     <p class="hinweis">Die Texte stehen nur in den Kompendien dieser Welt. Würfeltabellen, Beispiele und Merkkästen werden erkannt und eigens dargestellt; mehrspaltige Tabellen können unvollständig sein. Ein erneuter Import ersetzt alle Einträge dieses Buches vollständig, auch von Hand geänderte. Kopien auf Charakterbögen und in der Welt erhalten den neuen Beschreibungstext; ihre Spielwerte bleiben.</p>
   </div>`;
   if (D) D.prompt({ window: { title: "Regelwerk importiert" }, content: inhalt, ok: { label: "OK" }, rejectClose: false }).catch(() => {});
