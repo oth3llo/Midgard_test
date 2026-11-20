@@ -91,7 +91,8 @@
   }
   // Spielverlauf: EP-Konto, Gold, Praxispunkte, Steigerungen, später gelernte Fertigkeiten/Zauber, Protokoll
   function leeresSpiel() {
-    return { es: 0, ep: 0, gold: 0, pp: {}, werte: {}, neu: [], protokoll: [], apPlus: 0, gradBestaetigt: 1 };
+    // zahlungen: je Fertigkeit und Stufe, was tatsächlich bezahlt wurde ({ ep, gold, pp }), für Erstattungen bei Korrekturen
+    return { es: 0, ep: 0, gold: 0, pp: {}, werte: {}, neu: [], protokoll: [], apPlus: 0, gradBestaetigt: 1, zahlungen: {} };
   }
   function neueId() { return "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   function normalisieren(obj) {
@@ -1143,12 +1144,9 @@
       } }));
   }
   function wertEingabe(schluessel, start) {
-    const akt = aktuellerWert(schluessel, start);
-    // Spieler steigern Werte nur über das Lernen (EP, PP, Gold); direkt korrigieren darf nur die Spielleitung
-    if (!darfVergeben()) return h("span", { class: "wert-fest", title: "Steigern über „Lernen“ in der Seitenleiste" }, vz(akt));
-    return h("span", { class: "wert-eingabe" },
-      h("span", { class: "nur-drucken" }, vz(akt)),
-      h("input", { type: "number", class: "zahl klein nicht-drucken", value: akt, onchange: (ev) => { const v = zahl(ev.target.value); if (v === start || v === null) delete S.spiel.werte[schluessel]; else S.spiel.werte[schluessel] = v; neuZeichnen(); } }));
+    // Werte steigen nur über bezahltes Lernen; auch die Spielleitung setzt sie nicht frei. Korrekturen nach
+    // unten (mit Erstattung) gehen über den Lernbaum, Werte der Erschaffung über deren Schritte.
+    return h("span", { class: "wert-fest", title: darfVergeben() ? "Steigern über „Lernen“; Korrektur mit Erstattung im Lernbaum" : "Steigern über „Lernen“ in der Seitenleiste" }, vz(aktuellerWert(schluessel, start)));
   }
   function lerntabelle(kl) {
     const r = [];
@@ -1438,16 +1436,17 @@
   // alle gelernten Fertigkeiten und Waffen mit Lerndaten
   function gelernteListe() {
     const liste = [];
+    const imSpiel = new Set(S.spiel.neu);
     for (const f of alleFertigkeiten().concat(S.spiel.neu.filter((n) => !n.waffe && !n.zauber))) {
       const fd = fertigkeitDaten(f.name);
       if (!fd) continue;
       const key = "F:" + f.name + "|" + (f.spez || "");
-      liste.push({ key, titel: f.name + (f.spez ? ` (${f.spez})` : ""), lname: fd.name, gruppe: fd.gruppe, le: f.le || fd.le, ep: fd.kosten[S.klasse], wert: aktuellerWert(key, f.wert) });
+      liste.push({ key, titel: f.name + (f.spez ? ` (${f.spez})` : ""), lname: fd.name, gruppe: fd.gruppe, le: f.le || fd.le, ep: fd.kosten[S.klasse], wert: aktuellerWert(key, f.wert), basis: f.wert, imSpiel: imSpiel.has(f), eintrag: f });
     }
     for (const w of S.waffen.concat(S.spiel.neu.filter((n) => n.waffe))) {
       const wd = waffenDaten(w.name);
       const key = "W:" + w.name;
-      liste.push({ key, titel: w.name, lname: w.name, gruppe: wd.gruppe, le: "Gs", ep: L.waffenKosten[S.klasse], wert: aktuellerWert(key, w.wert), waffe: true });
+      liste.push({ key, titel: w.name, lname: w.name, gruppe: wd.gruppe, le: "Gs", ep: L.waffenKosten[S.klasse], wert: aktuellerWert(key, w.wert), waffe: true, basis: w.wert, imSpiel: imSpiel.has(w), eintrag: w });
     }
     return liste;
   }
@@ -1471,6 +1470,8 @@
     return basis === undefined ? null : basis;
   }
 
+  function zahlungMerken(s, key, ziel, z) { ((s.zahlungen = s.zahlungen || {})[key] = s.zahlungen[key] || {})[ziel] = z; }
+  const lernSchluessel = (e, spez) => (e.waffe ? "W:" + e.lname : "F:" + e.lname + "|" + (spez || ""));
   // Buchung mit Rückgängig: vorher wird der Spielstand (ohne Protokoll) gesichert
   function buchen(text, aenderung) {
     const vorher = JSON.parse(JSON.stringify({ spiel: Object.assign({}, S.spiel, { protokoll: undefined }), eig: S.eig, pAwurf: S.pAwurf, Wkwurf: S.Wkwurf, Au: S.Au, festPA: S.festPA ?? null, festWk: S.festWk ?? null }));
@@ -1637,6 +1638,7 @@
             zu();
             buchen(`${g.titel} auf +${ziel}: ${te} TE` + (pp ? ` (${pp} PP)` : "") + ` – ${fmt(ep)} EP, ${fmt(gold)} GS` + (belohnung ? " (Belohnung)" : ""), (s) => {
               s.werte[g.key] = ziel; if (pp) s.pp[g.key] = ppVerf - pp; s.ep -= ep; s.gold -= gold;
+              zahlungMerken(s, g.key, ziel, { ep, gold, pp });
             });
           } }, "Steigern"),
           h("button", { type: "button", onclick: zu }, "Abbrechen"))];
@@ -1670,6 +1672,7 @@
             zu();
             buchen(`${e.lname}${spez ? " (" + spez.trim() + ")" : ""} gelernt (+${t.start}): ${le} LE – ${fmt(ep)} EP, ${fmt(gold)} GS` + (belohnung ? " (Belohnung)" : ""), (s) => {
               s.neu.push(e.waffe ? { name: e.lname, waffe: true, wert: t.start } : { name: e.lname, spez: spez.trim(), le: e.le, wert: t.start });
+              zahlungMerken(s, lernSchluessel(e, spez.trim()), t.start, { ep, gold, pp: 0 });
               s.ep -= ep; s.gold -= gold;
             });
           } }, "Lernen"),
@@ -1919,6 +1922,13 @@
     lernenBestaetigen(g.titel, `+${k.ziel}`, kostenText(k) + ppText, () => {
       buchen(`${g.titel} auf +${k.ziel}: ${k.te} TE` + (k.pp ? ` (${k.pp} PP)` : "") + ` – ${fmt(k.ep)} EP, ${fmt(k.gold)} GS`, (s) => {
         s.werte[g.key] = k.ziel; if (k.pp) s.pp[g.key] = (s.pp[g.key] || 0) - k.pp; s.ep -= k.ep; s.gold -= k.gold;
+        // je Stufe merken; Praxispunkte decken zuerst die unteren Stufen (wie bei der Berechnung)
+        let ppRest = k.pp || 0;
+        for (let z = g.wert + 1; z <= k.ziel; z++) {
+          const te = teFuer(g.gruppe, z), pp = Math.min(ppRest, te), rest = te - pp;
+          ppRest -= pp;
+          zahlungMerken(s, g.key, z, { ep: rest * g.ep, gold: rest * 20, pp });
+        }
       });
     });
   }
@@ -1927,6 +1937,7 @@
     const buche = (spez) => buchen(`${e.lname}${spez ? " (" + spez + ")" : ""} gelernt (+${x.start}): ${x.le} LE – ${fmt(x.ep)} EP, ${fmt(x.gold)} GS`, (s) => {
       s.neu.push(e.waffe ? { name: e.lname, waffe: true, wert: x.start } : { name: e.lname, spez, le: e.le, wert: x.start });
       s.ep -= x.ep; s.gold -= x.gold;
+      zahlungMerken(s, lernSchluessel(e, spez), x.start, { ep: x.ep, gold: x.gold, pp: 0 });
     });
     if (!MEHRFACH.includes(e.lname)) return lernenBestaetigen(lernAnzeige(e.lname), `+${x.start}`, kostenText(x), () => buche(""));
     // Sprachen, Landeskunde, Überleben: Angabe im selben Fenster
@@ -1972,7 +1983,7 @@
   const BAUM_KOSTEN = { 10: "günstig", 20: "normal", 30: "teuer", 40: "sehr teuer" };
   const BAUM_GRUPPIERUNG = [["bereich", "nach Bereich"], ["kosten", "nach Lernkosten"], ["leit", "nach Leiteigenschaft"]];
   // Ansicht des Baums: gehört zur Sitzung, nicht zum Charakter (auch Beobachter können umschalten)
-  const baumAnsicht = { gruppierung: "bereich", nurErreichbar: false };
+  const baumAnsicht = { gruppierung: "bereich", nurErreichbar: false, korrektur: false };
   // Lernbäume außerhalb der Wurzel (Reiter im Foundry-Bogen) zeichnen sich nach jeder Buchung sofort mit neu
   const baumBeobachter = new Set();
   function baumBereich(lname) {
@@ -1989,7 +2000,9 @@
     for (const g of gelernt) {
       const t = L.te[g.gruppe], max = t.start + t.stufen.length;
       const knoten = [];
-      for (let w = Math.min(t.start, g.wert); w <= g.wert; w++) knoten.push({ wert: w, art: "gelernt", titel: `${vz(w)} gelernt` });
+      // Korrektur: auf eine niedrigere, im Spiel bezahlte Stufe zurücksetzen (nicht unter den Wert aus der Erschaffung)
+      const zurueck = (w) => (w < g.wert && w >= g.basis ? { aktion: () => baumZuruecknehmen(g, w), titel: `Spielleitung: auf ${vz(w)} zurücksetzen, ${erstattungText(erstattung(g, w))} zurück` } : null);
+      for (let w = Math.min(t.start, g.wert); w <= g.wert; w++) knoten.push({ wert: w, art: "gelernt", titel: `${vz(w)} gelernt`, korrektur: zurueck(w) });
       const ppVerf = sp.pp[g.key] || 0;
       let te = 0, erreichbar = true, erreichbarAnzahl = 0;
       for (let ziel = g.wert + 1; ziel <= max; ziel++) {
@@ -2007,7 +2020,7 @@
           aktion: erreichbar ? () => lernlisteSteigern(g, k) : erste ? () => steigernDialog(g) : null });
       }
       zweige.push({ id: g.key, titel: lernAnzeige(g.titel), lname: g.lname, waffe: !!g.waffe, le: g.waffe ? null : g.le, gruppe: g.gruppe, ep: g.ep,
-        wert: g.wert, gelernt: true, erreichbar: erreichbarAnzahl, knoten });
+        wert: g.wert, gelernt: true, erreichbar: erreichbarAnzahl, knoten, vergessen: g.imSpiel ? () => baumVergessen(g) : null });
     }
     const hat = new Set(gelernt.map((g) => (g.waffe ? "W:" : "F:") + g.lname));
     const offen = L.fertigkeiten.map((f) => ({ lname: f.name, gruppe: f.gruppe, le: f.le, ep: f.kosten[S.klasse] }))
@@ -2022,7 +2035,9 @@
       const ok = !gesperrt && leistbar(x);
       const knoten = [{ wert: t.start, art: gesperrt ? "gesperrt" : ok ? "lernbar" : "teuer", neu: true,
         titel: gesperrt ? grund : `Neu lernen auf ${vz(t.start)}: ${kosten(x)}` + (ok ? "" : " (EP oder Gold reichen nicht)"),
-        aktion: gesperrt ? null : ok ? () => lernlisteNeu(x) : () => lernDialog(e) }];
+        aktion: gesperrt ? null : ok ? () => lernlisteNeu(x) : () => lernDialog(e),
+        // Spielleitung darf über Sperren hinweg lernen lassen, aber nur bezahlt (ausführliches Fenster mit Kosten)
+        korrektur: gesperrt ? { aktion: () => lernDialog(e), titel: `Spielleitung: trotz Sperre lernen (${grund}); kostet ${kostenText(x)}` } : null }];
       t.stufen.forEach((te, i) => knoten.push({ wert: t.start + i + 1, art: gesperrt ? "gesperrt" : "spaeter",
         titel: `${vz(t.start + i + 1)}: ${te} TE (${fmt(te * e.ep)} EP, ${fmt(te * 20)} GS), erst nach dem Lernen` }));
       zweige.push({ id: (e.waffe ? "W:" : "F:") + e.lname + (mehrfach ? "|neu" : ""), titel: lernAnzeige(e.lname) + (mehrfach && hat.has("F:" + e.lname) ? " (weitere Angabe)" : ""),
@@ -2079,6 +2094,56 @@
     if (zauber.length) aeste.push({ id: "zauber", titel: "Zauber", unter: "je Spruchstufe", zweige: zauber });
     return aeste.map((a) => Object.assign(a, { zweige: sortiert(a.zweige) })).filter((a) => a.zweige.length);
   }
+  // Korrektur durch die Spielleitung: nur Zurücknehmen, und zwar mit Erstattung. Werte steigen ausschließlich
+  // über bezahltes Lernen. Erstattet wird, was laut Zahlungsbuch bezahlt wurde (EP, Gold, Praxispunkte);
+  // für Stufen ohne Eintrag (vor dem Zahlungsbuch gelernt) gilt der Listenpreis. Werte aus der Erschaffung
+  // (mit LE bezahlt) lassen sich hier nicht zurücknehmen, das geht in den Schritten der Erschaffung.
+  function erstattung(g, bis) {
+    const buch = S.spiel.zahlungen[g.key] || {};
+    const e = { ep: 0, gold: 0, pp: 0, geschaetzt: 0 };
+    for (let z = bis + 1; z <= g.wert; z++) {
+      const b = buch[z];
+      if (b) { e.ep += b.ep; e.gold += b.gold; e.pp += b.pp || 0; continue; }
+      const te = teFuer(g.gruppe, z) || 0;
+      e.ep += te * g.ep; e.gold += te * 20; e.geschaetzt++;
+    }
+    return e;
+  }
+  function erstattungText(e) {
+    return [`${fmt(e.ep)} EP`, `${fmt(e.gold)} GS`, e.pp ? `${e.pp} PP` : null].filter(Boolean).join(", ");
+  }
+  const geschaetztText = (n) => (n ? ` Für ${n} ${n === 1 ? "Stufe" : "Stufen"} ist keine Zahlung erfasst (vor Version 0.9.10 gebucht), dafür gilt der Listenpreis.` : "");
+  function baumZuruecknehmen(g, w) {
+    if (!darfVergeben() || w >= g.wert || w < g.basis) return;
+    const e = erstattung(g, w);
+    frage("Korrektur (Spielleitung)", `${g.titel} von ${vz(g.wert)} auf ${vz(w)} zurücksetzen? Erstattet werden ${erstattungText(e)}.${geschaetztText(e.geschaetzt)} Die Korrektur steht im Protokoll und lässt sich rückgängig machen.`, "Zurücksetzen", () =>
+      buchen(`Spielleitung: ${g.titel} von ${vz(g.wert)} auf ${vz(w)} zurückgesetzt, erstattet ${erstattungText(e)}`, (s) => {
+        if (w === g.basis) delete s.werte[g.key]; else s.werte[g.key] = w;
+        s.ep += e.ep; s.gold += e.gold;
+        if (e.pp) s.pp[g.key] = (s.pp[g.key] || 0) + e.pp;
+        const buch = s.zahlungen[g.key] || {};
+        for (let z = w + 1; z <= g.wert; z++) delete buch[z];
+      }));
+  }
+  // Im Spiel gelernte Fertigkeit ganz zurücknehmen: Lernkosten und alle Steigerungen werden erstattet
+  function baumVergessen(g) {
+    if (!darfVergeben() || !g.imSpiel) return;
+    const e = erstattung(g, g.basis);
+    const lern = (S.spiel.zahlungen[g.key] || {})[g.basis];
+    if (lern) { e.ep += lern.ep; e.gold += lern.gold; }
+    else {
+      const t = L.te[g.gruppe], le = t.lernTE / 3;
+      e.ep += t.lernTE * g.ep + elfZuschlag() * le; e.gold += le * 200; e.geschaetzt++;
+    }
+    const ppRest = S.spiel.pp[g.key] || 0;
+    frage("Korrektur (Spielleitung)", `${g.titel} ganz zurücknehmen (${vz(g.wert)})? Erstattet werden ${fmt(e.ep)} EP und ${fmt(e.gold)} GS.${geschaetztText(e.geschaetzt)}${ppRest + e.pp ? ` Die ${ppRest + e.pp} Praxispunkte dieser Fertigkeit verfallen.` : ""} Die Korrektur steht im Protokoll und lässt sich rückgängig machen.`, "Zurücknehmen", () =>
+      buchen(`Spielleitung: ${g.titel} zurückgenommen, erstattet ${fmt(e.ep)} EP, ${fmt(e.gold)} GS`, (s) => {
+        const i = s.neu.indexOf(g.eintrag);
+        if (i >= 0) s.neu.splice(i, 1);
+        delete s.werte[g.key]; delete s.pp[g.key]; delete s.zahlungen[g.key];
+        s.ep += e.ep; s.gold += e.gold;
+      }));
+  }
   /**
    * Lernbaum als eigenständiges Element (für die Lernansicht hier und, mit extern, den Reiter im
    * Foundry-Bogen). Umschalten der Ansicht zeichnet nur den Baum neu; Buchungen laufen über buchen()
@@ -2094,17 +2159,19 @@
       const sichtbar = (z) => !baumAnsicht.nurErreichbar || z.gelernt || z.erreichbar > 0;
       const zaehle = (liste, f) => liste.reduce((n, z) => n + (f(z) ? 1 : 0), 0);
       const alle = aeste.flatMap((a) => a.zweige);
+      const korrektur = baumAnsicht.korrektur && darfVergeben();
       const knotenEl = (k, z) => {
         const kind = [h("span", { class: "lb-wert" }, k.neu ? vz(k.wert) : k.wert), k.zahl ? h("small", { class: "lb-zahl" }, k.zahl) : null];
         const klasse_ = `lb-knoten ${k.art}${k.neu ? " neu" : ""}`;
         const label = `${z.titel} ${k.titel}`;
-        return k.aktion && !gesperrt
+        if (korrektur && k.korrektur) return h("button", { type: "button", class: klasse_ + " korrektur", title: k.korrektur.titel, "aria-label": `${z.titel}: ${k.korrektur.titel}`, onclick: k.korrektur.aktion }, kind);
+        return k.aktion && (!gesperrt || korrektur)
           ? h("button", { type: "button", class: klasse_, title: k.titel, "aria-label": label, onclick: k.aktion }, kind)
           : h("span", { class: klasse_, title: k.titel, "aria-label": label, role: "img" }, kind);
       };
       const zweigEl = (z) => h("li", { class: `lb-zweig${z.gelernt ? " gelernt" : ""}${z.gesperrt ? " gesperrt" : ""}${z.erreichbar ? " erreichbar" : ""}`, "data-zweig": z.id },
         h("div", { class: "lb-name" },
-          h("strong", {}, z.titel),
+          h("strong", {}, z.titel, korrektur && z.vergessen ? h("button", { type: "button", class: "lb-vergessen", title: "Spielleitung: ganz zurücknehmen, Lernkosten und Steigerungen werden erstattet", "aria-label": `${z.titel} zurücknehmen`, onclick: z.vergessen }, "zurücknehmen") : null),
           h("span", { class: "lb-merkmale" },
             z.zauber ? null : z.gelernt ? h("span", { class: "lb-aktuell" }, vz(z.wert)) : null,
             z.le ? h("span", { title: "Leiteigenschaft" }, z.le) : null,
@@ -2129,7 +2196,9 @@
           h("div", { class: "lb-steuerung" },
             h("div", { class: "lb-umschalter", role: "group", "aria-label": "Äste ordnen" }, BAUM_GRUPPIERUNG.map(([id, text]) =>
               h("button", { type: "button", class: baumAnsicht.gruppierung === id ? "aktiv" : null, "aria-pressed": String(baumAnsicht.gruppierung === id), onclick: () => { baumAnsicht.gruppierung = id; zeichne(); } }, text))),
-            h("label", { class: "schalter" }, h("input", { type: "checkbox", checked: baumAnsicht.nurErreichbar, onchange: (ev) => { baumAnsicht.nurErreichbar = ev.target.checked; zeichne(); } }), " nur Gelerntes und jetzt Lernbares"))),
+            h("label", { class: "schalter" }, h("input", { type: "checkbox", checked: baumAnsicht.nurErreichbar, onchange: (ev) => { baumAnsicht.nurErreichbar = ev.target.checked; zeichne(); } }), " nur Gelerntes und jetzt Lernbares"),
+            darfVergeben() ? h("label", { class: "schalter lb-korrektur-schalter" }, h("input", { type: "checkbox", checked: baumAnsicht.korrektur, onchange: (ev) => { baumAnsicht.korrektur = ev.target.checked; zeichne(); } }), " Korrigieren (Spielleitung)") : null)),
+        korrektur ? h("div", { class: "sperre-hinweis lb-korrektur-hinweis" }, "Korrekturmodus: Ein Klick auf eine gelernte Stufe (gestrichelt) setzt die Fertigkeit dorthin zurück und erstattet EP, Gold und Praxispunkte, die dafür bezahlt wurden. „zurücknehmen“ entfernt eine im Spiel gelernte Fertigkeit samt Lernkosten. Steigern und Lernen kosten auch hier EP und Gold; gesperrte Fertigkeiten lassen sich bezahlt trotzdem lernen. Werte aus der Erschaffung ändern sich nur in deren Schritten. Alles steht im Protokoll und lässt sich rückgängig machen.") : "",
         h("ul", { class: "lb-legende", "aria-label": "Legende" },
           [["gelernt", "gelernt"], ["lernbar", "jetzt lernbar (Klick bucht nach Rückfrage)"], ["teuer", "EP oder Gold reichen noch nicht"], ["spaeter", "erst nach dem Lernen"], ["gesperrt", "nicht lernbar"]]
             .map(([art, text]) => h("li", {}, h("span", { class: `lb-knoten ${art}`, "aria-hidden": "true" }), text)),

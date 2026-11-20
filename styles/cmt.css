@@ -600,6 +600,11 @@
 .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.neu.gesperrt, .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.neu.teuer {outline-color: var(--linie);}
 .midgard-cmt.midgard-cmt .lernbaum button.lb-knoten:hover, .midgard-cmt.midgard-cmt .lernbaum button.lb-knoten:focus-visible {filter: brightness(1.12); outline: 3px dashed var(--akzent); outline-offset: 3px;}
 .midgard-cmt.midgard-cmt .lernbaum button.lb-knoten:active {transform: translate(1px, 1px);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.korrektur {cursor: pointer; animation: none; outline: 2px dashed var(--warn); outline-offset: 2px;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.korrektur:hover, .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.korrektur:focus-visible {outline: 3px solid var(--warn); filter: brightness(1.12);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-vergessen {margin: 0 0 0 .5rem; padding: 0 .4rem; font-size: .72rem; font-weight: 700; color: var(--warn); background: transparent; box-shadow: 0 0 0 1px var(--warn); vertical-align: middle;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-korrektur-hinweis {margin: -.4rem 0 1rem; padding: .45rem .7rem; font-size: .9rem; background: var(--warn-grund); color: var(--text);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-korrektur-schalter {color: var(--warn); font-weight: 700;}
 @keyframes lb-leuchten { 50% { box-shadow: 0 -2px 0 0 var(--gut), 0 2px 0 0 var(--gut), -2px 0 0 0 var(--gut), 2px 0 0 0 var(--gut), 0 0 0 7px color-mix(in srgb, var(--gut) 12%, transparent); } }
 @media (prefers-reduced-motion: reduce) {
 .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.lernbar {animation: none;}
@@ -665,6 +670,9 @@
 .midgard-cmt.midgard-cmt :is(option, optgroup) { color: var(--text); background-color: var(--flaeche); }
 .midgard-cmt.midgard-cmt option:disabled { color: var(--leise); }
 .midgard-cmt.midgard-cmt input::placeholder { color: var(--leise); opacity: 1; }
+
+/* Rückfragen und Fenster des Werkzeugs hängen am body: über alle Foundry-Fenster legen (die stapeln sich ab z-index 100 aufwärts) */
+.midgard-cmt.cmt-overlay .dialog-hintergrund { z-index: 100000; }
 
 /* ---------------------------------------------------------------- Kompendium-Browser */
 .midgard-browser .window-content { padding: 0; overflow: hidden; }
