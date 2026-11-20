@@ -46,6 +46,8 @@ export const REITER = [
   { id: "ausruestung", titel: "Ausrüstung", icon: "fa-box-open" },
   { id: "persoenlich", titel: "Persönliches", icon: "fa-feather" },
   { id: "entwicklung", titel: "Entwicklung", icon: "fa-chart-line" },
+  // Lernbaum: nur für Charaktere aus dem Werkzeug, denn er rechnet mit dessen Lerntabelle und Konto
+  { id: "lernbaum", titel: "Lernbaum", icon: "fa-sitemap", nur: (s) => !!s.zustand && game.settings.get(SYSTEM_ID, "kodexImportiert") },
   { id: "werkzeug", titel: "Erschaffung & Lernen", icon: "fa-hammer", werkzeug: true },
 ];
 
@@ -785,7 +787,19 @@ export class AbenteurerBogen extends ActorSheetV2 {
       el("h4", { text: `${g.titel} (${g.eintraege.length})` }),
       el("div", { class: "ma-lernbar-liste" }, g.eintraege.map((e) => el("button", { type: "button", class: "ma-lernbar", title: e.weitere ? `weitere ${e.weitere} Stufe(n) bezahlbar, in der Lernliste auf einmal buchbar` : null, onclick: () => e.aktion() },
         el("span", { text: e.titel }), el("small", { text: e.kosten })))))),
-      el("button", { type: "button", class: "ma-knopf", onclick: () => { const z = this.#werkzeug?.zustand(); if (z) { z.ansicht = "tabellen"; this.#werkzeug.neuZeichnen(); } this.#wechseln("werkzeug"); } }, icon("fa-list"), " Vollständige Lernliste"));
+      el("div", { class: "ma-knopfreihe" },
+        el("button", { type: "button", class: "ma-knopf", onclick: () => this.#wechseln("lernbaum") }, icon("fa-sitemap"), " Lernbaum"),
+        el("button", { type: "button", class: "ma-knopf", onclick: () => { const z = this.#werkzeug?.zustand(); if (z) { z.ansicht = "tabellen"; this.#werkzeug.neuZeichnen(); } this.#wechseln("werkzeug"); } }, icon("fa-list"), " Vollständige Lernliste")));
+  }
+
+  /**
+   * Lernbaum: die Lerntabelle des Abenteurertyps als Baum (aus dem Werkzeug). Klick auf einen
+   * leuchtenden Knoten fragt nach und bucht wie die Lernliste; der Bogen zeichnet sich danach neu.
+   */
+  async _lernbaum() {
+    if (!this.#werkzeugWurzel) this.#werkzeugStarten();
+    const baum = this.#werkzeug?.lernbaum?.();
+    return baum ? karte(null, "ma-k-lernbaum", baum) : null;
   }
 
   async _werkzeug() {
@@ -945,7 +959,10 @@ export class AbenteurerBogen extends ActorSheetV2 {
     if (!offen) return;
     this.#ausstehend = null;
     await ausWerkzeug(this.actor, offen[1], offen[0]);
-    this.#veraltet = true;
+    // Gebucht aus einem anderen Reiter (Jetzt lernbar, Lernbaum): sofort neu zeichnen, sonst blieben
+    // dort veraltete Einträge stehen, deren zweiter Klick dieselbe Stufe noch einmal buchen würde
+    if (this.#reiter !== "werkzeug" && this.rendered) { this.#veraltet = false; this.render(); }
+    else this.#veraltet = true;
   }
 
   /** Neuzeichnen durch Foundry (z. B. nach eigener Speicherung) nicht mitten in die Werkzeugeingabe. */

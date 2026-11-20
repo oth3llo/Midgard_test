@@ -1421,6 +1421,7 @@
     { id: "waffen", titel: "Waffen" },
     { id: "zauber", titel: "Zauber", nur: () => !!(L.zauberKosten[S.klasse] && Object.keys(L.zauberKosten[S.klasse]).length) },
     { id: "tabellen", titel: "Lernliste" },
+    { id: "baum", titel: "Lernbaum" },
     { id: "protokoll", titel: "Protokoll" },
   ];
   function gradAus(es) {
@@ -1950,6 +1951,201 @@
       });
     });
   }
+  // ---------------------------------------------------------------- Lernbaum
+  // Die Lerntabelle des Abenteurertyps als Baum: Äste nach Bereich, Lernkosten oder Leiteigenschaft,
+  // je Fertigkeit ein Zweig mit allen Stufen vom Startwert bis zum Höchstwert. Midgard kennt keine
+  // Voraussetzungsketten zwischen Fertigkeiten; der Baum zeigt also die Steigerungswege, die die
+  // Lerntabelle vorgibt, und was davon mit den vorhandenen EP und dem Gold jetzt erreichbar ist.
+  // Gebucht wird über dieselben Rückfragen und Fenster wie in der Lernliste.
+  // Bereiche nach den Fertigkeitslisten der Erschaffung (Kodex); wo eine Fertigkeit dort fehlt oder in
+  // mehreren Listen steht, ist sie dem naheliegendsten Bereich zugeordnet (nur Anzeige, keine Regel).
+  const BAUM_BEREICHE = {
+    Alltag: ["Abrichten", "Bootfahren", "Erste Hilfe", "Glücksspiel", "Musizieren", "Seilkunst", "Wagenlenken", "Sprechen:Sprache", "Schreiben:Sprache"],
+    Freiland: ["Naturkunde", "Pflanzenkunde", "Tierkunde", "Spurensuche", "Überleben"],
+    Halbwelt: ["Akrobatik", "Balancieren", "Fälschen", "Gaukeln"],
+    Kampf: ["Anführen", "Beidhändiger Kampf", "Betäuben", "Fechten", "Kampf in Vollrüstung", "Reiten", "Reiterkampf", "Scharfschießen"],
+    "Körper": ["Athletik", "Geländelauf", "Klettern", "Laufen", "Meditieren", "Schwimmen", "Tauchen"],
+    Sozial: ["Beredsamkeit", "Etikette", "Geschäftssinn", "Menschenkenntnis", "Verführen", "Verhören", "Verstellen"],
+    Unterwelt: ["Fallen entdecken", "Fallenmechanik", "Gassenwissen", "Meucheln", "Schleichen", "Schlösser öffnen", "Stehlen", "Tarnen"],
+    Wissen: ["Alchemie", "Astrologie", "Gerätekunde", "Heilkunde", "Landeskunde", "Lesen von Ogamstäben", "Lesen von Zauberschrift", "Orakelkunst", "Thaumagraphie", "Thaumalogie", "Wahrsagen", "Zauberkunde"],
+  };
+  const BAUM_KOSTEN = { 10: "günstig", 20: "normal", 30: "teuer", 40: "sehr teuer" };
+  const BAUM_GRUPPIERUNG = [["bereich", "nach Bereich"], ["kosten", "nach Lernkosten"], ["leit", "nach Leiteigenschaft"]];
+  // Ansicht des Baums: gehört zur Sitzung, nicht zum Charakter (auch Beobachter können umschalten)
+  const baumAnsicht = { gruppierung: "bereich", nurErreichbar: false };
+  // Lernbäume außerhalb der Wurzel (Reiter im Foundry-Bogen) zeichnen sich nach jeder Buchung sofort mit neu
+  const baumBeobachter = new Set();
+  function baumBereich(lname) {
+    for (const [b, liste] of Object.entries(BAUM_BEREICHE)) if (liste.includes(lname)) return b;
+    return "Weitere";
+  }
+  // Zweige aller Fertigkeiten und Waffen: gelernte mit ihren Steigerungen, offene mit dem Lernknoten
+  function baumZweige() {
+    const sp = S.spiel, elf = S.rasse === "Elf";
+    const leistbar = (k) => k.ep <= sp.ep && k.gold <= sp.gold;
+    const kosten = (k) => kostenText(k) + (k.pp ? ` (davon ${k.pp} ${k.le ? "LE" : "TE"} mit Praxispunkten)` : "");
+    const zweige = [];
+    const gelernt = gelernteListe();
+    for (const g of gelernt) {
+      const t = L.te[g.gruppe], max = t.start + t.stufen.length;
+      const knoten = [];
+      for (let w = Math.min(t.start, g.wert); w <= g.wert; w++) knoten.push({ wert: w, art: "gelernt", titel: `${vz(w)} gelernt` });
+      const ppVerf = sp.pp[g.key] || 0;
+      let te = 0, erreichbar = true, erreichbarAnzahl = 0;
+      for (let ziel = g.wert + 1; ziel <= max; ziel++) {
+        const tStufe = teFuer(g.gruppe, ziel);
+        if (tStufe === null) break;
+        te += tStufe;
+        const pp = Math.min(ppVerf, te), rest = te - pp;
+        const k = { ziel, te, pp, ep: rest * g.ep, gold: rest * 20 };
+        erreichbar = erreichbar && leistbar(k);
+        const erste = ziel === g.wert + 1;
+        const titel = `${vz(ziel)}: ${tStufe} TE für diese Stufe; ${erste ? "" : "bis hierhin zusammen "}${kosten(k)}`
+          + (erreichbar ? "" : erste ? " (EP oder Gold reichen nicht; im Fenster lässt sich Gold statt EP einsetzen)" : " (noch nicht bezahlbar)");
+        if (erreichbar) erreichbarAnzahl++;
+        knoten.push({ wert: ziel, art: erreichbar ? "lernbar" : "teuer", titel,
+          aktion: erreichbar ? () => lernlisteSteigern(g, k) : erste ? () => steigernDialog(g) : null });
+      }
+      zweige.push({ id: g.key, titel: lernAnzeige(g.titel), lname: g.lname, waffe: !!g.waffe, le: g.waffe ? null : g.le, gruppe: g.gruppe, ep: g.ep,
+        wert: g.wert, gelernt: true, erreichbar: erreichbarAnzahl, knoten });
+    }
+    const hat = new Set(gelernt.map((g) => (g.waffe ? "W:" : "F:") + g.lname));
+    const offen = L.fertigkeiten.map((f) => ({ lname: f.name, gruppe: f.gruppe, le: f.le, ep: f.kosten[S.klasse] }))
+      .concat(L.waffen.map((w) => ({ lname: w.name, gruppe: w.gruppe, le: "Gs", ep: L.waffenKosten[S.klasse], waffe: true })));
+    for (const e of offen) {
+      const mehrfach = MEHRFACH.includes(e.lname);
+      if (hat.has((e.waffe ? "W:" : "F:") + e.lname) && !mehrfach) continue;
+      const t = L.te[e.gruppe], le = t.lernTE / 3;
+      const x = { e, start: t.start, le, ep: t.lernTE * e.ep + elfZuschlag() * le, gold: le * 200 };
+      const grund = e.waffe ? waffenErlaubt(e.lname) : elf && K.elfenNie.includes(e.lname) ? "für Elfen nie lernbar" : null;
+      const gesperrt = !!grund && (!e.waffe || /nicht nutzbar|nur für Zauberer/.test(grund));
+      const ok = !gesperrt && leistbar(x);
+      const knoten = [{ wert: t.start, art: gesperrt ? "gesperrt" : ok ? "lernbar" : "teuer", neu: true,
+        titel: gesperrt ? grund : `Neu lernen auf ${vz(t.start)}: ${kosten(x)}` + (ok ? "" : " (EP oder Gold reichen nicht)"),
+        aktion: gesperrt ? null : ok ? () => lernlisteNeu(x) : () => lernDialog(e) }];
+      t.stufen.forEach((te, i) => knoten.push({ wert: t.start + i + 1, art: gesperrt ? "gesperrt" : "spaeter",
+        titel: `${vz(t.start + i + 1)}: ${te} TE (${fmt(te * e.ep)} EP, ${fmt(te * 20)} GS), erst nach dem Lernen` }));
+      zweige.push({ id: (e.waffe ? "W:" : "F:") + e.lname + (mehrfach ? "|neu" : ""), titel: lernAnzeige(e.lname) + (mehrfach && hat.has("F:" + e.lname) ? " (weitere Angabe)" : ""),
+        lname: e.lname, waffe: !!e.waffe, le: e.waffe ? null : e.le, gruppe: e.gruppe, ep: e.ep, wert: null, gelernt: false,
+        erreichbar: ok ? 1 : 0, gesperrt, grund, knoten });
+    }
+    return zweige;
+  }
+  // Zauber: je Zaubergruppe ein Zweig, je Spruchstufe ein Knoten (bekannt, lernbar, zu teuer)
+  function baumZauber() {
+    const sp = S.spiel, elf = S.rasse === "Elf";
+    const zweige = [];
+    for (const gruppe of Object.keys(L.zauberKosten[S.klasse] || {})) {
+      const basis = zauberEP(gruppe);
+      const liste = ZAUBER.filter((z) => z.gruppe === gruppe);
+      if (basis === null || !liste.length) continue;
+      const ppVerf = sp.pp["Z:" + gruppe] || 0;
+      const stufen = [...new Set(liste.map((z) => z.stufe))].sort((a, b) => a - b);
+      let bekanntGesamt = 0, erreichbar = 0;
+      const knoten = stufen.map((st) => {
+        const hier = liste.filter((z) => z.stufe === st);
+        const bekannt = hier.filter((z) => kenntZauber(z.name, gruppe)).length;
+        const frei = hier.filter((z) => !kenntZauber(z.name, gruppe) && !(elf && z.urspr === "schwarzmagisch")).length;
+        const le = STUFEN_LE[st - 1], pp = Math.min(ppVerf, le), rest = le - pp;
+        const k = { le, pp, ep: rest * (basis + elfZuschlag()), gold: rest * 100 };
+        const ok = frei > 0 && k.ep <= sp.ep && k.gold <= sp.gold;
+        bekanntGesamt += bekannt;
+        if (ok) erreichbar += frei;
+        const art = ok ? "lernbar" : !frei ? (bekannt ? "gelernt" : "gesperrt") : bekannt ? "teilweise" : "teuer";
+        return { wert: st, art, zahl: `${bekannt}/${hier.length}`,
+          titel: `Spruchstufe ${st}: ${bekannt} von ${hier.length} bekannt; je Zauber ${kostenText(k)}${pp ? ` (davon ${pp} LE mit Praxispunkten)` : ""}` + (frei && !ok ? " (EP oder Gold reichen nicht)" : ""),
+          aktion: frei ? () => zauberDialog(gruppe, hier.find((z) => !kenntZauber(z.name, gruppe))?.name) : null };
+      });
+      zweige.push({ id: "Z:" + gruppe, titel: gruppe, zauber: true, ep: basis + elfZuschlag(), gelernt: bekanntGesamt > 0, erreichbar, knoten });
+    }
+    return zweige;
+  }
+  function baumAeste() {
+    const zweige = baumZweige(), fert = zweige.filter((z) => !z.waffe), waffen = zweige.filter((z) => z.waffe);
+    const sortiert = (liste) => liste.slice().sort((a, b) => (b.gelernt - a.gelernt) || (a.ep - b.ep) || a.titel.localeCompare(b.titel, "de"));
+    let aeste;
+    if (baumAnsicht.gruppierung === "kosten") {
+      aeste = Object.keys(BAUM_KOSTEN).map((ep) => ({ id: "k" + ep, titel: `${ep} EP je TE`, unter: BAUM_KOSTEN[ep], zweige: fert.filter((z) => String(z.ep) === ep) }));
+      const rest = fert.filter((z) => !BAUM_KOSTEN[z.ep]);
+      if (rest.length) aeste.push({ id: "krest", titel: "Weitere Kosten", zweige: rest });
+    } else if (baumAnsicht.gruppierung === "leit") {
+      const leit = [...new Set(fert.map((z) => z.le))].sort((a, b) => ["St", "Gs", "Gw", "Ko", "In", "Zt", "pA", "Wk"].indexOf(a) - ["St", "Gs", "Gw", "Ko", "In", "Zt", "pA", "Wk"].indexOf(b));
+      aeste = leit.map((e) => ({ id: "l" + e, titel: K.eigenschaftNamen[e] || e, unter: wert(e) === null || wert(e) === undefined ? e : `${e} ${wert(e)}`, zweige: fert.filter((z) => z.le === e) }));
+    } else {
+      aeste = Object.keys(BAUM_BEREICHE).concat("Weitere").map((b) => ({ id: "b" + b, titel: b, zweige: fert.filter((z) => baumBereich(z.lname) === b) }));
+    }
+    aeste.push({ id: "waffen", titel: "Waffen", unter: `${L.waffenKosten[S.klasse]} EP je TE`, zweige: waffen });
+    const zauber = baumZauber();
+    if (zauber.length) aeste.push({ id: "zauber", titel: "Zauber", unter: "je Spruchstufe", zweige: zauber });
+    return aeste.map((a) => Object.assign(a, { zweige: sortiert(a.zweige) })).filter((a) => a.zweige.length);
+  }
+  /**
+   * Lernbaum als eigenständiges Element (für die Lernansicht hier und, mit extern, den Reiter im
+   * Foundry-Bogen). Umschalten der Ansicht zeichnet nur den Baum neu; Buchungen laufen über buchen()
+   * und damit über das übliche Neuzeichnen und Speichern, das externe Bäume mitnimmt.
+   */
+  function lernbaum(extern = false) {
+    const kl = klasse();
+    const box = h("div", { class: "lernbaum" });
+    if (!kl) { box.append(info("Zuerst in der Erschaffung einen Abenteurertyp wählen.")); return box; }
+    const gesperrt = sperren().lernen;
+    const zeichne = () => {
+      const aeste = baumAeste(), sp = S.spiel;
+      const sichtbar = (z) => !baumAnsicht.nurErreichbar || z.gelernt || z.erreichbar > 0;
+      const zaehle = (liste, f) => liste.reduce((n, z) => n + (f(z) ? 1 : 0), 0);
+      const alle = aeste.flatMap((a) => a.zweige);
+      const knotenEl = (k, z) => {
+        const kind = [h("span", { class: "lb-wert" }, k.neu ? vz(k.wert) : k.wert), k.zahl ? h("small", { class: "lb-zahl" }, k.zahl) : null];
+        const klasse_ = `lb-knoten ${k.art}${k.neu ? " neu" : ""}`;
+        const label = `${z.titel} ${k.titel}`;
+        return k.aktion && !gesperrt
+          ? h("button", { type: "button", class: klasse_, title: k.titel, "aria-label": label, onclick: k.aktion }, kind)
+          : h("span", { class: klasse_, title: k.titel, "aria-label": label, role: "img" }, kind);
+      };
+      const zweigEl = (z) => h("li", { class: `lb-zweig${z.gelernt ? " gelernt" : ""}${z.gesperrt ? " gesperrt" : ""}${z.erreichbar ? " erreichbar" : ""}`, "data-zweig": z.id },
+        h("div", { class: "lb-name" },
+          h("strong", {}, z.titel),
+          h("span", { class: "lb-merkmale" },
+            z.zauber ? null : z.gelernt ? h("span", { class: "lb-aktuell" }, vz(z.wert)) : null,
+            z.le ? h("span", { title: "Leiteigenschaft" }, z.le) : null,
+            z.gruppe ? h("span", { title: "Steigerungsgruppe" }, `Gr. ${z.gruppe}`) : null,
+            h("span", { class: `lb-kosten k${z.ep}`, title: z.zauber ? "EP je LE für diese Zaubergruppe" : `EP je TE für ${kl.name}: ${BAUM_KOSTEN[z.ep] || ""}` }, `${z.ep} EP/${z.zauber ? "LE" : "TE"}`))),
+        h("ol", { class: "lb-kette" }, z.knoten.map((k, i) => h("li", { class: i && ["gelernt", "teilweise"].includes(z.knoten[i - 1].art) && ["gelernt", "teilweise", "lernbar"].includes(k.art) ? "verbunden" : null }, knotenEl(k, z)))));
+      const astEl = (a, i) => {
+        const zw = a.zweige.filter(sichtbar);
+        return h("section", { class: `lb-ast f${(i % 7) + 1}`, "data-ast": a.id },
+          h("header", { class: "lb-ast-kopf" },
+            h("span", { class: "lb-ast-knoten", "aria-hidden": "true" }, a.titel.slice(0, 1)),
+            h("h3", {}, a.titel, a.unter ? h("small", {}, ` ${a.unter}`) : null),
+            h("span", { class: "lb-ast-stand" }, `${zaehle(a.zweige, (z) => z.gelernt)} gelernt · ${zaehle(a.zweige, (z) => z.erreichbar > 0)} jetzt lernbar`)),
+          zw.length ? h("ol", { class: "lb-zweige" }, zw.map(zweigEl)) : info("Hier ist gerade nichts gelernt oder bezahlbar."));
+      };
+      box.replaceChildren(
+        h("div", { class: "lb-kopf" },
+          h("div", { class: "lb-stamm" },
+            h("span", { class: "lb-stamm-knoten", "aria-hidden": "true" }, kl.name.slice(0, 1)),
+            h("div", {}, h("strong", {}, `${kl.name}${S.rasse !== "Mensch" ? ` (${S.rasse})` : ""}`),
+              h("small", {}, `Grad ${aktGrad()} · ${fmt(sp.ep)} EP · ${fmt(sp.gold)} GS · ${zaehle(alle, (z) => z.gelernt)} gelernt, ${zaehle(alle, (z) => z.erreichbar > 0)} jetzt lernbar`))),
+          h("div", { class: "lb-steuerung" },
+            h("div", { class: "lb-umschalter", role: "group", "aria-label": "Äste ordnen" }, BAUM_GRUPPIERUNG.map(([id, text]) =>
+              h("button", { type: "button", class: baumAnsicht.gruppierung === id ? "aktiv" : null, "aria-pressed": String(baumAnsicht.gruppierung === id), onclick: () => { baumAnsicht.gruppierung = id; zeichne(); } }, text))),
+            h("label", { class: "schalter" }, h("input", { type: "checkbox", checked: baumAnsicht.nurErreichbar, onchange: (ev) => { baumAnsicht.nurErreichbar = ev.target.checked; zeichne(); } }), " nur Gelerntes und jetzt Lernbares"))),
+        h("ul", { class: "lb-legende", "aria-label": "Legende" },
+          [["gelernt", "gelernt"], ["lernbar", "jetzt lernbar (Klick bucht nach Rückfrage)"], ["teuer", "EP oder Gold reichen noch nicht"], ["spaeter", "erst nach dem Lernen"], ["gesperrt", "nicht lernbar"]]
+            .map(([art, text]) => h("li", {}, h("span", { class: `lb-knoten ${art}`, "aria-hidden": "true" }), text)),
+          h("li", {}, h("span", { class: "lb-knoten teuer neu", "aria-hidden": "true" }), "Neu lernen (Startwert)")),
+        gesperrt ? h("div", { class: "sperre-hinweis warnung" }, gesperrt) : "",
+        h("div", { class: "lb-aeste" }, aeste.map(astEl)));
+    };
+    zeichne();
+    if (extern) { const beobachter = () => (box.isConnected ? zeichne() : baumBeobachter.delete(beobachter)); baumBeobachter.add(beobachter); }
+    return box;
+  }
+  function ansichtBaum() {
+    return [kontoKacheln(),
+      info("Die Lerntabelle als Baum: Jeder Ast ist ein Bereich, jeder Zweig eine Fertigkeit mit allen Stufen bis zum Höchstwert. Leuchtende Knoten sind mit den vorhandenen EP und dem Gold jetzt lernbar; ein Klick fragt nach und bucht. Der nächste, noch zu teure Knoten öffnet das ausführliche Fenster (Gold statt EP, Belohnung)."),
+      lernbaum()];
+  }
   /**
    * Lernbares für den Charakterbogen (Reiter „Entwicklung“): je Fertigkeit die nächste bezahlbare Stufe,
    * neue Fertigkeiten, Waffenfertigkeiten und Zauber, jeweils mit derselben Rückfrage und Buchung wie in
@@ -1996,7 +2192,7 @@
   function renderLernen(id) {
     if (!klasse()) return [info("Zuerst in der Erschaffung einen Abenteurertyp wählen.")];
     return id === "konto" ? ansichtKonto() : id === "fert" ? ansichtFert(false) : id === "waffen" ? ansichtFert(true)
-      : id === "zauber" ? ansichtZauber() : id === "tabellen" ? ansichtTabellen() : ansichtProtokoll();
+      : id === "zauber" ? ansichtZauber() : id === "tabellen" ? ansichtTabellen() : id === "baum" ? ansichtBaum() : ansichtProtokoll();
   }
 
   // ---------------------------------------------------------------- Rahmen
@@ -2022,6 +2218,7 @@
     const fokus = fokusMerken();
     zeichnen();
     fokusWiederherstellen(fokus);
+    for (const f of [...baumBeobachter]) f();
   }
   function zeichnen() {
     speichern();
@@ -2118,7 +2315,7 @@
       h("main", { class: "cmt-inhalt" })),
   ].filter(Boolean));
   neuZeichnen();
-  return { neuZeichnen, zustand: () => S, auswertung, lernbar: lernbarFuerBogen };
+  return { neuZeichnen, zustand: () => S, auswertung, lernbar: lernbarFuerBogen, lernbaum: () => lernbaum(true) };
   }
 
   window.MidgardCMT = { starte };

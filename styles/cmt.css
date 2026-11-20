@@ -531,6 +531,89 @@
 .midgard-cmt.midgard-cmt .fert-tab td.herkunft {white-space: normal; width: 7.5rem; color: var(--leise);}
 .midgard-cmt.midgard-cmt .fert-tab .wert-eingabe input, .midgard-cmt.midgard-cmt .fert-tab .pp-eingabe {width: 3.6em; text-align: right;}
 .midgard-cmt.midgard-cmt .kopfdaten .wert-eingabe input {width: 6.5em;}
+.midgard-cmt.midgard-cmt .lernbaum {--kante: 0 -2px 0 0 var(--rand), 0 2px 0 0 var(--rand), -2px 0 0 0 var(--rand), 2px 0 0 0 var(--rand); container-type: inline-size;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-kopf {display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .6rem 1rem; margin-bottom: .6rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-stamm {display: flex; align-items: center; gap: .7rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-stamm > div {display: flex; flex-direction: column;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-stamm strong {font-family: var(--schrift-titel); font-size: 1.15rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-stamm-knoten, .midgard-cmt.midgard-cmt .lernbaum .lb-ast-knoten {display: inline-grid; place-items: center; flex: 0 0 auto; font-family: var(--schrift-kapitaelchen); font-weight: 700;
+  box-shadow: var(--kante), inset 0 -3px 0 0 rgba(0, 0, 0, .25);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-stamm-knoten {width: 2.6rem; height: 2.6rem; font-size: 1.35rem; background: var(--rahmen); color: var(--rahmen-text);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-steuerung {display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-steuerung .schalter {margin: 0;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-umschalter {display: inline-flex; gap: 0;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-umschalter button {margin: 2px 0 2px 2px; padding: .2rem .6rem; font-size: .9rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-umschalter button.aktiv {background: var(--akzent); color: var(--auf-akzent);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-legende {display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; list-style: none; margin: 0 0 1rem; padding: 0; font-size: .85rem; color: var(--leise);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-legende li {display: inline-flex; align-items: center; gap: .45rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-legende .lb-knoten {width: .95rem; height: .95rem; min-width: 0;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-aeste {display: flex; flex-direction: column; gap: 1.1rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast {--ast: var(--f, var(--akzent)); --ast-hell: var(--fh, var(--akzent-hell)); --ast-text: var(--ft, var(--auf-akzent));}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast.f1 {--f: var(--a6); --fh: var(--a6h); --ft: var(--a6t);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast.f2 {--f: var(--a4); --fh: var(--a4h); --ft: var(--a4t);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast.f3 {--f: var(--a2); --fh: var(--a2h); --ft: var(--a2t);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast.f4 {--f: var(--a7); --fh: var(--a7h); --ft: var(--a7t);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast.f5 {--f: var(--a5); --fh: var(--a5h); --ft: var(--a5t);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast.f6 {--f: var(--a1); --fh: var(--a1h); --ft: var(--a1t);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast.f7 {--f: var(--a3); --fh: var(--a3h); --ft: var(--a3t);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast-kopf {display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast-knoten {width: 2rem; height: 2rem; font-size: 1.05rem; background: var(--ast); color: var(--ast-text);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast-kopf h3 {margin: 0; font-size: 1.1rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast-kopf h3 small {font-family: var(--schrift-text); font-weight: 400;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast-stand {margin-left: auto; font-size: .85rem; color: var(--leise);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-zweige {list-style: none; margin: 0 0 0 .9rem; padding: .35rem 0 0 1.1rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-zweig {position: relative; display: grid; grid-template-columns: minmax(9.5rem, 15rem) minmax(0, 1fr); align-items: center; gap: .3rem .8rem;
+  padding: .28rem .4rem; margin: 0 0 .15rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-zweig::before {content: ""; position: absolute; left: -1.1rem; top: 50%; width: .9rem; border-top: 3px solid var(--ast);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-zweig::after {content: ""; position: absolute; left: -1.1rem; top: -.15rem; bottom: 0; border-left: 3px solid var(--ast);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-zweig:first-child::after {top: -.35rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-zweig:last-child::after {bottom: calc(50% - 3px);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-zweig.gelernt {background: color-mix(in srgb, var(--ast-hell) 70%, transparent);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-zweig.gesperrt {opacity: .55;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-zweig.gesperrt .lb-name strong {text-decoration: line-through; text-decoration-thickness: 1px;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-name {display: flex; flex-direction: column; min-width: 0;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-name strong {font-weight: 700; line-height: 1.2;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-merkmale {display: flex; flex-wrap: wrap; gap: .1rem .45rem; font-size: .78rem; color: var(--leise);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-aktuell {font-weight: 700; color: var(--text);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-kosten {padding: 0 .3rem; font-weight: 700; color: var(--auf-akzent); background: var(--akzent);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-kosten.k10 {background: var(--gut);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-kosten.k30 {background: var(--warn);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-kosten.k40 {background: var(--schlecht);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-kette {display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 0; list-style: none; margin: 0; padding: 0;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-kette li {display: flex; align-items: center;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-kette li + li::before {content: ""; width: .5rem; border-top: 2px dotted var(--linie);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-kette li.verbunden::before {border-top: 3px solid var(--ast);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten {position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  min-width: 1.85rem; height: 1.85rem; margin: 0 2px; padding: 0 .15rem; font-family: var(--schrift-titel); font-size: .85rem; line-height: 1;
+  color: var(--leise); background: var(--grund); box-shadow: var(--kante); cursor: default; transform: none;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten .lb-zahl {font-size: .62rem; color: inherit; opacity: .85;}
+.midgard-cmt.midgard-cmt .lernbaum button.lb-knoten {cursor: pointer;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.gelernt {background: var(--ast, var(--akzent)); color: var(--ast-text, var(--auf-akzent)); font-weight: 700;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.teilweise {background: linear-gradient(135deg, var(--ast, var(--akzent)) 50%, var(--grund) 50%); color: var(--text); font-weight: 700;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.lernbar {background: var(--flaeche); color: var(--gut); font-weight: 700;
+  box-shadow: 0 -2px 0 0 var(--gut), 0 2px 0 0 var(--gut), -2px 0 0 0 var(--gut), 2px 0 0 0 var(--gut), 0 0 0 5px color-mix(in srgb, var(--gut) 25%, transparent);
+  animation: lb-leuchten 2.4s ease-in-out infinite;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.teuer {color: var(--leise); box-shadow: 0 -2px 0 0 var(--leise), 0 2px 0 0 var(--leise), -2px 0 0 0 var(--leise), 2px 0 0 0 var(--leise);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.spaeter {opacity: .5; box-shadow: 0 -1px 0 0 var(--linie), 0 1px 0 0 var(--linie), -1px 0 0 0 var(--linie), 1px 0 0 0 var(--linie); background: transparent;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.gesperrt {opacity: .45; background: repeating-linear-gradient(45deg, transparent 0 3px, var(--linie) 3px 4px); box-shadow: 0 -1px 0 0 var(--leise), 0 1px 0 0 var(--leise), -1px 0 0 0 var(--leise), 1px 0 0 0 var(--leise);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.neu {min-width: 2.4rem; outline: 2px solid var(--gold); outline-offset: 2px;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.neu.gesperrt, .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.neu.teuer {outline-color: var(--linie);}
+.midgard-cmt.midgard-cmt .lernbaum button.lb-knoten:hover, .midgard-cmt.midgard-cmt .lernbaum button.lb-knoten:focus-visible {filter: brightness(1.12); outline: 3px dashed var(--akzent); outline-offset: 3px;}
+.midgard-cmt.midgard-cmt .lernbaum button.lb-knoten:active {transform: translate(1px, 1px);}
+@keyframes lb-leuchten { 50% { box-shadow: 0 -2px 0 0 var(--gut), 0 2px 0 0 var(--gut), -2px 0 0 0 var(--gut), 2px 0 0 0 var(--gut), 0 0 0 7px color-mix(in srgb, var(--gut) 12%, transparent); } }
+@media (prefers-reduced-motion: reduce) {
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.lernbar {animation: none;}
+}
+@container (max-width: 820px) {
+  .midgard-cmt.midgard-cmt .lernbaum .lb-zweig { grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr); gap: .3rem .6rem; }
+  .midgard-cmt.midgard-cmt .lernbaum .lb-knoten { min-width: 1.55rem; height: 1.65rem; font-size: .78rem; }
+  .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.neu { min-width: 2.1rem; }
+  .midgard-cmt.midgard-cmt .lernbaum .lb-kette li + li::before { width: .35rem; }
+}
+@container (max-width: 620px) {
+  .midgard-cmt.midgard-cmt .lernbaum .lb-zweig { grid-template-columns: minmax(0, 1fr); }
+  .midgard-cmt.midgard-cmt .lernbaum .lb-ast-stand { margin-left: 0; flex-basis: 100%; }
+}
 
 /* Schriften und Grundmaße auch außerhalb der Bögen (Journale, Chat, Dialoge) */
 :root { --schrift-titel: "Alegreya", "Palatino Linotype", Georgia, serif; --schrift-kapitaelchen: "Alegreya SC", "Alegreya", Georgia, serif; --schrift-text: "Alegreya", "Palatino Linotype", Georgia, serif; --radius: 4px; }
@@ -1074,6 +1157,9 @@ button.midgard-thema-kachel.aktiv { border-color: var(--akzent); box-shadow: 0 0
 /* eigene Reitersymbole, sobald Grafiken vorhanden sind (bilder/reiter/*.webp) */
 .midgard-abenteurer .ma-reiter button[data-reiter] i.mit-bild { display: inline-block; width: 32px; height: 32px; margin: -6px 0; background: var(--bild) center / 32px 32px no-repeat; opacity: 1; image-rendering: pixelated; }
 .midgard-abenteurer .ma-reiter button[data-reiter] i.mit-bild::before { content: none; }
+/* Mit dem Reiter Lernbaum sind es acht: etwas enger, damit sie bei 1000 px Breite in eine Zeile passen */
+.midgard-abenteurer .ma-reiter:has(> button:nth-child(8)) button { padding: 4px 5px; gap: 4px; }
+.midgard-abenteurer .ma-reiter:has(> button:nth-child(8)) button[data-reiter] i.mit-bild { width: 26px; height: 26px; background-size: 26px 26px; }
 
 /* Inhalt: Karten mit Kopfleiste (aus style.css), Eigenschaften als dunkle Wertetafel */
 .midgard-abenteurer .karte { background: var(--flaeche); }
