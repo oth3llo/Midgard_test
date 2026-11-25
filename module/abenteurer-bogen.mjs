@@ -149,6 +149,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
   #wechseln(id) {
     this.#reiter = id;
     if (id === "werkzeug" && !this.#werkzeugWurzel) { this.render(); return; }
+    if (id === "lernbaum" && this.element?.querySelector('[data-panel="lernbaum"] .ma-lernbaum-platz')) { this.render(); return; }
     if (this.#veraltet && id !== "werkzeug") { this.#veraltet = false; this.render(); return; }
     for (const b of this.element.querySelectorAll("button[data-reiter]")) { const an = b.dataset.reiter === id; b.classList.toggle("aktiv", an); b.setAttribute("aria-selected", String(an)); }
     for (const p of this.element.querySelectorAll(".ma-panel")) p.classList.toggle("aktiv", p.dataset.panel === id);
@@ -803,6 +804,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
    * leuchtenden Knoten fragt nach und bucht wie die Lernliste; der Bogen zeichnet sich danach neu.
    */
   async _lernbaum() {
+    // teuer (Tausende Knoten): nur aufbauen, wenn der Reiter offen ist; #wechseln zeichnet beim Öffnen nach
+    if (this.#reiter !== "lernbaum") return el("div", { class: "ma-lernbaum-platz" });
     if (!this.#werkzeugWurzel) this.#werkzeugStarten();
     const baum = this.#werkzeug?.lernbaum?.();
     return baum ? karte(null, "ma-k-lernbaum", baum) : null;
