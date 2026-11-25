@@ -63,6 +63,11 @@ export function einstellungenRegistrieren() {
     scope: "world", config: true, type: String, default: "frei",
     choices: { frei: "Keine Freigabe nötig", spielleiter: "Durch die Spielleitung" },
   });
+  game.settings.register(SYSTEM_ID, "erschaffungUebergabe", {
+    name: "Würfelschritte durch die Spielleitung",
+    hint: "Die Spielleitung trägt die am Tisch gewürfelten Werte ein (Schritte 1 bis 6: Rasse, Typ, Eigenschaften, pA/Wk/Au, LP/AP, Stand und Herkunft) und übergibt dann mit „An Spieler übergeben“. Der Spieler stellt ab Schritt 7 Fertigkeiten, Waffen, Zauber und Ausrüstung zusammen, auch am Handy, und gibt am Ende zurück. Die Würfelschritte bleiben für ihn gesperrt.",
+    scope: "world", config: true, type: Boolean, default: false,
+  });
   // --- Hausregeln (Welt)
   game.settings.register(SYSTEM_ID, "hausregelMindestsumme", {
     name: "Hausregel: Mindestsumme der Basiseigenschaften",
@@ -165,7 +170,8 @@ export function beimStart() {
   bilderAnwenden();
   themaAnwenden(get("thema"));
   skalaAnwenden(get("schriftgroesse"));
-  if (get("startDialog")) StartDialog.oeffnen();
+  // Handy-Ansicht: kein Startfenster, der Bogen ist schon offen
+  if (get("startDialog") && !document.documentElement.classList.contains("midgard-handy-aktiv")) StartDialog.oeffnen();
 }
 
 /** Status eines Regelwerks aus dem Importprotokoll. */

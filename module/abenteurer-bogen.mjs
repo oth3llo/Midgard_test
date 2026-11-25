@@ -3,7 +3,7 @@
 // Solange das Erschaffungs- und Lernwerkzeug einen Charakter verwaltet, sind die von ihm
 // berechneten Werte hier schreibgeschützt; geändert werden sie im Reiter „Erschaffung & Lernen“.
 import { EIGENSCHAFTEN, EIGENSCHAFT_NAMEN, ZAUBERGRUPPEN, ZUSTAENDE, bonus, vz, gradAus, abTabelle, wuerfelName } from "./regeln.mjs";
-import { ausWerkzeug } from "./akteur.mjs";
+import { ausWerkzeug, ladenWare, zauberDetails } from "./akteur.mjs";
 import { SYSTEM_ID } from "./kategorien.mjs";
 import { KompendiumBrowser } from "./browser.mjs";
 import { erfolgswurf, pruefwurf, nachricht, esc } from "./wuerfe.mjs";
@@ -132,12 +132,18 @@ export class AbenteurerBogen extends ActorSheetV2 {
       });
     }
     // Ältere Charaktere (nur Werkzeug-Zustand) einmal je Öffnen in die Bogenwerte übernehmen
-    if (!this.#abgeglichen && this.#verwaltet && this.isEditable && this.#werkzeug) {
+    if (!this.#abgeglichen && this.#verwaltet && this.isEditable && this.#werkzeug && !this.#sperren().nurLesen) {
       this.#abgeglichen = true;
       const zustand = this.#werkzeug.zustand();
       await ausWerkzeug(this.actor, this.#werkzeug.auswertung(), zustand);
       this.render();
     }
+  }
+
+  /** Reiter von außen wählen (Handy-Ansicht); zeichnen: false, wenn ohnehin gleich gerendert wird. */
+  reiterWaehlen(id, { zeichnen = true } = {}) {
+    if (!this.rendered || !this.element) { this.#reiter = id; return; }
+    if (zeichnen) this.#wechseln(id); else this.#reiter = id;
   }
 
   #wechseln(id) {
@@ -813,6 +819,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
     if (this.#letzteSperre !== null && sperre !== this.#letzteSperre) this.#werkzeug?.neuZeichnen();
     this.#letzteSperre = sperre;
     this.#leiste = el("div", { class: "ma-werkzeug-leiste", role: "status" }, icon("fa-hammer"), el("span", { class: "ma-werkzeug-stand" }),
+      this.#uebergabeElement(),
       this.#freigabeElement(),
       el("button", { type: "button", class: "ma-knopf", onclick: () => this.#wechseln("uebersicht") }, icon("fa-arrow-left"), " Zurück zum Bogen"));
     this.#leisteAktualisieren(this.#werkzeug.auswertung());
@@ -827,15 +834,72 @@ export class AbenteurerBogen extends ActorSheetV2 {
   get #freigabePflicht() { return game.settings.get(SYSTEM_ID, "erschaffungFreigabe") === "spielleiter"; }
   get #freigegeben() { return !!this.actor.getFlag?.(SYSTEM_ID, "freigegeben"); }
 
+  /** Einstellung „Würfelschritte durch die Spielleitung“ (Übergabe an den Spieler ab Schritt 7). */
+  get #uebergabePflicht() { return !!game.settings.get(SYSTEM_ID, "erschaffungUebergabe"); }
   /**
-   * Sperren für das Werkzeug: Spieler lernen erst nach der Freigabe; danach ist die Erschaffung
-   * für sie abgeschlossen. Die Spielleitung darf immer alles.
+   * Phase der Erschaffung bei Übergabe: "sl" (Spielleitung trägt die gewürfelten Werte ein), "spieler"
+   * (Spieler stellt Fertigkeiten, Waffen, Zauber und Ausrüstung zusammen), "fertig" (normaler Betrieb).
+   * Ohne Flag: neue Charaktere beginnen bei der Spielleitung, fertig erschaffene laufen normal.
+   */
+  get #phase() {
+    if (!this.#uebergabePflicht) return "fertig";
+    const flag = this.actor.getFlag?.(SYSTEM_ID, "phase");
+    if (flag) return flag;
+    const fertig = this.#werkzeug?.auswertung?.().fertig ?? !!this.actor.system.typ;
+    return fertig ? "fertig" : "sl";
+  }
+  async #phaseSetzen(phase) {
+    await this.#schreiben();
+    await this.actor.setFlag(SYSTEM_ID, "phase", phase);
+    this.#werkzeug?.neuZeichnen();
+    this.render();
+  }
+
+  /**
+   * Sperren für das Werkzeug. Übergabe: in der Phase der Spielleitung sieht der Spieler nur zu; danach
+   * sind die Würfelschritte 1 bis 6 für ihn gesperrt und die Spielleitung sieht zu, bis er abschließt
+   * oder sie zurückholt. Freigabe: Spieler lernen erst nach der Freigabe; danach ist die Erschaffung
+   * für sie abgeschlossen. nurLesen: dieser Client speichert nichts.
    */
   #sperren() {
+    const phase = this.#phase;
+    if (phase === "sl" && !game.user.isGM) {
+      const text = "Die Spielleitung trägt gerade die gewürfelten Werte ein. Sobald sie übergibt, geht es hier mit den Fertigkeiten weiter.";
+      return { erschaffung: text, lernen: text, nurLesen: true };
+    }
+    if (phase === "spieler" && game.user.isGM) {
+      const text = "Der Spieler stellt gerade Fertigkeiten, Waffen, Zauber und Ausrüstung zusammen. Zum Ändern erst „Zurückholen“.";
+      return { erschaffung: text, lernen: text, nurLesen: true };
+    }
+    if (phase === "spieler") {
+      return {
+        schritte: { ids: ["start", "typ", "eig", "abg", "koerper", "herkunft"], text: "Diese Werte hat die Spielleitung am Tisch eingetragen.", springen: true },
+        lernen: "Lernen und Steigern gibt es nach der Erschaffung.", abschliessen: "Fertig: an die Spielleitung zurückgeben",
+      };
+    }
     if (!this.#freigabePflicht || game.user.isGM) return {};
     return this.#freigegeben
       ? { erschaffung: "Die Erschaffung ist von der Spielleitung freigegeben und damit abgeschlossen. Änderungen nimmt die Spielleitung vor." }
       : { lernen: "Lernen und Steigern sind gesperrt, bis die Spielleitung den Charakter freigegeben hat." };
+  }
+
+  #uebergabeElement() {
+    if (!this.#uebergabePflicht) return null;
+    const phase = this.#phase;
+    if (!game.user.isGM) {
+      if (phase === "fertig") return null;
+      return el("span", { class: ["ma-freigabe", phase === "spieler" ? "frei" : "offen"] }, icon(phase === "spieler" ? "fa-hand-point-right" : "fa-hourglass-half"), phase === "spieler" ? " Du bist dran" : " Spielleitung trägt ein");
+    }
+    if (phase === "sl") return el("button", { type: "button", class: "ma-knopf ma-uebergabe-knopf", title: "Schritte 1 bis 6 sind eingetragen: ab Fertigkeiten übernimmt der Spieler", onclick: async () => {
+      if (!this.actor.hasPlayerOwner) ui.notifications.warn(`${this.actor.name} gehört noch keinem Spieler. Besitzer unter „Berechtigungen“ eintragen.`);
+      await this.#phaseSetzen("spieler");
+      ui.notifications.info(`${this.actor.name}: an den Spieler übergeben.`);
+    } }, icon("fa-share"), " An Spieler übergeben");
+    if (phase === "spieler") return el("button", { type: "button", class: "ma-knopf ma-uebergabe-knopf", title: "Der Spieler ist dran. Zurückholen sperrt ihn wieder aus.", onclick: async () => {
+      await this.#phaseSetzen("sl");
+      ui.notifications.info(`${this.actor.name}: von Spieler zurückgeholt.`);
+    } }, icon("fa-rotate-left"), " Zurückholen");
+    return null;
   }
 
   #freigabeElement() {
@@ -885,6 +949,9 @@ export class AbenteurerBogen extends ActorSheetV2 {
       mindestsumme: game.settings.get(SYSTEM_ID, "hausregelMindestsumme"),
       neuanfaenge: game.settings.get(SYSTEM_ID, "neuanfaenge"),
       sperren: () => this.#sperren(),
+      abschliessen: () => this.#phaseSetzen("fertig"),
+      laden: () => ladenWare(),   // Einkauf mit Startgeld bei der Erschaffung
+      zauberDetails: (name, gruppe) => zauberDetails(name, gruppe),
       spielleitung: () => game.user.isGM,      // EP und PP nur durch die Spielleitung
       // Ausrüstung bei der Erschaffung: Kompendium neben dem Bogen öffnen, vorhandene Ausrüstung anzeigen
       kompendium: (kat) => KompendiumBrowser.oeffnen(kat, { neben: this }),
@@ -946,6 +1013,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
     // Speicherung während des Starts ignorieren (der Abgleich in _onRender übernimmt verwaltete Werte)
     if (this.#startZustand === "startet") return;
     this.#leisteAktualisieren(auswertung);
+    // Übergabe: wer gerade nicht dran ist, schreibt nicht (sonst überschriebe ein veralteter Stand den anderen)
+    if (this.#sperren().nurLesen) return;
     if (!this.#verwaltet && JSON.stringify(zustand) === this.#startZustand) return;
     this.#ausstehend = [JSON.parse(JSON.stringify(zustand)), auswertung];
     clearTimeout(this.#timer);
@@ -958,6 +1027,9 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const offen = this.#ausstehend;
     if (!offen) return;
     this.#ausstehend = null;
+    // Übergabe: die Phase der Spielleitung festhalten, bevor die Werte stehen (sonst gälte der Charakter
+    // nach Schritt 5 als fertig erschaffen und der Spieler käme nie an die Reihe)
+    if (this.#uebergabePflicht && game.user.isGM && !this.actor.getFlag?.(SYSTEM_ID, "phase") && this.#phase === "sl") await this.actor.setFlag(SYSTEM_ID, "phase", "sl");
     await ausWerkzeug(this.actor, offen[1], offen[0]);
     // Gebucht aus einem anderen Reiter (Jetzt lernbar, Lernbaum): sofort neu zeichnen, sonst blieben
     // dort veraltete Einträge stehen, deren zweiter Klick dieselbe Stufe noch einmal buchen würde

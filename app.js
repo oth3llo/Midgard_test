@@ -5,7 +5,12 @@
    Vorgaben der Spielleitung (Foundry-Einstellungen): wuerfelModus "frei" | "digital" | "tisch",
    methode "I" | "II" (sonst freie Wahl), wurfMelden({ aktion, schritt, wuerfe: [[Seiten, Ergebnis], …] }),
    mindestsumme (Hausregel, 0 = aus), neuanfaenge (erlaubte Neuanfänge der Eigenschaften, 0 = unbegrenzt),
-   sperren() → { erschaffung: Text|null, lernen: Text|null } (Freigabe durch die Spielleitung) */
+   sperren() → { erschaffung: Text|null, lernen: Text|null, (Freigabe durch die Spielleitung)
+     schritte: { ids: [Schritt-IDs], text, springen } (einzelne Schritte gesperrt, z. B. Würfelschritte nur
+     durch die Spielleitung; springen: beim Öffnen zum ersten freien Schritt), abschliessen: Knopftext|null }
+   abschliessen(): Spieler gibt die Erschaffung an die Spielleitung zurück (Knopf im letzten Schritt)
+   Handy-Fassung (erschaffung.html): tisch: true blendet das Lernen aus, protokolliert digitale Würfe und
+   bietet am Ende „An die Spielleitung schicken“ (Text für WhatsApp mit Charakter-Code für den Foundry-Import). */
 (function () {
   "use strict";
 
@@ -20,6 +25,7 @@
 
   function starte(opts) {
   const FOUNDRY = opts.modus === "foundry";
+  const TISCH = !FOUNDRY && !!opts.tisch;   // Handy-Fassung am Spieltisch: nur Erschaffung, Versand an die Spielleitung
   const wurzel = opts.wurzel;
   const K = window.KODEX;
   const L = window.LERNKOSTEN;
@@ -116,16 +122,19 @@
     return { aktiv: c.id, charaktere: { [c.id]: c } };
   }
   let BIBL, S;
-  if (FOUNDRY) {
-    S = normalisieren(opts.zustand || {});
-    BIBL = { aktiv: S.id, charaktere: { [S.id]: S } };
-    // Vorgaben der Spielleitung gehen den eigenen Einstellungen vor
-    if (WUERFEL_MODUS !== "frei") S.toolWuerfel = WUERFEL_MODUS === "digital";
+  // Vorgaben der Spielleitung (Foundry-Einstellungen bzw. URL der Handy-Fassung) gehen den eigenen Einstellungen vor
+  function vorgabenAnwenden(c) {
+    if (WUERFEL_MODUS !== "frei") c.toolWuerfel = WUERFEL_MODUS === "digital";
     // feste Methode nur, solange noch keine Eigenschaft steht (bestehende Charaktere behalten ihre Würfe)
-    if (METHODE_FEST && Object.values(S.eig || {}).every((v) => v === null || v === undefined)) S.methode = METHODE_FEST;
+    if (METHODE_FEST && Object.values(c.eig || {}).every((v) => v === null || v === undefined)) c.methode = METHODE_FEST;
+    return c;
+  }
+  if (FOUNDRY) {
+    S = vorgabenAnwenden(normalisieren(opts.zustand || {}));
+    BIBL = { aktiv: S.id, charaktere: { [S.id]: S } };
   } else {
     BIBL = bibliothekLaden();
-    S = BIBL.charaktere[BIBL.aktiv] || Object.values(BIBL.charaktere)[0];
+    S = vorgabenAnwenden(BIBL.charaktere[BIBL.aktiv] || Object.values(BIBL.charaktere)[0]);
   }
   function speichern() {
     if (FOUNDRY) { if (opts.speichere) opts.speichere(S, auswertung()); return; }
@@ -285,7 +294,7 @@
     { id: "waffen", titel: "Waffenfertigkeiten", render: schrittWaffen, pruefen: pruefeWaffen },
     { id: "zauber", titel: "Zauber", render: schrittZauber, pruefen: pruefeZauber, nur: kannZaubern },
     { id: "spez", titel: "Spezialisierung, Ausrüstung", render: schrittSpezial, pruefen: pruefeSpezial },
-    { id: "ende", titel: "Bogen und Lerntabelle", render: schrittEnde, pruefen: () => [] },
+    { id: "ende", titel: TISCH ? "Bogen und Abschicken" : "Bogen und Lerntabelle", render: schrittEnde, pruefen: () => [] },
   ];
   const sichtbar = () => schritte.filter((s) => !s.nur || s.nur());
   const fehler = (t) => ({ art: "fehler", text: t });
@@ -315,6 +324,8 @@
       wurfPuffer = [];
       try { aktion(); } finally {
         const wuerfe = wurfPuffer; wurfPuffer = null;
+        // Handy-Fassung: digitale Würfe wandern mit dem Charakter zur Spielleitung (im Code und in der Nachricht)
+        if (wuerfe.length && TISCH) (S.wurfProtokoll = S.wurfProtokoll || []).push({ zeit: new Date().toISOString(), aktion: text, schritt: (schritte[S.schritt] || {}).titel || "", wuerfe });
         if (wuerfe.length && opts.wurfMelden) {
           try { opts.wurfMelden({ aktion: text, schritt: (schritte[S.schritt] || {}).titel || "", wuerfe }); } catch (e) { console.warn("Midgard-CMT | Wurf nicht gemeldet", e); }
         }
@@ -930,12 +941,17 @@
               if (!ok) versteckt++;
               return ok;
             }).map((z) => [z, le])).filter((r) => r.length);
-            return reihen.length ? h("div", { class: "waffenstufe" }, h("h4", {}, g), reihen.map((r) => h("div", { class: "optionen" }, r.map(([z, le]) => {
-              const name = z.replace("*", ""), zi = zauberInfo(name, g);
-              return h("button", { type: "button", class: "option",
-                onclick: () => lernenBestaetigen(`den Zauber ${name}`, zi ? String(zi.stufe) : "", `${le} LE`, () => { S.zauber.push({ name, gruppe: g, le }); neuZeichnen(); }) },
-                h("span", {}, z), h("small", {}, `${le} LE` + (zi ? ` · Stufe ${zi.stufe}` : "")));
-            })))) : null;
+            // je Gruppe aufklappbar; ein Tipp auf einen Zauber zeigt Werte und Beschreibung, von dort wird gelernt
+            const anzahl = reihen.reduce((n, r) => n + r.length, 0);
+            return reihen.length ? h("details", { class: "waffenstufe zaubergruppe", open: kl.zauberGruppen.length <= 2 || S.zauberOffen === g ? true : null,
+              ontoggle: (ev) => { if (ev.target.open) S.zauberOffen = g; } },
+              h("summary", {}, h("strong", {}, g), h("small", {}, ` ${anzahl} Zauber`)),
+              reihen.map((r) => h("div", { class: "optionen" }, r.map(([z, le]) => {
+                const name = z.replace("*", ""), zi = zauberInfo(name, g);
+                return h("button", { type: "button", class: "option",
+                  onclick: () => zauberDetailFenster(name, g, { text: `Lernen (${le} LE)`, aktion: () => { S.zauber.push({ name, gruppe: g, le }); neuZeichnen(); } }) },
+                  h("span", {}, z), h("small", {}, `${le} LE` + (zi ? ` · Stufe ${zi.stufe}` : "") + " · Details"));
+              })))) : null;
           });
           return [gruppen.some(Boolean) ? gruppen : info(rest > 0 ? "Mit den freien LE ist kein weiterer Zauber lernbar." : "Alle Zauber-LE sind verteilt."),
             ausgeblendet(versteckt, "zu teuer, schon gewählt oder Schwarze Magie")];
@@ -987,6 +1003,18 @@
         })) : info("Noch keine passende Waffenfertigkeit gelernt."),
         istKlein() ? info(`${S.rasse === "Gnom" ? "Gnome" : "Halblinge"} müssen ${K.kleineVerboten.zweihaendig.join(", ")} zweihändig führen (S. 37/44).`) : null));
     }
+    // In Foundry mit Kompendium: Startausrüstung zuteilen und Einkauf mit Startgeld; sonst die Textkarte
+    if (typeof opts.laden === "function") {
+      teile.push(...einkaufTeile());
+      // Spielleitung am PC: Besonderes aus dem Kompendium direkt auf den Bogen ziehen (kostet kein Startgeld)
+      if (darfVergeben() && typeof opts.kompendium === "function") teile.push(ausruestungTextKarte(true));
+    }
+    else teile.push(ausruestungTextKarte());
+    return teile;
+  }
+  // nurKompendium: Karte der Spielleitung neben dem Einkauf (Ziehen aus dem Kompendium, ohne Text und Startgeld)
+  function ausruestungTextKarte(nurKompendium = false) {
+    const kl = klasse();
     const frei = [];
     frei.push("Kleidung, Rucksack, Decke, Lederbeutel");
     frei.push(`${kl.freiWaffen} Waffe${kl.freiWaffen > 1 ? "n" : ""} nach Wahl (aus gelernten Waffenfertigkeiten, S. 42f), mit Behältnissen; bei Schusswaffen 30 Geschosse und Munitionsbehälter`);
@@ -999,29 +1027,186 @@
     // In Foundry: Ausrüstungskompendium öffnen; die Karte nimmt Gegenstände, Waffen und Rüstungen per Ziehen an
     const kompendium = typeof opts.kompendium === "function";
     const vorhanden = typeof opts.gegenstaende === "function" ? opts.gegenstaende() : [];
-    const ausruestungKarte = karte("Ausrüstung (S. 46)",
-      h("ul", {}, [...new Set(frei)].map((x) => h("li", {}, x))),
-      info("Dazu 80 GS Startgeld für weitere Einkäufe (Preislisten S. 197ff)."),
+    const ausruestungKarte = karte(nurKompendium ? "Aus dem Kompendium (Spielleitung)" : "Ausrüstung (S. 46)",
+      nurKompendium ? null : h("ul", {}, [...new Set(frei)].map((x) => h("li", {}, x))),
+      nurKompendium ? null : info("Dazu 80 GS Startgeld für weitere Einkäufe (Preislisten S. 197ff)."),
       kompendium ? h("div", { class: "knopfreihe" },
         h("button", { type: "button", class: "kompendium-knopf", onclick: () => opts.kompendium("gegenstaende") }, "Kompendium: Ausrüstung"),
         h("button", { type: "button", onclick: () => opts.kompendium("waffen") }, "Kompendium: Waffen"),
         h("button", { type: "button", onclick: () => opts.kompendium("ruestungen") }, "Kompendium: Rüstungen")) : null,
       kompendium ? info("Einträge aus dem Kompendium auf diesen Kasten ziehen; sie kommen direkt auf den Bogen. Gegenstände, die schon da sind, erhöhen die Anzahl.") : null,
       vorhanden.length ? h("div", { class: "auf-dem-bogen" }, h("strong", {}, "Schon auf dem Bogen: "), vorhanden.join(", ")) : null,
-      feld("Gewählte Waffen und weitere Einkäufe (für den Bogen)", h("textarea", { rows: 5, oninput: (ev) => { S.ausruestung = ev.target.value; speichern(); } }, S.ausruestung)));
+      nurKompendium ? null : feld("Gewählte Waffen und weitere Einkäufe (für den Bogen)", h("textarea", { rows: 5, oninput: (ev) => { S.ausruestung = ev.target.value; speichern(); } }, S.ausruestung)));
     if (kompendium) {
       ausruestungKarte.classList.add("cmt-ablage");
       ausruestungKarte.addEventListener("dragover", (ev) => { ev.preventDefault(); ausruestungKarte.classList.add("cmt-ablage-aktiv"); });
       ausruestungKarte.addEventListener("dragleave", (ev) => { if (!ausruestungKarte.contains(ev.relatedTarget)) ausruestungKarte.classList.remove("cmt-ablage-aktiv"); });
       ausruestungKarte.addEventListener("drop", () => ausruestungKarte.classList.remove("cmt-ablage-aktiv"));
     }
-    teile.push(ausruestungKarte);
+    return ausruestungKarte;
+  }
+  // ---------------------------------------------------------------- Startausrüstung und Einkauf (Kodex S. 46)
+  // Ablauf: erst die freien Waffen wählen (aus gelernten Waffenfertigkeiten), dann gibt es Rüstung und
+  // Grundausstattung dazu, dann Einkauf mit dem Startgeld aus dem Kompendium (opts.laden). Solange der
+  // Einkauf offen ist, gleicht Foundry die Gegenstände ab; „Einkauf abschließen“ bucht das Restgold ins
+  // Konto, danach gehören die Gegenstände dem Bogen und das Werkzeug fasst sie nicht mehr an.
+  const STARTGELD = 80;
+  // nur während der Erschaffung: Charaktere mit Buchungen im Protokoll (Lernen, Gold, EP) sind darüber hinaus,
+  // sonst bekämen bestehende Charaktere nachträglich Startgeld
+  const einkaufLaeuft = () => typeof opts.laden === "function" && !!klasse() && !S.spiel.startgeldGebucht && !(S.spiel.protokoll || []).length;
+  // Kategorien des Ladens: keine Tiere, Transportmittel und Lebensmittel (Vorgabe der Spielleitung)
+  const LADEN_KATEGORIEN = ["Waffen", "Rüstungen", "Ausrüstung", "Kleidung", "Waffenzubehör", "Rüstungszubehör", "Zaubermittel"];
+  // Auswahl im Zustand (S.einkauf); ob das Startgeld gebucht ist, steht im Spielstand (S.spiel.startgeldGebucht),
+  // damit „Rückgängig“ im Protokoll den Abschluss samt Gold zurücknimmt
+  function einkauf() {
+    const e = S.einkauf || (S.einkauf = {});
+    if (!Array.isArray(e.freiWaffen)) e.freiWaffen = [];
+    if (!Array.isArray(e.kauf)) e.kauf = [];
+    return e;
+  }
+  function freieWaffenKandidaten() {
+    const liste = [];
+    const gelernt = S.waffen.map((w) => w.name).concat(S.spiel.neu.filter((n) => n.waffe).map((n) => n.name));
+    for (const fert of [...new Set(gelernt)]) {
+      const waffen = (K.waffenListe[fert] || []).concat(K.weitereWaffen.filter((x) => x[0] === fert).map((x) => x.slice(1)));
+      for (const [name, anf, schaden, preis] of waffen) {
+        let grund = null;
+        if (!anforderungErfuellt(anf)) grund = `${anf} nicht erreicht`;
+        if (istKlein() && K.kleineVerboten.waffen.includes(name)) grund = "zu groß";
+        liste.push({ fert, name, anf, schaden, preis, grund });
+      }
+    }
+    return liste;
+  }
+  function grundausstattung() {
+    const kl = klasse(), teile = [];
+    const g = (name, such, kat = "gegenstaende") => teile.push({ name, such: such || [name], kat });
+    g("Kleidung");
+    g("Lederrucksack für 25 kg");
+    g("warme Decke");
+    g("Lederbeutel für 20 Münzen");
+    if (S.klasse === "Kr" || S.klasse === "Or") teile.push({ name: "Kettenrüstung", such: ["Kettenrüstung"], kat: "ruestungen", getragen: true });
+    if (istZauberer()) g("Zaubermaterial (je gelerntem Spruch 1×)");
+    if (S.klasse === "Ba") g("magisches Instrument");
+    const werkzeug = { "Erste Hilfe": "Salben, Heilkräuter, Verbände", "Fälschen": "Werkzeug zum Fälschen", Gaukeln: "Jonglierbälle, Reifen und Keulen",
+      "Glücksspiel": "geladene Würfel oder gezinkte Karten", Musizieren: "Musikinstrument nach Wahl", "Schlösser öffnen": "Dietriche und Nachschlüssel" };
+    for (const f of alleFertigkeiten()) if (werkzeug[f.name]) g(werkzeug[f.name]);
+    return { teile, kl };
+  }
+  const einkaufSumme = () => summe(einkauf().kauf.map((k) => k.preis * k.anzahl));
+  const einkaufRest = () => Math.round((STARTGELD - einkaufSumme()) * 100) / 100;
+  const geld = (gs) => { const ks = Math.round(gs * 100); const g = fl(ks / 100), ss = fl((ks % 100) / 10), k = ks % 10; return [g ? `${fmt(g)} GS` : null, ss ? `${ss} SS` : null, k ? `${k} KS` : null].filter(Boolean).join(" ") || "0 GS"; };
+  function einkaufAbschliessen() {
+    if (S.spiel.startgeldGebucht) return;
+    const rest = einkaufRest();
+    buchen(`Startausrüstung abgeschlossen: ${geld(STARTGELD - rest)} ausgegeben, ${geld(rest)} Startgeld übrig`, (sp) => {
+      sp.gold = Math.round((sp.gold + rest) * 100) / 100; sp.startgeldGebucht = true;
+    });
+  }
+  /** Für Foundry: Gegenstände der Startausrüstung (freie Waffen, Grundausstattung, Einkäufe). */
+  function ausstattungListe() {
+    if (!klasse()) return [];
+    const e = einkauf(), liste = [];
+    const zaehl = new Map();
+    const dazu = (eintrag) => {
+      const k = `${eintrag.kat}:${eintrag.name}`;
+      if (zaehl.has(k)) { zaehl.get(k).anzahl += eintrag.anzahl || 1; return; }
+      const x = Object.assign({ anzahl: 1 }, eintrag, { schluessel: "A:" + k });
+      zaehl.set(k, x); liste.push(x);
+    };
+    for (const w of e.freiWaffen) dazu({ kat: "waffen", name: w.name, such: [`${w.name} (${w.fert})`, w.name], anzahl: w.anzahl || 1 });
+    if (summe(e.freiWaffen.map((w) => w.anzahl || 1)) >= freieWaffenZiel()) for (const t of grundausstattung().teile) dazu(t);
+    for (const k of e.kauf) dazu({ kat: k.kat, name: k.name, such: [k.name], anzahl: k.anzahl });
+    return liste;
+  }
+  function freieWaffenZiel() {
+    const kl = klasse();
+    const moeglich = freieWaffenKandidaten().filter((k) => !k.grund).length;
+    return Math.min(kl ? kl.freiWaffen : 0, moeglich ? kl.freiWaffen : 0);
+  }
+  function einkaufTeile() {
+    const e = einkauf(), kl = klasse();
+    if (!einkaufLaeuft() && !S.spiel.startgeldGebucht) return [karte("Startausrüstung", info("Dieser Charakter ist schon im Spiel (Buchungen im Protokoll). Startausrüstung und Startgeld gibt es nur bei der Erschaffung; Ausrüstung kommt jetzt über das Kompendium auf den Bogen."))];
+    const fertig = !einkaufLaeuft();
+    const ziel = freieWaffenZiel();
+    const gewaehlt = summe(e.freiWaffen.map((w) => w.anzahl || 1));
+    const teile = [];
+    // 1. freie Waffen
+    const kandidaten = freieWaffenKandidaten();
+    teile.push(karte(`1. Freie Waffen (${gewaehlt} von ${kl.freiWaffen})`,
+      info(`${kl.name}: ${kl.freiWaffen} Waffe${kl.freiWaffen > 1 ? "n" : ""} nach Wahl aus den gelernten Waffenfertigkeiten (Kodex S. 46), mit Scheide oder Köcher; bei Schusswaffen 30 Geschosse.${ziel ? "" : " Mit den gelernten Waffenfertigkeiten ist keine Waffe wählbar."}`),
+      kandidaten.length ? h("div", { class: "optionen einkauf-waffen" }, kandidaten.map((k) => {
+        const eintrag = e.freiWaffen.find((w) => w.name === k.name && w.fert === k.fert);
+        const n = eintrag ? eintrag.anzahl || 1 : 0;
+        return h("div", { class: "einkauf-zeile" + (n ? " gewaehlt" : "") },
+          h("span", { class: "einkauf-name" }, h("strong", {}, k.name), h("small", {}, `${k.fert} · ${k.schaden}${k.anf ? " · " + k.anf : ""}${k.grund ? " · " + k.grund : ""}`)),
+          h("span", { class: "einkauf-menge" },
+            h("button", { type: "button", class: "mini", disabled: fertig || !n, "aria-label": `${k.name} weniger`, onclick: () => { if (eintrag.anzahl > 1) eintrag.anzahl--; else e.freiWaffen.splice(e.freiWaffen.indexOf(eintrag), 1); neuZeichnen(); } }, "−"),
+            h("span", { class: "einkauf-zahl" }, n),
+            h("button", { type: "button", class: "mini", disabled: fertig || !!k.grund || gewaehlt >= kl.freiWaffen, "aria-label": `${k.name} wählen`, onclick: () => { if (eintrag) eintrag.anzahl = (eintrag.anzahl || 1) + 1; else e.freiWaffen.push({ fert: k.fert, name: k.name, anzahl: 1 }); neuZeichnen(); } }, "+")));
+      })) : info("Noch keine Waffenfertigkeit gelernt (Schritt Waffenfertigkeiten).")));
+    if (gewaehlt < ziel) {
+      teile.push(karte("2. Ausrüstung", info(`Erst ${ziel - gewaehlt} weitere freie Waffe${ziel - gewaehlt > 1 ? "n" : ""} wählen, dann gibt es Rüstung, Grundausstattung und den Einkauf.`)));
+      return teile;
+    }
+    // 2. Startausrüstung (automatisch)
+    const g = grundausstattung();
+    teile.push(karte("2. Startausrüstung (automatisch)",
+      h("ul", {}, g.teile.map((t) => h("li", {}, t.name + (t.kat === "ruestungen" ? " (angelegt)" : "")))),
+      info("Kommt so auf den Bogen. Werkzeug für Fertigkeiten und Zaubermaterial stehen als einfache Gegenstände da; die Spielleitung kann sie genauer benennen.")));
+    // 3. Einkauf
+    const rest = einkaufRest();
+    const ware = (opts.laden() || []).filter((x) => LADEN_KATEGORIEN.includes(x.kategorie) && x.preis > 0);
+    const kats = LADEN_KATEGORIEN.filter((k) => ware.some((x) => x.kategorie === k));
+    if (!kats.includes(S.ladenKat)) S.ladenKat = kats[0];
+    const such = (S.ladenSuche || "").trim().toLowerCase();
+    const angebot = ware.filter((x) => (such ? x.name.toLowerCase().includes(such) : x.kategorie === S.ladenKat)).sort((a, b) => a.name.localeCompare(b.name, "de"));
+    const sperrgrund = (x) => {
+      if (x.kat === "waffen") {
+        if (x.anf && !anforderungErfuellt(x.anf)) return `${x.anf} nicht erreicht`;
+        if (istKlein() && x.kleineVerboten) return "zu groß";
+      }
+      return null;
+    };
+    const kaufen = (x) => {
+      const vorh = e.kauf.find((k) => k.kat === x.kat && k.name === x.name);
+      if (vorh) vorh.anzahl++; else e.kauf.push({ kat: x.kat, name: x.name, preis: x.preis, anzahl: 1 });
+      neuZeichnen();
+    };
+    teile.push(karte(null,
+      h("div", { class: "topf-kopf" }, h("h3", {}, "3. Einkauf mit Startgeld"), h("span", { class: "topf-rest" + (rest < 0 ? " ueber" : rest === 0 ? " leer" : "") }, `${geld(rest)} von ${STARTGELD} GS übrig`)),
+      fertig ? info(S.spiel.startgeldGebucht ? "Der Einkauf ist abgeschlossen; das Restgold steht im Konto." : "Dieser Charakter ist schon im Spiel (Buchungen im Protokoll); Startgeld gibt es nicht mehr.") : [
+        h("div", { class: "inline filter laden-filter" },
+          h("select", { "aria-label": "Kategorie", onchange: (ev) => { S.ladenKat = ev.target.value; S.ladenSuche = ""; neuZeichnen(); } }, kats.map((k) => h("option", { value: k, selected: k === S.ladenKat }, k))),
+          h("input", { type: "search", placeholder: "Suchen", value: S.ladenSuche || "", oninput: (ev) => { S.ladenSuche = ev.target.value; const pos = ev.target.selectionStart; neuZeichnen(); const f = wurzel.querySelector(".laden-filter input"); if (f) { f.focus(); f.setSelectionRange(pos, pos); } } })),
+        h("div", { class: "laden-liste" }, angebot.map((x) => {
+          const grund = sperrgrund(x), zuTeuer = x.preis > rest;
+          return h("div", { class: "einkauf-zeile" + (grund ? " gesperrt" : "") },
+            h("span", { class: "einkauf-name" }, h("strong", {}, x.name), h("small", {}, [x.preisText || geld(x.preis), x.gewicht ? `${String(x.gewicht).replace(".", ",")} kg` : null, x.schaden, x.anf, grund].filter(Boolean).join(" · "))),
+            h("button", { type: "button", class: "mini", disabled: !!grund || zuTeuer, title: zuTeuer ? "Startgeld reicht nicht" : null, "aria-label": `${x.name} kaufen`, onclick: () => kaufen(x) }, "+"));
+        }), angebot.length ? null : info("Nichts gefunden.")),
+      ],
+      e.kauf.length ? [h("h4", {}, "Gekauft"), h("div", { class: "laden-liste" }, e.kauf.map((k) => h("div", { class: "einkauf-zeile gewaehlt" },
+        h("span", { class: "einkauf-name" }, h("strong", {}, k.name), h("small", {}, `${k.anzahl} × ${geld(k.preis)} = ${geld(k.preis * k.anzahl)}`)),
+        fertig ? null : h("span", { class: "einkauf-menge" },
+          h("button", { type: "button", class: "mini", "aria-label": `${k.name} weniger`, onclick: () => { if (k.anzahl > 1) k.anzahl--; else e.kauf.splice(e.kauf.indexOf(k), 1); neuZeichnen(); } }, "−"),
+          h("span", { class: "einkauf-zahl" }, k.anzahl),
+          h("button", { type: "button", class: "mini", disabled: k.preis > rest, "aria-label": `${k.name} mehr`, onclick: () => { k.anzahl++; neuZeichnen(); } }, "+")))))] : null,
+      fertig ? null : h("div", { class: "knopfreihe" }, h("button", { type: "button", onclick: () => frage("Einkauf abschließen?", `${geld(rest)} Startgeld gehen ins Konto. Danach ändert sich die Startausrüstung nicht mehr über dieses Fenster.`, "Abschließen", einkaufAbschliessen) }, "Einkauf abschließen"))));
     return teile;
   }
   function pruefeSpezial() {
-    if (!istKaempfer()) return [];
-    const n = S.klasse === "Kr" ? 3 : 1;
-    return S.spezialwaffen.length < n ? [hinweis(`Noch ${n - S.spezialwaffen.length} Spezialwaffe(n) offen.`)] : [];
+    const m = [];
+    if (istKaempfer()) {
+      const n = S.klasse === "Kr" ? 3 : 1;
+      if (S.spezialwaffen.length < n) m.push(hinweis(`Noch ${n - S.spezialwaffen.length} Spezialwaffe(n) offen.`));
+    }
+    if (einkaufLaeuft()) {
+      const offen = freieWaffenZiel() - summe(einkauf().freiWaffen.map((w) => w.anzahl || 1));
+      if (offen > 0) m.push(hinweis(`Noch ${offen} freie Waffe${offen > 1 ? "n" : ""} wählen.`));
+      if (einkaufRest() < 0) m.push(fehler("Die Einkäufe kosten mehr als das Startgeld."));
+    }
+    return m;
   }
 
   // ---------------------------------------------------------------- 11 Ende: Bogen + Lerntabelle
@@ -1034,14 +1219,92 @@
     if (!kl) return [info("Zuerst einen Abenteurertyp wählen.")];
     const offene = sichtbar().slice(0, -1).flatMap((s) => s.pruefen().filter((x) => x.art === "fehler").map((x) => `${s.titel}: ${x.text}`));
     return [
-      h("div", { class: "knopfreihe nicht-drucken" },
-        h("button", { type: "button", class: "haupt", onclick: drucken }, "Drucken / als PDF speichern"),
-        FOUNDRY ? null : h("button", { type: "button", onclick: () => exportieren(false) }, "Charakter exportieren"),
-        h("button", { type: "button", onclick: () => { S.ansicht = "konto"; neuZeichnen(); nachOben(); } }, "Zum Lernen und Steigern")),
       offene.length ? h("div", { class: "warnung nicht-drucken" }, h("strong", {}, "Noch offen:"), h("ul", {}, offene.map((t) => h("li", {}, t)))) : null,
+      FOUNDRY ? null : sendenKarte(offene),
+      sperren().abschliessen && typeof opts.abschliessen === "function" ? karte("Fertig?",
+        info("Wenn Fertigkeiten, Waffen, Zauber und Ausrüstung stehen, gibst du die Erschaffung an die Spielleitung zurück. Danach ändert nur noch sie etwas."),
+        h("div", { class: "knopfreihe" }, h("button", { type: "button", class: "haupt", onclick: () => frage("Erschaffung abschließen?", (offene.length ? `Noch offen: ${offene.join("; ")}. Trotzdem an die Spielleitung zurückgeben?` : "Die Erschaffung geht an die Spielleitung zurück.") + (einkaufLaeuft() ? ` Der Einkauf wird abgeschlossen, ${geld(einkaufRest())} Startgeld gehen ins Konto.` : ""), "Ja, abschließen", () => { if (einkaufLaeuft()) einkaufAbschliessen(); opts.abschliessen(); }) }, sperren().abschliessen))) : null,
+      h("div", { class: "knopfreihe nicht-drucken" },
+        h("button", { type: "button", class: TISCH ? null : "haupt", onclick: drucken }, "Drucken / als PDF speichern"),
+        FOUNDRY ? null : h("button", { type: "button", onclick: () => exportieren(false) }, "Als Datei speichern"),
+        TISCH ? null : h("button", { type: "button", onclick: () => { S.ansicht = "konto"; neuZeichnen(); nachOben(); } }, "Zum Lernen und Steigern")),
       bogen(r, kl),
-      lerntabelle(kl),
+      TISCH ? h("details", { class: "volle-lerntabelle" }, h("summary", {}, "Lerntabelle (zum Nachschlagen)"), lerntabelle(kl)) : lerntabelle(kl),
     ];
+  }
+  // ---------------------------------------------------------------- An die Spielleitung schicken
+  // Nachricht = lesbare Zusammenfassung (zum Eintragen von Hand) + Charakter-Code (Import in Foundry:
+  // Akteure › „Charakter-Code importieren“). Geteilt über das Teilen-Menü des Handys (WhatsApp, Signal,
+  // Mail …), als WhatsApp-Link oder über die Zwischenablage.
+  function zusammenfassungText() {
+    const a = auswertung(), e = a.eigenschaften;
+    const zeilen = [];
+    const kopf = (t) => zeilen.push("", `*${t}*`);
+    zeilen.push(`*${a.name || "Neuer Abenteurer"}*${a.spieler ? ` (${a.spieler})` : ""}`);
+    zeilen.push([a.rasse, a.typName, a.spezialisierung ? `Spezialgebiet ${a.spezialisierung}` : null, a.geschlecht === "w" ? "weiblich" : a.geschlecht === "m" ? "männlich" : null].filter(Boolean).join(" · "));
+    kopf("Eigenschaften");
+    zeilen.push(["St", "Gs", "Gw", "Ko", "In", "Zt"].map((k) => `${k} ${e[k] ?? "–"}`).join(" · "));
+    zeilen.push(["pA", "Wk", "Au"].map((k) => `${k} ${e[k] ?? "–"}`).join(" · "));
+    zeilen.push(`LP ${a.lp ?? "–"} · AP ${a.ap ?? "–"} · B ${a.b ?? "–"} · SG ${a.sg ?? "–"}`);
+    const persoenlich = [a.stand ? `Stand ${a.stand}` : null, a.heimat ? `Heimat ${a.heimat}` : null, a.glaube ? `Glaube ${a.glaube}` : null,
+      a.groesse ? `${a.groesse} cm` : null, a.gewicht ? `${a.gewicht} kg` : null, a.gestalt, a.hand].filter(Boolean);
+    if (persoenlich.length) zeilen.push(persoenlich.join(" · "));
+    if (a.faehigkeiten && a.faehigkeiten.length) zeilen.push("Besonderes: " + a.faehigkeiten.map((f) => `${f.name} ${vz(f.wert)}`).join(", "));
+    kopf("Fertigkeiten");
+    for (const f of a.fertigkeiten) zeilen.push(`${f.name}${f.spez ? ` (${f.spez})` : ""} ${vz(f.wert)}${f.le ? ` (${f.le})` : ""}`);
+    if (a.waffen.length) { kopf("Waffenfertigkeiten"); for (const w of a.waffen) zeilen.push(`${w.name} ${vz(w.wert)}`); }
+    if (a.spezialwaffen.length) zeilen.push("Spezialwaffe: " + a.spezialwaffen.map((x) => `${x.name} (${x.fertigkeit})`).join(", "));
+    if (a.zauber.length) { kopf("Zauber"); for (const z of a.zauber) zeilen.push(`${z.name}${z.gruppe ? ` (${z.gruppe}${z.stufe ? `, Stufe ${z.stufe}` : ""})` : ""}`); }
+    if (a.ausruestung) { kopf("Ausrüstung"); zeilen.push(a.ausruestung); }
+    const wuerfe = S.wurfProtokoll || [];
+    zeilen.push("", wuerfe.length ? `Digital gewürfelt: ${wuerfe.length}× (Liste im Code)` : "Gewürfelt am Tisch (Ergebnisse eingetragen)");
+    if (S.neuanfaenge) zeilen.push(`Neuanfänge beim Würfeln: ${S.neuanfaenge}`);
+    return zeilen.join("\n");
+  }
+  async function nachrichtErzeugen() {
+    const zustand = JSON.parse(JSON.stringify(S));
+    delete zustand.ansicht; delete zustand.besucht;
+    const code = await codeErzeugen(zustand);
+    return `${zusammenfassungText()}\n\n_Import in Foundry: Akteure › „Charakter-Code importieren“, ganze Nachricht einfügen._\n\`\`\`${code}\`\`\``;
+  }
+  function sendenKarte(offene) {
+    const status = h("p", { class: "senden-status", "aria-live": "polite" });
+    const melde = (t) => { status.textContent = t; };
+    const kopieren = async (text) => {
+      try { await navigator.clipboard.writeText(text); return true; } catch (e) {
+        const ta = h("textarea", { class: "versteckt" }, text); document.body.append(ta); ta.select();
+        let ok = false; try { ok = document.execCommand("copy"); } catch (e2) { ok = false; } ta.remove(); return ok;
+      }
+    };
+    const teilen = async () => {
+      const text = await nachrichtErzeugen();
+      if (navigator.share) {
+        try { await navigator.share({ title: `Midgard: ${S.name || "Charakter"}`, text }); melde("Geteilt. Die Spielleitung fügt die ganze Nachricht in Foundry ein."); return; }
+        catch (e) { if (e && e.name === "AbortError") return; }
+      }
+      melde((await kopieren(text)) ? "Teilen geht hier nicht: Nachricht in die Zwischenablage kopiert, jetzt in WhatsApp einfügen." : "Teilen und Kopieren gehen hier nicht. Bitte „Nachricht anzeigen“ nutzen.");
+    };
+    const whatsapp = async () => {
+      const text = await nachrichtErzeugen();
+      window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank");
+    };
+    const anzeigen = async () => {
+      const text = await nachrichtErzeugen();
+      fenster("Nachricht an die Spielleitung", (zu) => [
+        h("p", {}, "Alles markieren, kopieren und per WhatsApp schicken. Der Teil zwischen ``` ist der Charakter-Code."),
+        h("textarea", { rows: 10, readonly: true, class: "senden-text" }, text),
+        h("div", { class: "knopfreihe" },
+          h("button", { type: "button", class: "haupt", onclick: async (ev) => { ev.target.textContent = (await kopieren(text)) ? "Kopiert" : "Bitte von Hand markieren"; } }, "Kopieren"),
+          h("button", { type: "button", onclick: zu }, "Schließen"))], { breit: true });
+    };
+    return karte("An die Spielleitung schicken",
+      info("Schickt die Werte als Nachricht, zum Beispiel per WhatsApp. Oben steht alles lesbar zum Eintragen von Hand, unten der Charakter-Code: In Foundry unter Akteure › „Charakter-Code importieren“ die ganze Nachricht einfügen, dann steht der Charakter fertig da."),
+      offene.length ? h("p", { class: "fehlt" }, "Es ist noch nicht alles ausgefüllt (siehe oben). Schicken geht trotzdem, die Spielleitung kann den Rest in Foundry ergänzen.") : null,
+      h("div", { class: "knopfreihe senden-knoepfe" },
+        h("button", { type: "button", class: "haupt", onclick: teilen }, "Teilen …"),
+        h("button", { type: "button", onclick: whatsapp }, "WhatsApp"),
+        h("button", { type: "button", onclick: anzeigen }, "Nachricht anzeigen")),
+      status);
   }
 
   function bogen(r, kl) {
@@ -1305,8 +1568,8 @@
     const kl = c.klasse ? K.klassen[c.klasse].name : "ohne Typ";
     return `${c.name || "Neuer Abenteurer"} · ${kl}${c.rasse !== "Mensch" ? " · " + c.rasse : ""}`;
   }
-  function wechseln(id) { S = BIBL.charaktere[id]; neuZeichnen(); nachOben(); }
-  function neuerCharakter() { S = leererZustand(); BIBL.charaktere[S.id] = S; neuZeichnen(); nachOben(); }
+  function wechseln(id) { S = vorgabenAnwenden(BIBL.charaktere[id]); neuZeichnen(); nachOben(); }
+  function neuerCharakter() { S = vorgabenAnwenden(leererZustand()); BIBL.charaktere[S.id] = S; neuZeichnen(); nachOben(); }
   function charakterLoeschen() {
     frage("Charakter löschen?", `„${charakterTitel(S)}“ wird aus diesem Browser gelöscht. Exportiere ihn vorher, wenn du ihn behalten willst.`, "Löschen", () => {
       delete BIBL.charaktere[S.id];
@@ -1348,7 +1611,7 @@
   }
   function textImport() {
     fenster("Text importieren", (zu) => {
-      const ta = h("textarea", { rows: 8, placeholder: "Exportierten Text hier einfügen" });
+      const ta = h("textarea", { rows: 8, placeholder: "Exportierten Text oder Nachricht mit Charakter-Code hier einfügen" });
       return [ta, h("div", { class: "knopfreihe" },
         h("button", { type: "button", class: "haupt", onclick: () => { zu(); importText(ta.value); } }, "Importieren"),
         h("button", { type: "button", onclick: zu }, "Abbrechen"))];
@@ -1360,6 +1623,11 @@
     if (datei) datei.text().then(importText, () => meldung("Import fehlgeschlagen", "Die Datei konnte nicht gelesen werden."));
   }
   function importText(text) {
+    // Charakter-Code aus einer Nachricht (Handy-Fassung)
+    if (/M5CMT[01]:/.test(text || "")) {
+      codeLesen(text).then((z) => importText(JSON.stringify(z)), (e) => meldung("Import fehlgeschlagen", `Der Charakter-Code ist unvollständig oder beschädigt (${e.message}).`));
+      return;
+    }
     let daten;
     try { daten = JSON.parse(text); } catch (e) { meldung("Import fehlgeschlagen", "Das ist keine gültige Charakterdatei (kein lesbares JSON)."); return; }
     const liste = Array.isArray(daten) ? daten : daten && Array.isArray(daten.charaktere) ? daten.charaktere : [daten];
@@ -1387,6 +1655,12 @@
   }
   function charakterBereich() {
     const liste = Object.values(BIBL.charaktere);
+    // Handy-Fassung: eine Zeile, Export und Import stecken unter „Daten“
+    if (TISCH) return h("div", { class: "charwahl kompakt" },
+      h("select", { "aria-label": "Charakter", onchange: (ev) => { if (ev.target.value === "__neu") neuerCharakter(); else wechseln(ev.target.value); } },
+        liste.map((c) => h("option", { value: c.id, selected: c.id === S.id }, charakterTitel(c))),
+        h("option", { value: "__neu" }, "+ Neuer Charakter")),
+      h("button", { type: "button", onclick: datenFenster, title: "Sichern, laden, löschen" }, "Daten"));
     return h("div", { class: "charwahl" },
       h("label", { class: "feld" }, h("span", { class: "feld-label" }, "Charakter"),
         h("select", { onchange: (ev) => { if (ev.target.value === "__neu") neuerCharakter(); else wechseln(ev.target.value); } },
@@ -1402,6 +1676,8 @@
     fenster("Daten", (zu) => [
       h("p", { class: "info" }, "Charaktere liegen nur in diesem Browser. Ein Export ist die Sicherung, z. B. vor dem Löschen der Browserdaten oder für ein anderes Gerät."),
       h("div", { class: "daten-knoepfe" },
+        TISCH ? h("button", { type: "button", onclick: () => { zu(); exportieren(false); } }, "Diesen Charakter als Datei") : null,
+        TISCH ? h("label", { class: "knopf" }, "Datei laden", h("input", { type: "file", accept: ".json,application/json", class: "versteckt", onchange: (ev) => { zu(); dateiImport(ev); } })) : null,
         h("button", { type: "button", onclick: () => { zu(); exportieren(true); } }, `Alle ${anzahl} Charaktere exportieren (Datei)`),
         h("button", { type: "button", onclick: () => { zu(); textExport(false); } }, "Diesen Charakter als Text"),
         h("button", { type: "button", onclick: () => { zu(); textExport(true); } }, "Alle Charaktere als Text"),
@@ -1679,6 +1955,29 @@
           h("button", { type: "button", onclick: zu }, "Abbrechen"))];
     });
   }
+  // Werte und Beschreibung eines Zaubers. In Foundry liefert opts.zauberDetails die Daten aus dem Zauber-
+  // Kompendium (nach dem Arkanum-Import mit Beschreibung); sonst bleibt es bei Stufe, Art und Ursprung.
+  // lernen: { text, aktion } für den Knopf unten, null ohne Lernen.
+  function zauberDetailFenster(name, gruppe, lernen) {
+    const zi = zauberInfo(name, gruppe) || {};
+    let d = { stufe: zi.stufe, art: zi.art, ursprung: zi.urspr }, laedt = typeof opts.zauberDetails === "function";
+    const WERTE = [["stufe", "Stufe"], ["art", "Art"], ["ursprung", "Ursprung"], ["ap", "AP"], ["zauberdauer", "Zauberdauer"], ["reichweite", "Reichweite"],
+      ["wirkungsziel", "Wirkungsziel"], ["wirkungsbereich", "Wirkungsbereich"], ["wirkungsdauer", "Wirkungsdauer"], ["agens", "Agens"], ["reagens", "Reagens"], ["material", "Material"]];
+    fenster(`${name}${gruppe ? ` (${gruppe})` : ""}`, (zu, neu) => {
+      if (laedt) {
+        laedt = false;
+        Promise.resolve(opts.zauberDetails(name, gruppe)).then((x) => { if (x) { d = Object.assign({}, d, x); neu(); } }, () => {});
+      }
+      const zeilen = WERTE.filter(([k]) => d[k] !== undefined && d[k] !== null && d[k] !== "" && d[k] !== "-").map(([k, t]) => kostenZeile(t, String(d[k])));
+      return [
+        zeilen.length ? h("table", { class: "kosten zauberwerte" }, h("tbody", {}, zeilen)) : null,
+        d.beschreibung ? h("div", { class: "zauber-beschreibung", html: d.beschreibung })
+          : info(FOUNDRY ? "Die Beschreibung steht nach dem Import des Arkanums (Regelwerk-PDF) im Kompendium." : "Beschreibung: siehe Arkanum."),
+        h("div", { class: "knopfreihe" },
+          lernen ? h("button", { type: "button", class: "haupt", onclick: () => { zu(); lernen.aktion(); } }, lernen.text) : null,
+          h("button", { type: "button", onclick: zu }, "Schließen"))];
+    }, { breit: true });
+  }
   function zauberDialog(startGruppe, startName) {
     const sp = S.spiel, gruppen = Object.keys(L.zauberKosten[S.klasse] || {});
     let name = startName || "", gruppe = startGruppe || gruppen[0], stufe = 1, art = "lehrer", pp = 0, goldEP = 0, gescheitert = false, belohnung = false;
@@ -1817,7 +2116,7 @@
     return [
       kontoKacheln(),
       karte("Bekannte Zauber",
-        h("ul", { class: "spalten" }, bekannteZauber().map((z) => h("li", {}, z.name, h("small", {}, ` ${[z.gruppe, z.stufe ? "Stufe " + z.stufe : "", z.quelle].filter(Boolean).join(", ")}`)))),
+        h("ul", { class: "spalten" }, bekannteZauber().map((z) => h("li", {}, h("button", { type: "button", class: "zauber-name", title: "Werte und Beschreibung", onclick: () => zauberDetailFenster(z.name, z.gruppe, null) }, z.name), h("small", {}, ` ${[z.gruppe, z.stufe ? "Stufe " + z.stufe : "", z.quelle].filter(Boolean).join(", ")}`)))),
         h("div", { class: "knopfreihe" }, h("button", { type: "button", class: "haupt", onclick: () => zauberDialog() }, "Zauber lernen"))),
       zauberListeKarte(),
       karte("Zaubergruppen: Kosten und Praxispunkte",
@@ -1853,7 +2152,7 @@
           const bekannt = kenntZauber(z.name, z.gruppe);
           const verboten = elf && z.urspr === "schwarzmagisch";
           return h("tr", { class: bekannt ? "bekannt" : verboten ? "gesperrt" : "" },
-            h("th", {}, z.name, bekannt ? h("small", {}, " (bekannt)") : null),
+            h("th", {}, h("button", { type: "button", class: "zauber-name", title: "Werte und Beschreibung", onclick: () => zauberDetailFenster(z.name, z.gruppe, bekannt || verboten ? null : { text: "Lernen …", aktion: () => zauberDialog(z.gruppe, z.name) }) }, z.name), bekannt ? h("small", {}, " (bekannt)") : null),
             h("td", {}, z.stufe), h("td", {}, le), h("td", {}, fmt(le * e)), h("td", {}, fmt(le * 100)),
             h("td", {}, z.art || ""), h("td", { class: z.urspr === "schwarzmagisch" ? "schwarz" : "" }, z.urspr || ""),
             h("td", {}, bekannt || verboten ? null : h("button", { type: "button", class: "klein-knopf", onclick: () => zauberDialog(z.gruppe, z.name) }, "Lernen")));
@@ -2289,20 +2588,32 @@
     fokusWiederherstellen(fokus);
     for (const f of [...baumBeobachter]) f();
   }
+  let letzteSchrittSperre;
   function zeichnen() {
     speichern();
     if (!FOUNDRY) $(".cmt-charakter").replaceChildren(charakterBereich());
     const liste = sichtbar();
     if (S.schritt >= liste.length) S.schritt = liste.length - 1;
+    // gesperrte Schritte (Würfelschritte nur durch die Spielleitung): zum ersten freien Schritt springen
+    const spVorab = sperren();
+    const schrittGesperrt = (id) => !!(spVorab.schritte && (spVorab.schritte.ids || []).includes(id));
+    // nur beim ersten Zeichnen und wenn sich die Sperre ändert (Übergabe), damit Gesperrtes ansehbar bleibt
+    const sperrSchluessel = JSON.stringify(spVorab.schritte || null);
+    if (sperrSchluessel !== letzteSchrittSperre && spVorab.schritte && spVorab.schritte.springen && !S.ansicht && schrittGesperrt(liste[S.schritt].id)) {
+      const frei = liste.findIndex((x) => !schrittGesperrt(x.id));
+      if (frei >= 0) S.schritt = frei;
+    }
+    letzteSchrittSperre = sperrSchluessel;
     const akt = liste[S.schritt];
-    const lernListe = lernAnsichten.filter((a) => !a.nur || a.nur());
+    const lernListe = TISCH ? [] : lernAnsichten.filter((a) => !a.nur || a.nur());
+    if (TISCH) S.ansicht = null;
     if (S.ansicht && !lernListe.some((a) => a.id === S.ansicht)) S.ansicht = "konto";
     S.besucht = S.besucht || {};
     if (!S.ansicht) S.besucht[akt.id] = true;
     $(".cmt-schritte").replaceChildren(...liste.map((s, i) => {
       const p = s.pruefen();
       const status = !S.besucht[s.id] ? "" : p.some((x) => x.art === "fehler") ? "offen" : "fertig";
-      return h("li", {}, h("button", { type: "button", class: (!S.ansicht && i === S.schritt ? "aktiv " : "") + status, onclick: () => { S.schritt = i; S.ansicht = null; neuZeichnen(); nachOben(); } },
+      return h("li", {}, h("button", { type: "button", class: (!S.ansicht && i === S.schritt ? "aktiv " : "") + status + (schrittGesperrt(s.id) ? " schritt-gesperrt" : ""), title: schrittGesperrt(s.id) ? spVorab.schritte.text : null, onclick: () => { S.schritt = i; S.ansicht = null; neuZeichnen(); nachOben(); } },
         h("span", { class: "nr" }, i + 1), h("span", {}, s.titel)));
     }));
     $(".cmt-lernen-nav").replaceChildren(...lernListe.map((a) => h("li", {}, h("button", { type: "button", class: S.ansicht === a.id ? "aktiv" : "", onclick: () => { S.ansicht = a.id; neuZeichnen(); nachOben(); } },
@@ -2318,10 +2629,11 @@
     }
     const meldungen = akt.pruefen();
     // gesperrte Erschaffung: Inhalt sichtbar, aber nicht bedienbar
-    const inhalt = sp.erschaffung ? h("div", { class: "gesperrt", inert: true, "aria-disabled": "true" }, akt.render()) : akt.render();
+    const sperrText = sp.erschaffung || (sp.schritte && (sp.schritte.ids || []).includes(akt.id) ? sp.schritte.text : null);
+    const inhalt = sperrText ? h("div", { class: "gesperrt", inert: true, "aria-disabled": "true" }, akt.render()) : akt.render();
     haupt.replaceChildren(...[
       h("h2", { class: "schritt-titel" }, `${S.schritt + 1}. ${akt.titel}`),
-      sp.erschaffung ? h("div", { class: "sperre-hinweis warnung" }, sp.erschaffung) : null,
+      sperrText ? h("div", { class: "sperre-hinweis warnung" }, sperrText) : null,
       inhalt,
       meldungen.length ? h("div", { class: "meldungen nicht-drucken" }, meldungen.map((m) => h("p", { class: m.art }, m.text))) : null,
       h("div", { class: "weiter nicht-drucken" },
@@ -2329,7 +2641,7 @@
         S.schritt < liste.length - 1 ? h("button", { type: "button", class: "haupt", onclick: () => { S.schritt++; neuZeichnen(); nachOben(); } }, "Weiter") : null),
     ].flat(Infinity).filter((x) => x !== null && x !== undefined && x !== false));
     kopfzeile();
-    if (akt.id === "eig" && !sp.erschaffung) summenAbfrage();
+    if (akt.id === "eig" && !sperrText) summenAbfrage();
   }
   // Zusammenfassung für den Foundry-Bogen: alle Werte so, wie sie im Charakterbogen erscheinen
   function auswertung() {
@@ -2350,7 +2662,10 @@
     return {
       fertig: !!(kl && K.eigenschaften.every((e) => S.eig[e] !== null) && r.LP !== null && r.AP !== null),
       name: S.name, spieler: S.spieler, geschlecht: S.geschlecht, rasse: S.rasse,
-      typ: S.klasse, typName: kl ? kl.name : "", typArt: kl ? kl.art : "", grad, es: S.spiel.es, ep: S.spiel.ep, gold: S.spiel.gold,
+      typ: S.klasse, typName: kl ? kl.name : "", typArt: kl ? kl.art : "", grad, es: S.spiel.es, ep: S.spiel.ep,
+      // während des Einkaufs zählt das restliche Startgeld schon zum Gold auf dem Bogen
+      gold: Math.round((S.spiel.gold + (einkaufLaeuft() ? einkaufRest() : 0)) * 100) / 100,
+      ausstattung: einkaufLaeuft() ? ausstattungListe() : [], ausstattungOffen: einkaufLaeuft(),
       eigenschaften: eig, lp: r.LP, ap: r.AP === null ? null : r.AP + S.spiel.apPlus, b: r.B, sg: r.SG + fl(grad / 2),
       faehigkeiten: r.faehigkeiten, trinken: r.Trinken, wahrnehmung: r.Wahrnehmung,
       stand: st ? st.name : "", heimat: S.heimat, glaube: S.glaube, alter: S.alter, groesse: S.groesse, gewicht: S.gewicht,
@@ -2370,16 +2685,18 @@
   // Gerüst: Seitenleiste mit Erschaffung und Lernen, daneben der Inhalt
   wurzel.classList.add("midgard-cmt");
   if (FOUNDRY) wurzel.classList.add("im-foundry");
+  if (TISCH) wurzel.classList.add("am-tisch");
   wurzel.replaceChildren(...[
     FOUNDRY ? null : h("header", { class: "kopf nicht-drucken" },
-      h("div", {}, h("h1", {}, "Midgard-Charaktere"), h("p", {}, "Erschaffung und Lernen nach dem Kodex (Midgard 5)")),
+      TISCH ? h("div", {}, h("h1", {}, "Midgard"), h("p", {}, "Charakter bauen und der Spielleitung schicken"))
+        : h("div", {}, h("h1", {}, "Midgard-Charaktere"), h("p", {}, "Erschaffung und Lernen nach dem Kodex (Midgard 5)")),
       h("div", { class: "kopf-name cmt-kopf-name" })),
     h("div", { class: "rahmen" },
       h("nav", { class: "seitenleiste nicht-drucken", "aria-label": "Navigation" },
         FOUNDRY ? null : h("div", { class: "cmt-charakter" }),
         h("h2", { class: "nav-titel" }, "Erschaffung"), h("ol", { class: "cmt-schritte" }),
-        h("h2", { class: "nav-titel" }, "Lernen"), h("ol", { class: "cmt-lernen-nav" }),
-        FOUNDRY ? null : h("p", { class: "speicherhinweis" }, "Charaktere bleiben in diesem Browser gespeichert. Zum Sichern oder für ein anderes Gerät: „Export“ oben."),
+        TISCH ? null : h("h2", { class: "nav-titel" }, "Lernen"), h("ol", { class: "cmt-lernen-nav" }),
+        FOUNDRY ? null : h("p", { class: "speicherhinweis" }, TISCH ? "Charaktere bleiben auf diesem Handy gespeichert, bis der Browserverlauf gelöscht wird." : "Charaktere bleiben in diesem Browser gespeichert. Zum Sichern oder für ein anderes Gerät: „Export“ oben."),
         opts.version ? h("p", { class: "versionshinweis" }, `Midgard-CMT ${opts.version}`) : null),
       h("main", { class: "cmt-inhalt" })),
   ].filter(Boolean));
@@ -2387,5 +2704,41 @@
   return { neuZeichnen, zustand: () => S, auswertung, lernbar: lernbarFuerBogen, lernbaum: () => lernbaum(true) };
   }
 
-  window.MidgardCMT = { starte };
+  // ---------------------------------------------------------------- Charakter-Code
+  // „M5CMT1:“ + Base64 des mit deflate-raw gepackten Zustands + „.“; ohne CompressionStream „M5CMT0:“ +
+  // Base64 des JSON. Normales Base64 statt der URL-Variante: Unterstriche deutet WhatsApp als Kursivschrift.
+  // Der Punkt am Ende begrenzt den Code, damit er sich aus einer ganzen Nachricht herauslösen lässt.
+  const CODE_MUSTER = /M5CMT([01]):([A-Za-z0-9+/=\s]+)\./;
+  function bytesZuBase64(bytes) {
+    let t = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) t += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(t);
+  }
+  function base64ZuBytes(b64) {
+    const t = atob(b64.replace(/\s+/g, ""));
+    const b = new Uint8Array(t.length);
+    for (let i = 0; i < t.length; i++) b[i] = t.charCodeAt(i);
+    return b;
+  }
+  async function umwandeln(bytes, strom) { return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(strom)).arrayBuffer()); }
+  async function codeErzeugen(zustand) {
+    const json = new TextEncoder().encode(JSON.stringify(zustand));
+    if (typeof CompressionStream === "function") {
+      try { return "M5CMT1:" + bytesZuBase64(await umwandeln(json, new CompressionStream("deflate-raw"))) + "."; } catch (e) { /* ungepackt weiter */ }
+    }
+    return "M5CMT0:" + bytesZuBase64(json) + ".";
+  }
+  /** Zustand aus einem Text mit Charakter-Code (ganze Nachricht genügt); null, wenn keiner darin steht. */
+  async function codeLesen(text) {
+    const m = String(text || "").match(CODE_MUSTER);
+    if (!m) return null;
+    let bytes = base64ZuBytes(m[2]);
+    if (m[1] === "1") {
+      if (typeof DecompressionStream !== "function") throw new Error("Dieser Browser kann den gepackten Code nicht lesen.");
+      bytes = await umwandeln(bytes, new DecompressionStream("deflate-raw"));
+    }
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
+  window.MidgardCMT = { starte, codeErzeugen, codeLesen };
 })();

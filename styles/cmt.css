@@ -509,6 +509,7 @@
 .midgard-cmt.midgard-cmt .kopfdaten {grid-template-columns: repeat(4, 1fr);}
 .midgard-cmt.midgard-cmt th, .midgard-cmt.midgard-cmt td {padding: .15rem .3rem;}
 }
+.midgard-cmt.midgard-cmt .seitenleiste ol button.schritt-gesperrt {opacity: .55;}
 .midgard-cmt.midgard-cmt .sperre-hinweis {margin: 0 0 1rem; padding: .6rem .9rem;}
 .midgard-cmt.midgard-cmt div.gesperrt {opacity: .6; filter: grayscale(.4);}
 .midgard-cmt.midgard-cmt .neuanfang {display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;}
@@ -619,6 +620,25 @@
   .midgard-cmt.midgard-cmt .lernbaum .lb-zweig { grid-template-columns: minmax(0, 1fr); }
   .midgard-cmt.midgard-cmt .lernbaum .lb-ast-stand { margin-left: 0; flex-basis: 100%; }
 }
+.midgard-cmt.midgard-cmt .einkauf-zeile {display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .3rem .4rem; border-bottom: 1px solid var(--linie);}
+.midgard-cmt.midgard-cmt .einkauf-zeile.gewaehlt {background: color-mix(in srgb, var(--akzent) 12%, transparent);}
+.midgard-cmt.midgard-cmt .einkauf-zeile.gesperrt {opacity: .55;}
+.midgard-cmt.midgard-cmt .einkauf-name {display: flex; flex-direction: column; min-width: 0;}
+.midgard-cmt.midgard-cmt .einkauf-name small {line-height: 1.25;}
+.midgard-cmt.midgard-cmt .einkauf-menge {display: inline-flex; align-items: center; gap: .3rem; flex: none;}
+.midgard-cmt.midgard-cmt .einkauf-zahl {min-width: 1.4rem; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums;}
+.midgard-cmt.midgard-cmt .einkauf-zeile button.mini {min-width: 2.2rem; min-height: 2.2rem; padding: 0; font-size: 1.1rem;}
+.midgard-cmt.midgard-cmt .optionen.einkauf-waffen {display: block;}
+.midgard-cmt.midgard-cmt .laden-liste {max-height: 26rem; overflow-y: auto; margin: .4rem 0 .6rem;}
+.midgard-cmt.midgard-cmt .laden-filter {display: flex; gap: .5rem; flex-wrap: wrap;}
+.midgard-cmt.midgard-cmt .laden-filter select, .midgard-cmt.midgard-cmt .laden-filter input {flex: 1 1 10rem;}
+.midgard-cmt.midgard-cmt details.zaubergruppe {margin: .5rem 0;}
+.midgard-cmt.midgard-cmt details.zaubergruppe > summary {cursor: pointer; padding: .35rem .2rem; font-family: var(--schrift-titel);}
+.midgard-cmt.midgard-cmt details.zaubergruppe > summary small {font-family: var(--schrift-text);}
+.midgard-cmt.midgard-cmt button.zauber-name {background: none; box-shadow: none; border: 0; padding: 0; margin: 0; min-height: 0; font: inherit; font-weight: 600; color: inherit; text-align: left; text-decoration: underline dotted; cursor: pointer;}
+.midgard-cmt.midgard-cmt .zauberwerte th {width: 40%;}
+.midgard-cmt.midgard-cmt .zauber-beschreibung {max-height: 50vh; overflow-y: auto; margin: .6rem 0; padding-right: .3rem;}
+.midgard-cmt.midgard-cmt .zauber-beschreibung p {margin: 0 0 .6rem;}
 
 /* Schriften und Grundmaße auch außerhalb der Bögen (Journale, Chat, Dialoge) */
 :root { --schrift-titel: "Alegreya", "Palatino Linotype", Georgia, serif; --schrift-kapitaelchen: "Alegreya SC", "Alegreya", Georgia, serif; --schrift-text: "Alegreya", "Palatino Linotype", Georgia, serif; --radius: 4px; }
@@ -1096,6 +1116,52 @@ button.midgard-thema-kachel.aktiv { border-color: var(--akzent); box-shadow: 0 0
 .midgard-ep-modus { display: flex; gap: 16px; }
 .midgard-ep-zeile { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 4px 8px; border: 2px solid var(--linie); background: var(--flaeche); }
 .midgard-ep-anlass input, .midgard-ep-alle input { margin-left: 6px; }
+/* Handy-Ansicht (module/handy.mjs): Bogen bildschirmfüllend, Fensterrahmen schlank, Foundry-Oberfläche dahinter verborgen */
+html.midgard-handy-aktiv :is(#interface, #ui-left, #ui-right, #ui-top, #ui-bottom, #hotbar, #players, #navigation, #controls, #sidebar) { display: none !important; }
+.application.midgard-handy { position: fixed !important; inset: 0 !important; left: 0 !important; top: 0 !important; width: 100vw !important; height: 100dvh !important; max-width: none; max-height: none; margin: 0; border-radius: 0; transform: none !important; }
+.application.midgard-handy .window-header { min-height: 36px; padding: 0 6px; }
+.application.midgard-handy .window-resize-handle { display: none; }
+.midgard-handy .ma-kopf { padding: 8px 10px; gap: 8px; }
+.midgard-handy .ma-inhalt { padding: 8px; }
+.midgard-handy .ma-panel[data-panel="werkzeug"] { margin: -8px; }
+/* Kopf des Bogens auf dem Handy: kleines Porträt neben dem Namen, LP/AP darunter über die volle Breite */
+.midgard-abenteurer.midgard-handy .ma-kopf, .midgard-abenteurer.midgard-handy .ma-kopf:has(.ma-portrait-rasse) { grid-template-columns: 56px minmax(0, 1fr); align-items: start; }
+.midgard-abenteurer.midgard-handy .ma-portrait, .midgard-abenteurer.midgard-handy .ma-portrait.ma-portrait-rasse { width: 56px; height: 56px; }
+.midgard-abenteurer.midgard-handy .ma-vorraete { grid-column: 1 / -1; min-width: 0; }
+.midgard-abenteurer.midgard-handy :is(.ma-marke, .ma-glueck, .ma-export-knopf) { display: none; }
+.midgard-abenteurer.midgard-handy .ma-konto { gap: 4px; }
+.midgard-abenteurer.midgard-handy .ma-konto span { font-size: .8rem; padding: 0 5px; }
+.midgard-abenteurer.midgard-handy .ma-werkzeug-leiste { flex-wrap: wrap; gap: 6px; padding: 6px 8px; font-size: .9rem; }
+.midgard-abenteurer.midgard-handy .ma-werkzeug-stand { flex: 1 1 100%; }
+/* Werkzeug im Bogen: Seitenleiste wird zur Schrittleiste oben */
+.midgard-handy .midgard-cmt.im-foundry .rahmen { grid-template-columns: minmax(0, 1fr); }
+.midgard-handy .midgard-cmt.im-foundry .seitenleiste { position: static; max-height: none; border-right: 0; }
+.midgard-handy .midgard-cmt.im-foundry .seitenleiste ol { flex-direction: row; overflow-x: auto; gap: .3rem; padding: 3px; }
+.midgard-handy .midgard-cmt.im-foundry .seitenleiste li { flex: none; }
+.midgard-handy .midgard-cmt.im-foundry .seitenleiste ol button span:not(.nr) { display: none; }
+.midgard-handy .midgard-cmt.im-foundry .seitenleiste ol button.aktiv span:not(.nr) { display: inline; }
+.midgard-handy .midgard-cmt.im-foundry main { padding: .8rem .5rem 0; }
+html.midgard-handy-aktiv:has(.application.midgard-handy) .midgard-handy-knopf { display: none; }
+/* auf dem Handy scrollt die ganze Seite (Kopf und Reiter wandern mit), nicht nur der Inhalt */
+.application.midgard-handy { display: flex; flex-direction: column; }
+.application.midgard-handy .window-content { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.midgard-abenteurer.midgard-handy .ma-wurzel { height: auto; min-height: 100%; }
+.midgard-abenteurer.midgard-handy .ma-inhalt { flex: none; overflow: visible; }
+.midgard-abenteurer.midgard-handy .ma-reiter { flex-wrap: nowrap; overflow-x: auto; padding: 6px 6px 0; gap: 2px; }
+.midgard-abenteurer.midgard-handy .ma-reiter button, .midgard-abenteurer.midgard-handy .ma-reiter button:not(.aktiv) { padding: 4px 5px; min-height: 0; margin: 0; }
+.midgard-handy-knopf { position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 50; width: auto; padding: 10px 14px; font-weight: 700; }
+html.retro .midgard-handy .ma-wurzel { background: transparent; color: var(--text); }
+html.retro .midgard-handy :is(.ma-kopf, .ma-reiter) { background: linear-gradient(180deg, #121c78, #070b38); }
+html.retro .midgard-handy .ma-inhalt { background: transparent; }
+html.retro .application.midgard-handy { background: #05082a; }
+html.retro .midgard-abenteurer.midgard-handy :is(.karte, .ma-k-lernbaum) { background: var(--fenster); border: 0; border-radius: 6px; box-shadow: var(--fensterrand), 5px 6px 0 5px var(--schatten); margin: 10px 8px 1.4rem; color: var(--text); }
+html.retro .midgard-abenteurer.midgard-handy .karte > h3:first-child { background: none; color: var(--akzent); border-bottom: 2px solid #ffffff30; }
+html.retro .midgard-abenteurer.midgard-handy :is(.typ, .option) { border: 0; border-radius: 4px; }
+html.retro .midgard-abenteurer.midgard-handy .ma-werkzeug-leiste { background: #070b38; color: var(--akzent); border-bottom: 3px solid #e9ecff; }
+
+/* Charakter-Code importieren */
+.midgard-import-wurzel textarea { width: 100%; min-height: 9rem; font-family: monospace; font-size: .8rem; }
+.midgard-import-besitzer select { margin-left: 6px; }
 .midgard-ep-anlass input { width: 70%; }
 .midgard-wartung { border-top: 2px solid var(--linie); padding-top: 8px; }
 .midgard-protokoll ul { margin: 6px 0 0; padding-left: 1.2em; font-size: 13px; color: var(--leise); }
@@ -1378,3 +1444,196 @@ button.midgard-in-welt { display: flex; align-items: center; justify-content: ce
 .midgard-gegenstand .mg-fundstelle-gross { font-size: 1.1rem; font-weight: 700; margin: 0 0 8px; }
 .midgard-gegenstand .mg-regel-liste { margin: 0 0 8px; padding-left: 1.2rem; }
 .midgard-gegenstand .mg-regel-liste li { margin: 2px 0; }
+
+/* Midgard-CMT, Handy-Fassung am Spieltisch: Stil der 16-Bit-Rollenspiele (frühe 90er).
+   Blaue Menüfenster mit doppeltem Rahmen, Pixelschrift, gelber Auswahlcursor. Wird nur von tisch.html
+   bzw. der gebauten erschaffung.html geladen, nach style.css; alle Regeln hängen an html.retro.
+   Schriften: Press Start 2P und Pixelify Sans, SIL Open Font License 1.1 (schrift/OFL-*.txt). */
+
+@font-face { font-family: "Press Start 2P"; src: url("../schrift/PressStart2P-400.woff2") format("woff2"); font-weight: 400 800; font-display: swap; }
+@font-face { font-family: "Pixelify Sans"; src: url("../schrift/PixelifySans-variabel.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+
+html.retro, html.retro .midgard-cmt {
+  --grund: #0a1040;
+  --flaeche: #1a2a9a;
+  --text: #f4f2ff;
+  --leise: #b4bdff;
+  --rand: #eef0ff;
+  --schatten: rgba(0, 0, 0, .55);
+  --linie: #4256d0;
+  --akzent: #ffd23f;
+  --akzent-hell: #2b3cb8;
+  --auf-akzent: #1c1300;
+  --gut: #78ff96;
+  --schlecht: #ff7b7b;
+  --warn: #ffd45a;
+  --warn-grund: #3b2f0c;
+  --fehler-grund: #4c1828;
+  --raster: rgba(255, 255, 255, .025);
+  --rahmen: #060a2c;
+  --rahmen-hell: #1d2ca4;
+  --rahmen-text: #ffd23f;
+  --gold: #ffd23f;
+  --gold-dunkel: #b98f16;
+  --knopf: #2a43d8;
+  --knopf-hell: #4b66ff;
+  --knopf-text: #fff;
+  --a1: #ff5d5d; --a1h: #4c1622; --a1t: #160606;
+  --a2: #ff9d3d; --a2h: #4a2a10; --a2t: #160c02;
+  --a3: #ffd23f; --a3h: #4a3d0e; --a3t: #161000;
+  --a4: #61e070; --a4h: #163d1f; --a4t: #041206;
+  --a5: #45d6d6; --a5h: #0f3b40; --a5t: #021212;
+  --a6: #7b95ff; --a6h: #1b2766; --a6t: #060a20;
+  --a7: #c785ff; --a7h: #35205e; --a7t: #10061c;
+  --schrift-titel: "Press Start 2P", "Courier New", monospace;
+  --schrift-kapitaelchen: "Press Start 2P", "Courier New", monospace;
+  --schrift-text: "Pixelify Sans", "Trebuchet MS", sans-serif;
+  --bild-pergament: none;
+  /* Menüfenster: dunkle Kante, helle Linie, dunkle Kante, versetzter Schatten */
+  --fensterrand: 0 0 0 2px #060a2c, 0 0 0 5px #e9ecff, 0 0 0 7px #060a2c;
+  --fenster: linear-gradient(180deg, #2a40d2 0%, #18248e 55%, #101a6c 100%);
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------- Grund: Nachthimmel mit Pixelsternen */
+html.retro body {
+  background-color: #05082a;
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 68% 9%, #cfd6ff 50%, transparent 51%),
+    radial-gradient(2px 2px at 38% 62%, #fff8 50%, transparent 51%),
+    radial-gradient(1px 1px at 85% 44%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 22% 83%, #cfd6ff 50%, transparent 51%),
+    linear-gradient(180deg, #05082a 0%, #0b1250 100%);
+  background-size: 220px 220px, 260px 260px, 300px 300px, 240px 240px, 280px 280px, 100% 100%;
+  background-attachment: fixed;
+  font: 18px/1.45 var(--schrift-text);
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  -webkit-tap-highlight-color: transparent;
+}
+html.retro img { image-rendering: pixelated; }
+
+/* Überschriften in der Pixel-Titelschrift, klein gesetzt (die Schrift ist sehr breit) */
+html.retro :is(h1, h2, h3, .nav-titel, .schritt-titel) { font-family: var(--schrift-titel); font-weight: 400; letter-spacing: 0; line-height: 1.5; }
+html.retro h2 { font-size: 1rem; }
+html.retro h3 { font-size: .8rem; }
+html.retro h4 { font-family: var(--schrift-text); font-size: 1.05rem; font-weight: 700; color: var(--akzent); }
+html.retro :is(button, .knopf, .marke, thead th, .eig-kachel strong, .konto-kachel strong, .wz-ergebnis, .m1-ergebnis, .topf-rest, .seitenleiste .nr) {
+  font-family: var(--schrift-text); font-weight: 700;
+}
+html.retro small, html.retro .klein { color: var(--leise); }
+
+/* Rahmen und Prägungen des klassischen Stils zurücknehmen */
+html.retro :is(.karte, .bogen, .lerntabelle, .eig-kachel, .konto-kachel, .dialog, .typ, .option, .wichtig-info, .nachwurf-hinweis, .warnung, .meldungen p, button, .knopf, input, select, textarea) { border: 0; text-shadow: none; }
+html.retro h2 { border-bottom: 0; }
+html.retro :is(.typ, .option) strong { font-family: var(--schrift-text); font-weight: 700; }
+html.retro .karte { overflow: visible; }
+
+/* ---------------------------------------------------------------- Kopf */
+html.retro .kopf {
+  background: linear-gradient(180deg, #121c78, #070b38); border-bottom: 0; box-shadow: 0 3px 0 #e9ecff, 0 6px 0 #060a2c;
+  padding: .9rem 1rem .8rem; padding-top: calc(.9rem + env(safe-area-inset-top));
+}
+html.retro .kopf h1 { font-family: var(--schrift-titel); font-size: 1.25rem; color: var(--akzent); text-shadow: 3px 3px 0 #b8541a, 5px 5px 0 #060a2c; letter-spacing: .02em; }
+html.retro .kopf h1::before { width: 1.2rem; height: 1.2rem; }
+html.retro .kopf p { color: var(--leise); font-size: .95rem; margin-top: .35rem; }
+html.retro .kopf-name { display: none; } /* steht schon in der Charakterwahl */
+html.retro .kopf > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .8rem; }
+/* Charakterwahl einzeilig: Auswahl und „Daten“ */
+html.retro .charwahl.kompakt { flex-direction: row; align-items: center; gap: .3rem; padding: .2rem 0 .3rem; margin-bottom: .2rem; border-bottom: 0; }
+html.retro .charwahl.kompakt select { flex: 1; width: auto; min-width: 0; }
+html.retro .charwahl.kompakt button { flex: none; margin: 6px; padding: .35rem .7rem; }
+
+/* ---------------------------------------------------------------- Menüfenster */
+html.retro :is(.karte, .dialog, .bogen, .lerntabelle, .konto-kachel, .wichtig-info, .topf) {
+  background: var(--fenster); color: var(--text); border-radius: 6px; box-shadow: var(--fensterrand), 6px 8px 0 6px var(--schatten);
+}
+html.retro .karte { margin: 10px 10px 1.6rem; padding: 1.1rem 1.1rem 1rem; }
+html.retro .karte::before { display: none; }
+html.retro .karte > h3:first-child { background: none; box-shadow: none; color: var(--akzent); font-size: .78rem; margin: 0 0 .8rem; padding-bottom: .55rem; border-bottom: 2px solid #ffffff30; }
+html.retro .karte > h3:first-child::before, html.retro .topf-kopf h3::before { content: "\25B6"; display: inline-block; width: auto; height: auto; margin-right: .5em; background: none; box-shadow: none; color: var(--akzent); font-size: .9em; transform: none; }
+html.retro .dialog { padding: 0 1.1rem 1.1rem; font: 18px/1.45 var(--schrift-text); }
+html.retro .dialog > h3:first-child { background: none; color: var(--akzent) !important; font-size: .8rem; padding: 1rem 0 .6rem; margin: 0 0 .4rem; border-bottom: 2px solid #ffffff30; }
+html.retro .dialog-hintergrund { background: rgba(2, 4, 20, .72); background-image: none; backdrop-filter: none; }
+html.retro .info { color: var(--leise); font-size: 1rem; }
+
+/* ---------------------------------------------------------------- Knöpfe: Menüpunkte mit gelbem Cursor */
+html.retro :is(button, .knopf) {
+  background: linear-gradient(180deg, #2c45dc, #1a2a9a); color: var(--text); border-radius: 4px; font-size: 1.02rem; padding: .5rem .9rem; min-height: 44px;
+  box-shadow: 0 0 0 2px #060a2c, 0 0 0 4px #c9d0ff, 0 0 0 6px #060a2c;
+  margin: 8px;
+}
+html.retro button:hover:not(:disabled), html.retro .knopf:hover { background: linear-gradient(180deg, #3b56f0, #2234b8); }
+html.retro button:active:not(:disabled) { transform: translate(1px, 2px); box-shadow: 0 0 0 2px #060a2c, 0 0 0 4px #c9d0ff, 0 0 0 6px #060a2c; }
+html.retro button.haupt { background: linear-gradient(180deg, #ffe066, #f2b31c); color: var(--auf-akzent); box-shadow: 0 0 0 2px #060a2c, 0 0 0 4px #fff3b8, 0 0 0 6px #060a2c; }
+html.retro button.haupt:hover:not(:disabled) { background: linear-gradient(180deg, #fff08a, #ffc22e); }
+html.retro :is(button, .knopf):focus-visible { outline: 3px dashed var(--akzent); outline-offset: 6px; }
+html.retro button:disabled { opacity: .5; }
+html.retro button.wuerfel { background: linear-gradient(180deg, #c74545, #8a1f2a); }
+/* Auswahl (Rasse, Typ, Optionen): gewählter Eintrag mit Cursor */
+html.retro :is(.typ, .option) { background: linear-gradient(180deg, #22349e, #141f78); }
+html.retro :is(.typ, .option).gewaehlt { background: linear-gradient(180deg, #3a52ea, #2033b4); box-shadow: 0 0 0 2px #060a2c, 0 0 0 4px var(--akzent), 0 0 0 6px #060a2c; }
+html.retro :is(.typ, .option).gewaehlt > :first-child::before { content: "\25B6  "; color: var(--akzent); }
+
+/* ---------------------------------------------------------------- Eingaben */
+html.retro :is(input[type="text"], input[type="number"], input[type="search"], select, textarea) {
+  background: #060a2c; color: var(--text); border-radius: 3px; font: 700 1.05rem/1.3 var(--schrift-text); min-height: 44px;
+  box-shadow: 0 0 0 2px #8f9cff;
+}
+html.retro :is(input, select, textarea):focus { outline: 3px solid var(--akzent); outline-offset: 2px; }
+html.retro input[type="checkbox"], html.retro input[type="radio"] { accent-color: var(--akzent); width: 1.3rem; height: 1.3rem; }
+html.retro .feld-label { font-weight: 700; }
+
+/* ---------------------------------------------------------------- Kacheln, Tabellen, Meldungen */
+html.retro .eig-kachel { background: #0d1660; border-radius: 4px; box-shadow: 0 0 0 2px #060a2c, 0 0 0 4px #8f9cff, 0 0 0 6px #060a2c; }
+html.retro .eig-kachel strong { color: var(--akzent); font-size: 1.6rem; }
+html.retro thead th { background: #0d1660; color: var(--akzent); border-bottom: 2px solid #ffffff40; }
+html.retro tbody tr:nth-child(even) { background: #ffffff0d; }
+html.retro :is(th, td) { border-color: #ffffff22; }
+html.retro .warnung { background: #3b2f0c; color: var(--warn); border-radius: 4px; box-shadow: 0 0 0 2px #060a2c, 0 0 0 4px var(--warn), 0 0 0 6px #060a2c; margin: 10px 10px 1.4rem; }
+html.retro .meldungen p { border-radius: 4px; }
+html.retro .meldungen .fehler { background: var(--fehler-grund); color: var(--schlecht); }
+html.retro .meldungen .hinweis { background: #102a52; color: #bfe0ff; }
+html.retro .fehlt { color: var(--schlecht); }
+
+/* ---------------------------------------------------------------- Navigation: Schrittleiste oben, Zurück/Weiter unten fest */
+html.retro .seitenleiste { background: #070b38; border: 0; box-shadow: 0 3px 0 #e9ecff, 0 6px 0 #060a2c; }
+html.retro .nav-titel { font-size: .62rem; color: var(--akzent); letter-spacing: .05em; border-bottom: 0; }
+html.retro .seitenleiste ol button { min-height: 44px; margin: 0; box-shadow: none; background: none; border-radius: 4px; font-weight: 400; }
+html.retro .seitenleiste ol button.aktiv { background: #2033b4; box-shadow: 0 0 0 2px var(--akzent); color: var(--text); }
+html.retro .seitenleiste ol button.aktiv::before { content: "\25B6"; color: var(--akzent); font-size: .8rem; margin-right: -.2rem; }
+html.retro .seitenleiste .nr { border-radius: 3px; font-size: .95rem; }
+html.retro .seitenleiste ol button.fertig .nr { color: var(--ft); }
+html.retro .charwahl { border-bottom-color: #ffffff30; }
+html.retro .schritt-titel { font-size: .95rem; color: var(--text); text-shadow: 3px 3px 0 #060a2c; border-bottom: 0; padding-bottom: 0; }
+html.retro .schritt-titel::before { content: "\25B6"; display: inline-block; width: auto; height: auto; background: none; box-shadow: none; transform: none; color: var(--akzent); margin-right: .55em; }
+html.retro .weiter { gap: .5rem; }
+html.retro .weiter button { flex: 1; }
+
+@media (max-width: 800px) {
+  html.retro main { padding: .9rem .7rem 0; }
+  html.retro .karte, html.retro .warnung { margin-left: 8px; margin-right: 8px; }
+  html.retro .seitenleiste { padding: .4rem .5rem .5rem; }
+  html.retro .seitenleiste ol { padding: 6px 4px; }
+  html.retro .charwahl-knoepfe button, html.retro .charwahl-knoepfe .knopf { margin: 6px; padding: .35rem .5rem; font-size: .95rem; }
+  /* Zurück/Weiter immer im Griff des Daumens */
+  html.retro .weiter {
+    position: sticky; bottom: 0; z-index: 5; margin: 1.2rem -.7rem 0; padding: .6rem .7rem calc(.6rem + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, #05082a00, #05082af0 35%);
+  }
+  html.retro .bogen, html.retro .lerntabelle { margin: 8px; }
+}
+
+html.retro .versionshinweis { font-family: var(--schrift-text); font-size: .8rem; margin: .4rem .3rem 0; }
+html.retro .speicherhinweis { display: none; }
+
+/* ---------------------------------------------------------------- Versand */
+html.retro .senden-knoepfe button { flex: 1 1 8rem; }
+html.retro .senden-status { color: var(--gut); min-height: 1.4em; margin: .4rem 0 0; }
+html.retro textarea.senden-text { width: 100%; font: 400 .9rem/1.35 ui-monospace, Menlo, Consolas, monospace; }
+
+@media (prefers-reduced-motion: no-preference) {
+  html.retro button.haupt:not(:disabled) { animation: retro-blinken 1.6s steps(2, jump-none) infinite; }
+}
+@keyframes retro-blinken { 50% { box-shadow: 0 0 0 2px #060a2c, 0 0 0 4px #ffffff, 0 0 0 6px #060a2c; } }

@@ -120,6 +120,81 @@ export async function ausWerkzeug(actor, a, zustand) {
   aenderung["system.protokoll"] = a.protokoll ?? [];
   await actor.update(aenderung, { render: false, diff: true, midgardWerkzeug: true });
   await gegenstaendeAbgleichen(actor, a);
+  await ausstattungAbgleichen(actor, a);
+}
+
+/**
+ * Werte und Beschreibung eines Zaubers für das Detailfenster des Werkzeugs: aus dem Zauber-Kompendium
+ * (nach dem Arkanum-Import mit Beschreibung, Verweise aufbereitet), sonst aus dem Datensatz ohne Text.
+ */
+export async function zauberDetails(name, gruppe) {
+  let daten = null;
+  const pack = game.packs.get(packId("zauber"));
+  if (pack) {
+    const index = await pack.getIndex({ fields: ["system.gruppe"] });
+    const e = index.find((x) => x.name === name && (!gruppe || x.system?.gruppe === gruppe)) ?? index.find((x) => x.name === name);
+    if (e) daten = (await pack.getDocument(e._id))?.toObject?.() ?? null;
+  }
+  daten ??= (KOMPENDIUM.kategorien.zauber ?? []).find((z) => z.name === name && (!gruppe || z.system.gruppe === gruppe)) ?? null;
+  if (!daten) return null;
+  const s = { ...daten.system };
+  if (s.beschreibung) {
+    const TE = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
+    try { if (TE?.enrichHTML) s.beschreibung = await TE.enrichHTML(s.beschreibung, { secrets: false }); } catch { /* roh anzeigen */ }
+  }
+  return s;
+}
+
+/** Ware für den Einkauf bei der Erschaffung (Werkzeug opts.laden): Waffen, Rüstungen, Gegenstände mit Preis. */
+let ladenCache = null;
+export function ladenWare() {
+  if (ladenCache) return ladenCache;
+  const k = KOMPENDIUM.kategorien;
+  const mindest = (m) => Object.entries(m ?? {}).filter(([, v]) => v).map(([e, v]) => `${e}${v}`).join(", ");
+  ladenCache = [
+    ...(k.waffen ?? []).map((w) => ({ kat: "waffen", kategorie: "Waffen", name: w.name, preis: Number(w.system.preis) || 0, gewicht: w.system.gewicht, schaden: w.system.schaden, anf: mindest(w.system.mindest), kleineVerboten: !!w.system.kleineVerboten })),
+    ...(k.ruestungen ?? []).map((r) => ({ kat: "ruestungen", kategorie: "Rüstungen", name: r.name, preis: Number(r.system.preis) || 0, gewicht: r.system.gewicht })),
+    ...(k.gegenstaende ?? []).map((g) => ({ kat: "gegenstaende", kategorie: g.system.kategorie, name: g.name, preis: Number(g.system.preis) || 0, preisText: g.system.preisText, gewicht: g.system.gewicht })),
+  ];
+  return ladenCache;
+}
+
+const AUSSTATTUNG_TYP = { waffen: "waffe", ruestungen: "ruestung", gegenstaende: "gegenstand" };
+
+/**
+ * Startausrüstung aus dem Werkzeug (freie Waffen, Grundausstattung, Einkäufe), nur solange der Einkauf
+ * offen ist; danach gehören die Gegenstände dem Bogen. Eigene Markierung „cmtStart“, damit der übrige
+ * Abgleich sie nicht anfasst. Waffen gibt es je Stück als eigenen Gegenstand, Gegenstände mit Anzahl.
+ */
+async function ausstattungAbgleichen(actor, a) {
+  if (!a.ausstattungOffen) return;
+  const soll = [];
+  for (const t of a.ausstattung ?? []) {
+    if (t.kat === "waffen") for (let i = 1; i <= (t.anzahl || 1); i++) soll.push({ ...t, schluessel: `${t.schluessel}#${i}`, system: {} });
+    else soll.push({ ...t, system: t.kat === "gegenstaende" ? { anzahl: t.anzahl || 1 } : t.getragen ? { getragen: true } : {} });
+  }
+  const vorhanden = new Map(actor.items.filter((i) => i.getFlag(SYSTEM_ID, "cmtStart")).map((i) => [i.getFlag(SYSTEM_ID, "cmtStart"), i]));
+  const indizes = {}, neu = [], aendern = [];
+  for (const e of soll) {
+    const alt = vorhanden.get(e.schluessel);
+    vorhanden.delete(e.schluessel);
+    if (alt) {
+      const diff = {};
+      for (const [k, v] of Object.entries(e.system)) if (alt.system[k] !== v) diff[`system.${k}`] = v;
+      if (Object.keys(diff).length) aendern.push({ _id: alt.id, ...diff });
+      continue;
+    }
+    indizes[e.kat] ??= await kompendiumNachName(e.kat);
+    const treffer = (e.such ?? [e.name]).map((n) => indizes[e.kat].get(n)).find(Boolean);
+    const basis = treffer ? await vorlage(treffer) : { name: e.name, type: AUSSTATTUNG_TYP[e.kat] ?? "gegenstand", img: "icons/svg/item-bag.svg", system: {} };
+    basis.system = { ...basis.system, ...e.system };
+    basis.flags = foundry.utils.mergeObject(basis.flags ?? {}, { [SYSTEM_ID]: { cmtStart: e.schluessel } }, { inplace: false });
+    neu.push(basis);
+  }
+  const loeschen = [...vorhanden.values()].map((i) => i.id);
+  if (loeschen.length) await actor.deleteEmbeddedDocuments("Item", loeschen, { render: false });
+  if (aendern.length) await actor.updateEmbeddedDocuments("Item", aendern, { render: false });
+  if (neu.length) await actor.createEmbeddedDocuments("Item", neu, { render: false });
 }
 
 async function gegenstaendeAbgleichen(actor, a) {
