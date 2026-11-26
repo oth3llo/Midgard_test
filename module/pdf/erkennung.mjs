@@ -16,6 +16,8 @@ export const MERKMALE = {
     "Nekromantisches Thaumaturgium", "Das Dunkle Arkanum", "Chaoswunder", "Schwarze Ritualzauber", "Nekromantisches Bestiarium"],
   "Das Mysterium": ["Die Welt der Thaumaturgie", "Die Regeln der Thaumaturgie", "Thaumaturgischer Almanach", "Mit Runenstab und Zauberklinge",
     "Zauberrunen", "Thaumatherapie", "Vigilsignien", "Thaumagrale", "Die Zauberwerkstatt"],
+  "Die Welt": ["Vom Aufbau des Multiversums", "Die Entstehung des Multiversums", "Die Geschichte der Welt Midgard", "Die Klimazonen Midgards",
+    "Valian und der Pfortenarchipel", "Die Inseln unter dem Westwind", "Die Tegarische Steppe", "Die Küstenstaaten", "Der Wettermacher"],
   "Ars Armorum": ["Meister des Kampfes", "Das Manual der Kampfkunst", "Kampfkunsttechniken", "Schusstechniken", "Fechttechniken",
     "Der Weg der inneren Kraft", "Kampfspezialisten", "Die Kunst der Verse", "Blutswaffen"],
 };

@@ -24,6 +24,7 @@ import { knopfEinrichten as weltImportEinrichten, packInWelt, importDialog } fro
 import { knopfEinrichten as bildKnopfEinrichten, bildmaterialVerschieben } from "./module/bildmaterial.mjs";
 import { CharakterImportFenster, charakterImportieren, knopfEinbauen as importKnopfEinbauen } from "./module/charakter-import.mjs";
 import { einstellungenRegistrieren as handyEinstellungen, beimStartHandy, handyBogenOeffnen } from "./module/handy.mjs";
+import { einstellungenRegistrieren as weltkarteEinstellungen, Weltkarte, knopfEinbauen as weltkarteKnopf, akteurGeaendert as weltkarteAkteur } from "./module/weltkarte.mjs";
 import { einstellungenRegistrieren as systemEinstellungen, beimStart, journalDarstellen, chatKarteAnpassen, StartDialog, RegelwerkeFenster, EpFenster, epVerteilen } from "./module/einstellungen.mjs";
 
 const SYSTEM_ID = "midgard5-cmt";
@@ -58,11 +59,13 @@ Hooks.once("init", () => {
   bildKnopfEinrichten();
   textFormatRegistrieren();
   handyEinstellungen();
+  weltkarteEinstellungen();
   game.midgard = { browser: (kat) => KompendiumBrowser.oeffnen(kat), kompendienAufbauen, kompendienOhnePdf, angreifen, gegnerAuswuerfeln, inWelt: (id, o) => packInWelt(game.packs.get(id), o), inWeltDialog: (id) => importDialog(game.packs.get(id)), bildVerschieben: bildmaterialVerschieben, pdfImport: pdfImportStarten, pdfImportieren, texteUmstellen, kaestenAufwerten, updatePruefen, stand: KOMPENDIUM_STAND,
     start: () => StartDialog.oeffnen(), regelwerke: () => new RegelwerkeFenster().render({ force: true }),
     epVerteilen: (verteilung, anlass) => (verteilung ? epVerteilen(verteilung, anlass) : new EpFenster().render({ force: true })),
     // Charakter-Code oder exportiertes JSON übernehmen; Handy-Ansicht des eigenen Bogens
-    charakterImport: (text, o) => (text ? charakterImportieren(text, o) : CharakterImportFenster.oeffnen()), handyBogen: handyBogenOeffnen };
+    charakterImport: (text, o) => (text ? charakterImportieren(text, o) : CharakterImportFenster.oeffnen()), handyBogen: handyBogenOeffnen,
+    weltkarte: () => Weltkarte.oeffnen() };
   console.log(`${SYSTEM_ID} | Midgard-CMT ${game.system.version} geladen`);
 });
 
@@ -87,6 +90,9 @@ for (const h of ["renderJournalEntrySheet", "renderJournalEntryPageSheet"]) Hook
 
 Hooks.on("renderCompendiumDirectory", knopfEinbauen);
 Hooks.on("renderActorDirectory", importKnopfEinbauen);
+// Weltkarte: Knopf im Journal-Reiter; Wissen der Charaktere von der Spielleitung geändert
+Hooks.on("renderJournalDirectory", weltkarteKnopf);
+Hooks.on("updateActor", weltkarteAkteur);
 // Werkzeug-Zustand oder Phase von jemand anderem geändert (Übergabe zwischen Spielleitung und Spieler):
 // ausWerkzeug speichert ohne Neuzeichnen, deshalb hier den offenen Bogen nachziehen
 Hooks.on("updateActor", (actor, aenderung, _optionen, benutzer) => {

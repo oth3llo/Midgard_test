@@ -31,13 +31,14 @@ export const REGELWERKE = [
   { buch: "Dunkle Mächte", inhalt: "Nekromantie, Chaoswunder, Finstere Magie (161 Zauber), 75 Untote und Geisterwesen, Regeln", pflicht: false },
   { buch: "Das Mysterium", inhalt: "Thaumaturgie: 265 Zaubersalze, Runen, Siegel, Runenstäbe, Thaumatherapie, Regeln", pflicht: false },
   { buch: "Ars Armorum", inhalt: "Kampfkünste, Techniken, Kampfspezialisten, 27 Kampfverse, Regeln", pflicht: false },
+  { buch: "Die Welt", inhalt: "Beschreibungen der 300 Orte auf der Weltkarte (verschlüsselt im System, das Buch liefert den Schlüssel)", pflicht: false },
 ];
 
 export function einstellungenRegistrieren() {
   // Regelwerke: Menü mit Status und Import-Knopf (nur Spielleiter)
   game.settings.registerMenu(SYSTEM_ID, "regelwerke", {
     name: "Regelwerke", label: "Regelwerke importieren", icon: "fa-solid fa-file-import", type: RegelwerkeFenster, restricted: true,
-    hint: "Eigene Regelwerk-PDFs (Der Kodex, Das Arkanum, Das Bestiarium, Dunkle Mächte, Das Mysterium, Ars Armorum) einlesen und den Stand der Kompendien prüfen.",
+    hint: "Eigene Regelwerk-PDFs (Der Kodex, Das Arkanum, Das Bestiarium, Dunkle Mächte, Das Mysterium, Ars Armorum, Die Welt) einlesen und den Stand der Kompendien prüfen.",
   });
   // --- Charaktererschaffung (Welt)
   game.settings.register(SYSTEM_ID, "erschaffungWuerfel", {

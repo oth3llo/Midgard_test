@@ -3,7 +3,7 @@
 // in den Kompendien dieser Welt, nicht im System. Erkannt werden „Das Arkanum“ (Zauber), „Der Kodex“
 // (Fertigkeiten, Waffenfertigkeiten, Waffen, Rüstungen, Abenteurertypen, Rassen, Gegner) und die
 // Quellenbücher „Das Bestiarium“, „Dunkle Mächte“, „Das Mysterium“ und „Ars Armorum“ (Gegner, Zauber
-// mit allen Spieldaten aus dem Buch, Regeln).
+// mit allen Spieldaten aus dem Buch, Regeln). „Die Welt“ schaltet die Ortsbeschreibungen der Weltkarte frei.
 // Die Kompendien sind bis zum Import leer; der Import legt die Einträge an.
 import { SYSTEM_ID, packId } from "./kategorien.mjs";
 import { textzeilen } from "./pdf/textzeilen.mjs";
@@ -23,11 +23,12 @@ import { gegnerAusBestiarium } from "./gegner.mjs";
 import { GEGNER_PACK, gegnerPackHolen, HANDOUT_PACK, KARTEN_PACK } from "./kompendien.mjs";
 import { materialDokument, handoutImNamen } from "./pdf/abbildungen.mjs";
 import { bildmaterialImportieren } from "./bildmaterial.mjs";
+import { weltkarteFreischalten } from "./weltkarte.mjs";
 
 const PFAD = `systems/${SYSTEM_ID}/vendor/pdfjs`;
 let pdfjs = null;
 
-async function pdfjsLaden() {
+export async function pdfjsLaden() {
   if (pdfjs) return pdfjs;
   pdfjs = await import(new URL(`${PFAD}/pdf.min.mjs`, document.baseURI).href);
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(`${PFAD}/pdf.worker.min.mjs`, document.baseURI).href;
@@ -122,11 +123,19 @@ export async function pdfImportieren(daten, { dateiname = "PDF", stumm = false, 
       return bericht;
     }
     if (!erkannt.buch) {
-      ui.notifications.warn(`${dateiname}: kein unterstütztes Regelwerk erkannt (unterstützt: Der Kodex, Das Arkanum, Das Bestiarium, Dunkle Mächte, Das Mysterium, Ars Armorum und Midgard-Abenteuerbände; ${erkannt.treffer} von ${erkannt.gesamt} Merkmalen gefunden).`);
+      ui.notifications.warn(`${dateiname}: kein unterstütztes Regelwerk erkannt (unterstützt: Der Kodex, Das Arkanum, Das Bestiarium, Dunkle Mächte, Das Mysterium, Ars Armorum, Die Welt und Midgard-Abenteuerbände; ${erkannt.treffer} von ${erkannt.gesamt} Merkmalen gefunden).`);
       return null;
     }
     const fingerabdruck = ausgabeFingerabdruck(zeilen, doc.numPages);
     const gepruefteAusgabe = (GEPRUEFTE_AUSGABEN[erkannt.buch] ?? []).includes(fingerabdruck);
+    // „Die Welt“: keine Kompendien, sondern der Schlüssel für die Ortsbeschreibungen der Weltkarte
+    if (erkannt.buch === "Die Welt") {
+      const ergebnis = await weltkarteFreischalten(doc);
+      await protokollieren({ datei: dateiname, buch: erkannt.buch, fingerabdruck, gepruefteAusgabe: ergebnis.ok });
+      const bericht = { buch: erkannt.buch, dateiname, weltkarte: ergebnis, teile: [] };
+      if (!stumm) weltBerichtZeigen(bericht);
+      return bericht;
+    }
     let bericht;
     if (erkannt.buch === "Das Arkanum") bericht = await arkanumImportieren(zeilen);
     else if (QUELLENBUECHER[erkannt.buch]) bericht = await quellenbuchImportieren(zeilen, erkannt.buch);
@@ -590,6 +599,17 @@ function textpruefungHtml(t) {
     ${liste("Zerrissene Wörter verbunden", t.zusammengefuegt)}
     ${liste("Vorzeitige Umbrüche zusammengeführt", t.umbrueche)}
     ${liste("Verdächtig, bitte im Buch prüfen", t.verdaechtig, (x) => `${x.art}${x.seite ? ` S. ${x.seite}` : ""}: ${x.text}`)}`;
+}
+
+function weltBerichtZeigen(b) {
+  const e = b.weltkarte;
+  const inhalt = `<div class="midgard-bericht"><p>Aus <strong>${esc(b.dateiname)}</strong> erkannt: <strong>Die Welt</strong>.</p>
+    ${e.ok ? `<p>Weltkarte: ${e.anzahl} Ortsbeschreibungen freigeschaltet. Spieler sehen sie je nach Wissensstufe ihrer Charaktere.</p>`
+      : `<p class="warnung">Weltkarte: Beschreibungen nicht freigeschaltet. ${esc(e.grund)}</p>`}
+    <p class="hinweis">Die Beschreibungen stehen nur in dieser Welt. Eigene Texte der Spielleitung haben Vorrang.</p></div>`;
+  const D = foundry.applications?.api?.DialogV2;
+  if (D) D.prompt({ window: { title: "Die Welt importiert" }, content: inhalt, ok: { label: "OK" }, rejectClose: false }).catch(() => {});
+  else ui.notifications[e.ok ? "info" : "warn"](`Midgard: ${e.ok ? `${e.anzahl} Ortsbeschreibungen freigeschaltet` : e.grund}`);
 }
 
 function berichtZeigen(b) {
