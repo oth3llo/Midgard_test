@@ -307,15 +307,15 @@
   function zahlFeld(wertAkt, setzen, opt = {}) {
     return h("input", {
       type: "number", inputmode: "numeric", class: "zahl" + (opt.breit ? " breit" : ""), value: wertAkt ?? "",
-      min: opt.min, max: opt.max, placeholder: opt.platzhalter || "",
+      min: opt.min, max: opt.max, placeholder: opt.platzhalter || "", "aria-label": opt.label || null,
       onchange: (ev) => { setzen(zahl(ev.target.value)); spaeterZeichnen(); },
     });
   }
   function textFeld(wertAkt, setzen, platzhalter) {
     return h("input", { type: "text", value: wertAkt || "", placeholder: platzhalter || "", oninput: (ev) => { setzen(ev.target.value); speichern(); kopfzeile(); } });
   }
-  function auswahl(wertAkt, optionen, setzen) {
-    return h("select", { onchange: (ev) => { setzen(ev.target.value); neuZeichnen(); } },
+  function auswahl(wertAkt, optionen, setzen, label) {
+    return h("select", { "aria-label": label || null, onchange: (ev) => { setzen(ev.target.value); neuZeichnen(); } },
       optionen.map(([w, t]) => h("option", { value: w, selected: w === wertAkt }, t)));
   }
   function wuerfelKnopf(text, aktion) {
@@ -336,7 +336,7 @@
   function wurfZeile(label, formel, wertAkt, setzen, wuerfeln, ergebnis, opt = {}) {
     return h("div", { class: "wurfzeile" },
       h("div", { class: "wz-label" }, h("strong", {}, label), h("small", {}, formel)),
-      h("div", { class: "wz-eingabe" }, zahlFeld(wertAkt, setzen, opt), wuerfelKnopf("Würfeln", wuerfeln)),
+      h("div", { class: "wz-eingabe" }, zahlFeld(wertAkt, setzen, { label, ...opt }), wuerfelKnopf("Würfeln", wuerfeln)),
       h("div", { class: "wz-ergebnis" }, ergebnis ?? ""));
   }
   function info(...t) { return h("p", { class: "info" }, ...t); }
@@ -477,11 +477,11 @@
             return h("div", { class: "eig-zeile m1" + wichtigZeile(e) + (S.eig[e] !== null && !gueltig(e, S.eig[e]) ? " ungueltig" : "") },
               h("div", {}, h("strong", {}, `${K.eigenschaftNamen[e]} (${e})`), h("small", {}, g.min > 1 || g.max < 100 ? ` ${g.min}–${g.max}` : ""), wichtigMarke(e)),
               h("div", { class: "inline" },
-                zahlFeld(m.a, setze("a"), { min: 1, max: 100, platzhalter: schwach ? "W%" : "1. W%" }),
-                schwach ? h("small", {}, "nur 1 Wurf") : zahlFeld(m.b, setze("b"), { min: 1, max: 100, platzhalter: "2. W%" }),
+                zahlFeld(m.a, setze("a"), { min: 1, max: 100, platzhalter: schwach ? "W%" : "1. W%", label: `${K.eigenschaftNamen[e]}, 1. Wurf` }),
+                schwach ? h("small", {}, "nur 1 Wurf") : zahlFeld(m.b, setze("b"), { min: 1, max: 100, platzhalter: "2. W%", label: `${K.eigenschaftNamen[e]}, 2. Wurf` }),
                 wuerfelKnopf("Würfeln", () => wuerfleMethode1(e))),
               st.nachNoetig ? h("div", { class: "inline nachwurf" }, h("small", {}, `${st.basis} reicht nicht (${st.grund}): nachwürfeln, bis es passt, gültigen Wurf eintragen`),
-                zahlFeld(m.nach, setze("nach"), { min: g.min, max: g.max, platzhalter: "Nachwurf" })) : h("span"),
+                zahlFeld(m.nach, setze("nach"), { min: g.min, max: g.max, platzhalter: "Nachwurf", label: `${K.eigenschaftNamen[e]}, Nachwurf` })) : h("span"),
               h("strong", { class: "m1-ergebnis" }, S.eig[e] ?? ""));
           })),
         S.toolWuerfel ? h("div", { class: "knopfreihe" }, wuerfelKnopf("Alle würfeln", () => K.eigenschaften.forEach(wuerfleMethode1))) : null,
@@ -495,12 +495,12 @@
       teile.push(karte("Methode II",
         nm ? h("div", { class: "eig-zeile" },
           h("div", {}, h("strong", {}, `Zuerst ${K.eigenschaftNamen[schwach]} (${schwach})`), h("small", {}, ` 1×W%, höchstens ${grenzen(schwach).max}`)),
-          zahlFeld(S.eig[schwach], (v) => { S.eig[schwach] = v; }, { min: 1, max: 100 }),
+          zahlFeld(S.eig[schwach], (v) => { S.eig[schwach] = v; }, { min: 1, max: 100, label: K.eigenschaftNamen[schwach] }),
           wuerfelKnopf("Würfeln", wuerfleSchwach),
           h("small", { class: "protokoll" }, S.wuerfe[schwach] ? "Würfe: " + S.wuerfe[schwach].join(", ") : "")) : null,
         h("p", {}, `${n} W%-Würfe:`),
         h("div", { class: "wurfreihe" },
-          Array.from({ length: n }, (_, i) => zahlFeld(S.m2.wuerfe[i], (v) => { S.m2.wuerfe[i] = v; S.m2.zuordnung = {}; m2Uebernehmen(); }, { min: 1, max: 100 })),
+          Array.from({ length: n }, (_, i) => zahlFeld(S.m2.wuerfe[i], (v) => { S.m2.wuerfe[i] = v; S.m2.zuordnung = {}; m2Uebernehmen(); }, { min: 1, max: 100, label: `W%-Wurf ${i + 1}` })),
           wuerfelKnopf(`${n}× würfeln`, wuerfleMethode2)),
         werte ? h("div", {},
           h("p", {}, `Die besten ${werte.length}: `, h("strong", {}, werte.join(", ")), ". Verteile sie auf die Eigenschaften:"),
@@ -511,7 +511,7 @@
               const akt = S.m2.zuordnung[e];
               return h("div", { class: "eig-zeile" + wichtigZeile(e) + (S.eig[e] !== null && !gueltig(e, S.eig[e]) ? " ungueltig" : "") },
                 h("div", {}, h("strong", {}, `${K.eigenschaftNamen[e]} (${e})`), h("small", {}, g.min > 1 ? ` ab ${g.min}` : g.max < 100 ? ` bis ${g.max}` : ""), wichtigMarke(e)),
-                h("select", {
+                h("select", { "aria-label": `Wurf für ${K.eigenschaftNamen[e]}`,
                   onchange: (ev) => { S.m2.zuordnung[e] = ev.target.value; if (ev.target.value === "x") { S.eig[e] = null; delete S.wuerfe[e]; } m2Uebernehmen(); neuZeichnen(); },
                 }, h("option", { value: "" }, "–"),
                 // nur Würfe anbieten, die die Grenzen der Rasse für diese Eigenschaft erfüllen
@@ -520,7 +520,7 @@
                 g.min > 1 ? h("option", { value: "x", selected: akt === "x" }, "Nachwurf") : null),
                 (akt !== "x" && (gueltig(e, S.eig[e]) || S.eig[e] === null)) ? h("span") : !S.toolWuerfel ? h("div", { class: "inline nachwurf" },
                   h("small", {}, akt === "x" ? `Nachwurf: würfeln, bis mindestens ${g.min} erreicht ist` : `reicht nicht (ab ${g.min}): nachwürfeln, bis es passt, gültigen Wurf eintragen`),
-                  zahlFeld(akt === "x" ? S.eig[e] : null, (v) => { S.eig[e] = v; S.m2.zuordnung[e] = "x"; }, { min: g.min, max: 100, platzhalter: "Nachwurf" })) : wuerfelKnopf("Neu würfeln bis ausreichend", () => {
+                  zahlFeld(akt === "x" ? S.eig[e] : null, (v) => { S.eig[e] = v; S.m2.zuordnung[e] = "x"; }, { min: g.min, max: 100, platzhalter: "Nachwurf", label: `${K.eigenschaftNamen[e]}, Nachwurf` })) : wuerfelKnopf("Neu würfeln bis ausreichend", () => {
                   let w, p = []; do { w = W(100); p.push(w); } while (w < g.min || w > g.max);
                   S.eig[e] = w; S.wuerfe[e] = p; S.m2.zuordnung[e] = "x";
                 }),
@@ -842,7 +842,7 @@
   function alltagAuswahl(topf, rest) {
     if (rest < 1) return h("small", {}, "kein LE frei.");
     const waehlbar = alltagExtraOptionen().filter((o) => !(!K.mitAngabe[o.name] && besitzt(o.name)) && !elfVerbot(o.name));
-    return h("select", { onchange: (ev) => {
+    return h("select", { "aria-label": "Alltagsfertigkeit für das übrige LE", onchange: (ev) => {
       const o = waehlbar.find((x) => x.name === ev.target.value);
       ev.target.value = "";
       if (o) lernenBestaetigen(o.name, `+${o.wert}`, "1 LE", () => { kaufen(o, topf, true); neuZeichnen(); });
@@ -962,7 +962,7 @@
           : h("strong", {}, kl.typischerZauber[0])) : null,
       S.klasse === "Ma" ? karte("Spezialgebiet des Magiers (S. 37)",
         info("+2 auf EW:Zaubern für Sprüche dieser Gruppe. Später kostet das Lernen dort nur 30 EP je LE (S. 154)."),
-        auswahl(S.magierSpezial || "", [["", "– wählen –"]].concat(K.magierSpezialgebiete.map((g) => [g, g])), (v) => (S.magierSpezial = v || null))) : null,
+        auswahl(S.magierSpezial || "", [["", "– wählen –"]].concat(K.magierSpezialgebiete.map((g) => [g, g])), (v) => (S.magierSpezial = v || null), "Spezialgebiet")) : null,
       karte(null,
         h("div", { class: "topf-kopf" }, h("h3", {}, `Zauber: ${kl.zauberGruppen.join(", ")}`), h("span", { class: "topf-rest" + (rest < 0 ? " ueber" : rest === 0 ? " leer" : "") }, `${rest} von ${zauberTopf()} LE frei`)),
         S.rasse === "Elf" ? info("Mit * markierte Zauber gehören zur Schwarzen Magie; Elfen dürfen sie nicht lernen.") : null,
@@ -1732,7 +1732,6 @@
     { id: "fert", titel: "Fertigkeiten" },
     { id: "waffen", titel: "Waffen" },
     { id: "zauber", titel: "Zauber", nur: () => !!(L.zauberKosten[S.klasse] && Object.keys(L.zauberKosten[S.klasse]).length) },
-    { id: "tabellen", titel: "Lernliste" },
     { id: "baum", titel: "Lernbaum" },
     { id: "protokoll", titel: "Protokoll" },
   ];
@@ -1813,8 +1812,8 @@
       h("div", { class: "konto-kachel" }, h("small", {}, "EP verfügbar"), h("strong", {}, fmt(sp.ep))),
       h("div", { class: "konto-kachel" }, h("small", {}, "Gold"), h("strong", {}, fmt(sp.gold) + " GS")),
       h("div", { class: "konto-kachel" }, h("small", {}, "Praxispunkte"), h("strong", {}, fmt(ppSumme))),
-      h("div", { class: "konto-kachel" }, h("small", {}, "Grad · Erfahrungsschatz"), h("strong", {}, `${g} · ${fmt(sp.es)} ES`),
-        gradAus(sp.es) > g ? h("small", { class: "offen-hinweis" }, `Grad ${gradAus(sp.es)} erreicht: Aufstieg unter „Konto und Grad“ übernehmen`)
+      h("div", { class: "konto-kachel" }, h("small", {}, "Grad · Erfahrungs\u00ADschatz"), h("strong", {}, `${g} · ${fmt(sp.es)} ES`),
+        gradAus(sp.es) > g ? h("small", { class: "offen-hinweis" }, `Grad ${gradAus(sp.es)} erreicht`)
           : h("small", {}, `Grad ${g + 1} ab ${fmt(naechster)} ES`)));
   }
   function ansichtKonto() {
@@ -1846,12 +1845,12 @@
     const zk = L.zauberKosten[S.klasse] || {};
     for (const gruppe of Object.keys(zk)) ziele.push(["Z:" + gruppe, "Zaubern: " + gruppe]);
     let ppZiel = "", ppAnz = 1;
-    if (!darfVergeben()) teile.push(karte("Praxispunkte", info("Praxispunkte schreibt die Spielleitung gut (Kodex S. 152). Eingesetzt werden sie beim Steigern, in der Lernliste automatisch."), ppListe() || info("Noch keine Praxispunkte.")));
+    if (!darfVergeben()) teile.push(karte("Praxispunkte", info("Praxispunkte schreibt die Spielleitung gut (Kodex S. 152). Eingesetzt werden sie beim Steigern, unter „Jetzt lernbar“ automatisch."), ppListe() || info("Noch keine Praxispunkte.")));
     else teile.push(karte("Praxispunkte gutschreiben",
       info("1 PP gibt es, wenn ein Erfolgswurf gelingt und der Würfel 16-20 zeigt (Waffen, Abwehr, Zaubern: 20). 1 PP ersetzt beim Steigern 1 TE derselben Fertigkeit, bei Zaubern 1 LE derselben Gruppe (Kodex S. 152-154)."),
       h("div", { class: "inline" },
-        h("select", { onchange: (ev) => (ppZiel = ev.target.value) }, h("option", { value: "" }, "Fertigkeit, Waffe oder Zaubergruppe …"), ziele.map(([k, t]) => h("option", { value: k }, t))),
-        h("input", { type: "number", class: "zahl", value: 1, min: 1, oninput: (ev) => (ppAnz = zahl(ev.target.value) || 1) }),
+        h("select", { "aria-label": "Praxispunkt für", onchange: (ev) => (ppZiel = ev.target.value) }, h("option", { value: "" }, "Fertigkeit, Waffe oder Zaubergruppe …"), ziele.map(([k, t]) => h("option", { value: k }, t))),
+        h("input", { type: "number", class: "zahl", value: 1, min: 1, "aria-label": "Anzahl Praxispunkte", oninput: (ev) => (ppAnz = zahl(ev.target.value) || 1) }),
         h("button", { type: "button", class: "haupt", onclick: () => {
           if (!ppZiel) return;
           const titel = ziele.find(([k]) => k === ppZiel)[1];
@@ -1885,16 +1884,16 @@
           S.rasse === "Zwerg" ? h("li", {}, `Zwerge brauchen zusätzlich einen Hort im Wert von ${fmt(esFuerGrad(g) / 2)} GS (Kodex S. 167).`) : null),
         h("div", { class: "raster3" },
           feld(`AP-Zuwachs: 1W3${bonusAP ? " + " + bonusAP : ""}`, h("div", { class: "inline" },
-            h("input", { type: "number", class: "zahl", min: 1, max: 3, placeholder: "1W3", value: apWurf ?? "", onchange: (ev) => { apWurf = zahl(ev.target.value); zeichne(); } }),
+            h("input", { type: "number", class: "zahl", min: 1, max: 3, placeholder: "1W3", "aria-label": "AP-Wurf 1W3", value: apWurf ?? "", onchange: (ev) => { apWurf = zahl(ev.target.value); zeichne(); } }),
             apWurf ? h("strong", {}, `+${apWurf + bonusAP} AP`) : null)),
           feld("Eigenschaft steigern? W%", h("div", { class: "inline" },
-            h("input", { type: "number", class: "zahl", min: 1, max: 100, placeholder: "W%", value: eigWurf ?? "", onchange: (ev) => { eigWurf = zahl(ev.target.value); zeichne(); } }),
+            h("input", { type: "number", class: "zahl", min: 1, max: 100, placeholder: "W%", "aria-label": "Eigenschaftswurf W%", value: eigWurf ?? "", onchange: (ev) => { eigWurf = zahl(ev.target.value); zeichne(); } }),
             eigWurf ? h("strong", {}, z === null ? "keine Steigerung" : z === "frei" ? "freie Wahl" : K.eigenschaftNamen[z]) : null),
             "1-50 keine, 51-55 Wk, 56-60 pA, 61-65 Au, 66-70 St, 71-75 Gs, 76-80 Gw, 81-85 Ko, 86-90 In, 91-95 Zt, 96-100 frei"),
           z ? feld("Steigerung: 1W3 + 1", h("div", { class: "inline" },
-            z === "frei" ? h("select", { onchange: (ev) => { eigFrei = ev.target.value; zeichne(); } }, h("option", { value: "" }, "Eigenschaft …"),
+            z === "frei" ? h("select", { "aria-label": "Eigenschaft steigern", onchange: (ev) => { eigFrei = ev.target.value; zeichne(); } }, h("option", { value: "" }, "Eigenschaft …"),
               ["St", "Gs", "Gw", "Ko", "In", "Zt", "pA", "Wk", "Au"].map((e) => h("option", { value: e, selected: eigFrei === e }, K.eigenschaftNamen[e]))) : null,
-            h("input", { type: "number", class: "zahl", min: 1, max: 3, placeholder: "1W3", value: steigWurf ?? "", onchange: (ev) => { steigWurf = zahl(ev.target.value); zeichne(); } }),
+            h("input", { type: "number", class: "zahl", min: 1, max: 3, placeholder: "1W3", "aria-label": "Steigerung 1W3", value: steigWurf ?? "", onchange: (ev) => { steigWurf = zahl(ev.target.value); zeichne(); } }),
             steigWurf && eig ? h("strong", {}, `${eig} +${steigWurf + 1}`) : null)) : null),
         info("Persönliche Ausstrahlung und Willenskraft ändern sich nicht mit, wenn In oder Ko steigen (Kodex S. 166). Nichtmenschen erreichen höchstens die Grenzwerte ihrer Rasse."),
         h("div", { class: "knopfreihe" }, h("button", { type: "button", class: "haupt", disabled: !apWurf || (z && (!eig || !steigWurf)), onclick: () => {
@@ -2140,20 +2139,62 @@
           h("td", {}, sperre ? null : h("button", { type: "button", class: "klein-knopf", onclick: () => lernDialog(e) }, "Lernen")));
       }))));
   }
+  // Schalter über Fertigkeiten, Waffen und Zauber: nur jetzt Bezahlbares (Klick bucht) oder alles mit Kosten
+  function nurLernbar() { return S.lernFilter === "lernbar"; }
+  function lernFilterSchalter() {
+    const knopf = (wert, text) => h("button", { type: "button", class: "klein-knopf" + ((S.lernFilter || "alle") === wert ? " haupt" : ""), "aria-pressed": String((S.lernFilter || "alle") === wert),
+      onclick: () => { S.lernFilter = wert; neuZeichnen(); } }, text);
+    return h("div", { class: "lern-filter knopfreihe nicht-drucken", role: "group", "aria-label": "Anzeige" },
+      knopf("lernbar", "Jetzt lernbar"), knopf("alle", "Alle mit Kosten"));
+  }
+  const lernKachel = (titel, unter, onclick) => h("button", { type: "button", class: "option lernbar", onclick }, h("span", {}, titel), h("small", {}, unter));
+  function lernbarHinweis() {
+    return info("Nur, was mit den verfügbaren EP und GS jetzt lernbar ist. Ein Klick fragt nach und bucht, Praxispunkte werden zuerst verrechnet. Gold statt EP, Belohnungen und Spruchrollen: unter „Alle mit Kosten“.");
+  }
+  function volleLerntabelle() {
+    return h("details", { class: "volle-lerntabelle" }, h("summary", {}, "Vollständige Lerntabelle (alle Kosten, zum Nachschlagen und Drucken)"), lerntabelle(klasse()));
+  }
   function ansichtFert(waffen) {
+    if (nurLernbar()) {
+      const d = lernlisteDaten();
+      const steigern = d.steigern.filter(({ g }) => !!g.waffe === waffen);
+      const neu = waffen ? d.waffen : d.fert;
+      return [
+        kontoKacheln(), lernFilterSchalter(), lernbarHinweis(),
+        karte(waffen ? "Gelernte Waffenfertigkeiten steigern" : "Gelernte Fertigkeiten steigern", steigern.length
+          ? h("div", { class: "lernliste" }, steigern.map(({ g, stufen }) => h("div", { class: "lernzeile" },
+            h("strong", {}, `${g.titel} ${vz(g.wert)}`),
+            h("div", { class: "optionen" }, stufen.map((k) => lernKachel(`+${k.ziel}`, kostenText(k) + (k.pp ? `, ${k.pp} PP` : ""), () => lernlisteSteigern(g, k)))))))
+          : info(waffen ? "Für keine gelernte Waffenfertigkeit reichen EP und Gold für die nächste Stufe." : "Für keine gelernte Fertigkeit reichen EP und Gold für die nächste Stufe.")),
+        karte(waffen ? "Neue Waffenfertigkeit lernen" : "Neue Fertigkeit lernen", neu.length
+          ? h("div", { class: "optionen" }, neu.map((x) => waffen ? lernKachel(`${x.e.lname} +${x.start}`, kostenText(x), () => lernlisteNeu(x))
+            : lernKachel(`${lernAnzeige(x.e.lname)} +${x.start}`, `${x.e.le} · ${kostenText(x)}`, () => lernlisteNeu(x))))
+          : info(waffen ? "Für keine neue Waffenfertigkeit reichen EP und Gold." : "Für keine neue Fertigkeit reichen EP und Gold.")),
+        waffen ? null : volleLerntabelle(),
+      ];
+    }
     return [
-      kontoKacheln(),
+      kontoKacheln(), lernFilterSchalter(),
       karte(waffen ? "Gelernte Waffenfertigkeiten" : "Gelernte Fertigkeiten",
         info(`„Steigern“ bucht die nächste Stufe. Praxispunkte und Gold statt EP werden im Fenster verrechnet.${darfVergeben() ? " „+1“ schreibt einen Praxispunkt gut." : ""}`),
         gelernteTabelle(waffen)),
       karte(waffen ? "Neue Waffenfertigkeit lernen" : "Neue Fertigkeit lernen", lernbareTabelle(waffen)),
+      waffen ? null : volleLerntabelle(),
     ];
   }
   function ansichtZauber() {
     const zk = L.zauberKosten[S.klasse] || {};
     const elf = elfZuschlag();
+    if (nurLernbar()) {
+      const d = lernlisteDaten();
+      const gruppen = [...new Set(d.zauber.map((k) => k.gruppe))];
+      return [kontoKacheln(), lernFilterSchalter(), lernbarHinweis(),
+        karte("Zauber lernen", gruppen.length ? gruppen.map((g) => h("div", { class: "waffenstufe" }, h("h4", {}, g),
+          h("div", { class: "optionen" }, d.zauber.filter((k) => k.gruppe === g).map((k) => lernKachel(k.z.name, `Stufe ${k.z.stufe} · ${kostenText(k)}${k.pp ? `, ${k.pp} PP` : ""}`, () => lernlisteZauber(k))))))
+          : info("Für keinen weiteren Zauber reichen EP und Gold."))];
+    }
     return [
-      kontoKacheln(),
+      kontoKacheln(), lernFilterSchalter(),
       karte("Bekannte Zauber",
         h("ul", { class: "spalten" }, bekannteZauber().map((z) => h("li", {}, h("button", { type: "button", class: "zauber-name", title: "Werte und Beschreibung", onclick: () => zauberDetailFenster(z.name, z.gruppe, null) }, z.name), h("small", {}, ` ${[z.gruppe, z.stufe ? "Stufe " + z.stufe : "", z.quelle].filter(Boolean).join(", ")}`)))),
         h("div", { class: "knopfreihe" }, h("button", { type: "button", class: "haupt", onclick: () => zauberDialog() }, "Zauber lernen"))),
@@ -2182,7 +2223,7 @@
     const e = zauberEP(S.zauberFilter) + elfZuschlag();
     return karte("Zauberliste (Arkanum, Spruchliste S. 206-207)",
       h("div", { class: "inline filter" },
-        h("select", { onchange: (ev) => { S.zauberFilter = ev.target.value; neuZeichnen(); } }, gruppen.map((g) => h("option", { value: g, selected: g === S.zauberFilter }, `${g} (${ZAUBER.filter((z) => z.gruppe === g).length})`))),
+        h("select", { "aria-label": "Zaubergruppe", onchange: (ev) => { S.zauberFilter = ev.target.value; neuZeichnen(); } }, gruppen.map((g) => h("option", { value: g, selected: g === S.zauberFilter }, `${g} (${ZAUBER.filter((z) => z.gruppe === g).length})`))),
         h("input", { type: "search", placeholder: "Zauber suchen", value: S.zauberSuche || "", oninput: (ev) => { S.zauberSuche = ev.target.value; const pos = ev.target.selectionStart; neuZeichnen(); const f = document.querySelector(".filter input"); if (f) { f.focus(); f.setSelectionRange(pos, pos); } } })),
       h("div", { class: "tabelle-scroll" }, h("table", { class: "lern kompakt zauberliste" },
         h("thead", {}, h("tr", {}, ["Zauber", "Stufe", "LE", "EP", "GS", "Art", "Ursprung", ""].map((t) => h("th", {}, t)))),
@@ -2571,35 +2612,10 @@
       { titel: "Zauber", eintraege: d.zauber.map((k) => ({ titel: `${k.z.name} (${k.gruppe}, Stufe ${k.z.stufe})`, kosten: kostenText(k) + pp(k), aktion: () => lernlisteZauber(k) })) },
     ].filter((g) => g.eintraege.length) };
   }
-  function ansichtTabellen() {
-    const d = lernlisteDaten(), sp = S.spiel;
-    const knopf = (titel, unter, onclick) => h("button", { type: "button", class: "option lernbar", onclick }, h("span", {}, titel), h("small", {}, unter));
-    const leer = (text) => info(text);
-    const teile = [kontoKacheln(),
-      info(`Angezeigt wird nur, was mit ${fmt(sp.ep)} EP und ${fmt(sp.gold)} GS jetzt lernbar ist. Ein Klick fragt nach und bucht. Praxispunkte werden zuerst verrechnet. Gold statt EP, Belohnungen und Spruchrollen: über die Reiter Fertigkeiten, Waffen und Zauber.`),
-      karte("Gelernte Fertigkeiten steigern", d.steigern.length
-        ? h("div", { class: "lernliste" }, d.steigern.map(({ g, stufen }) => h("div", { class: "lernzeile" },
-          h("strong", {}, `${g.titel} ${vz(g.wert)}`),
-          h("div", { class: "optionen" }, stufen.map((k) => knopf(`+${k.ziel}`, kostenText(k) + (k.pp ? `, ${k.pp} PP` : ""), () => lernlisteSteigern(g, k)))))))
-        : leer("Für keine gelernte Fertigkeit reichen EP und Gold für die nächste Stufe.")),
-      karte("Neue Fertigkeit lernen", d.fert.length ? h("div", { class: "optionen" }, d.fert.map((x) => knopf(`${lernAnzeige(x.e.lname)} +${x.start}`, `${x.e.le} · ${kostenText(x)}`, () => lernlisteNeu(x))))
-        : leer("Für keine neue Fertigkeit reichen EP und Gold.")),
-      karte("Neue Waffenfertigkeit lernen", d.waffen.length ? h("div", { class: "optionen" }, d.waffen.map((x) => knopf(`${x.e.lname} +${x.start}`, kostenText(x), () => lernlisteNeu(x))))
-        : leer("Für keine neue Waffenfertigkeit reichen EP und Gold.")),
-    ];
-    if (Object.keys(L.zauberKosten[S.klasse] || {}).length) {
-      const gruppen = [...new Set(d.zauber.map((k) => k.gruppe))];
-      teile.push(karte("Zauber lernen", gruppen.length ? gruppen.map((g) => h("div", { class: "waffenstufe" }, h("h4", {}, g),
-        h("div", { class: "optionen" }, d.zauber.filter((k) => k.gruppe === g).map((k) => knopf(k.z.name, `Stufe ${k.z.stufe} · ${kostenText(k)}${k.pp ? `, ${k.pp} PP` : ""}`, () => lernlisteZauber(k))))))
-        : leer("Für keinen weiteren Zauber reichen EP und Gold.")));
-    }
-    teile.push(h("details", { class: "volle-lerntabelle" }, h("summary", {}, "Vollständige Lerntabelle (alle Kosten, zum Nachschlagen und Drucken)"), lerntabelle(klasse())));
-    return teile;
-  }
   function renderLernen(id) {
     if (!klasse()) return [info("Zuerst in der Erschaffung einen Abenteurertyp wählen.")];
     return id === "konto" ? ansichtKonto() : id === "fert" ? ansichtFert(false) : id === "waffen" ? ansichtFert(true)
-      : id === "zauber" ? ansichtZauber() : id === "tabellen" ? ansichtTabellen() : id === "baum" ? ansichtBaum() : ansichtProtokoll();
+      : id === "zauber" ? ansichtZauber() : id === "baum" ? ansichtBaum() : ansichtProtokoll();
   }
 
   // ---------------------------------------------------------------- Rahmen
@@ -2646,6 +2662,8 @@
     const akt = liste[S.schritt];
     const lernListe = TISCH ? [] : lernAnsichten.filter((a) => !a.nur || a.nur());
     if (TISCH) S.ansicht = null;
+    // frühere eigene Ansicht „Lernliste“: jetzt der Schalter „Jetzt lernbar“ in den Fertigkeiten
+    if (S.ansicht === "tabellen") { S.ansicht = "fert"; S.lernFilter = "lernbar"; }
     if (S.ansicht && !lernListe.some((a) => a.id === S.ansicht)) S.ansicht = "konto";
     S.besucht = S.besucht || {};
     if (!S.ansicht) S.besucht[akt.id] = true;

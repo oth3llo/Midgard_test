@@ -65,7 +65,8 @@ export function anzeige(wert) {
   if (wert === null || wert === undefined || wert === "") return "";
   if (typeof wert === "boolean") return wert ? "ja" : "nein";
   if (Array.isArray(wert)) return wert.map(anzeige).join(", ");
-  if (typeof wert === "object") return Object.entries(wert).map(([k, v]) => `${k}: ${anzeige(v)}`).join(", ");
+  if (typeof wert === "object") return Object.entries(wert).filter(([, v]) => anzeige(v) !== "").map(([k, v]) => `${k}: ${anzeige(v)}`).join(", ");
+  if (typeof wert === "number" && !Number.isInteger(wert)) return String(wert).replace(".", ",");
   return String(wert);
 }
 

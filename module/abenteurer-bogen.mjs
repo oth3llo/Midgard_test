@@ -113,6 +113,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
   async _onRender(context, options) {
     await super._onRender(context, options);
     const w = this.element;
+    this.#reiterInsBild();
+    this.#breiteTabellen();
     if (!w.dataset.midgardEreignisse) {
       w.dataset.midgardEreignisse = "1";
       // Der Bogen ist ein <form>: Enter darf nichts absenden
@@ -153,6 +155,26 @@ export class AbenteurerBogen extends ActorSheetV2 {
     if (this.#veraltet && id !== "werkzeug") { this.#veraltet = false; this.render(); return; }
     for (const b of this.element.querySelectorAll("button[data-reiter]")) { const an = b.dataset.reiter === id; b.classList.toggle("aktiv", an); b.setAttribute("aria-selected", String(an)); }
     for (const p of this.element.querySelectorAll(".ma-panel")) p.classList.toggle("aktiv", p.dataset.panel === id);
+    this.#reiterInsBild();
+    this.#breiteTabellen();
+  }
+
+  /** Handy: Tabellen im sichtbaren Reiter, die breiter als ihre Karte sind, werden in sich waagerecht scrollbar (CSS .ma-breit). */
+  #breiteTabellen() {
+    const w = this.element;
+    if (!w?.classList.contains("midgard-handy")) return;
+    for (const t of w.querySelectorAll(".ma-panel.aktiv table")) {
+      t.classList.remove("ma-breit");
+      t.classList.toggle("ma-breit", t.scrollWidth > (t.parentElement?.clientWidth ?? Infinity) + 1);
+    }
+  }
+
+  /** Handy: Reiterleiste ist wischbar; den aktiven Reiter sichtbar halten (nur waagerecht, die Seite springt nicht). */
+  #reiterInsBild() {
+    const leiste = this.element?.querySelector(".ma-reiter"), aktiv = leiste?.querySelector("button.aktiv");
+    if (!aktiv || leiste.scrollWidth <= leiste.clientWidth) return;
+    const links = aktiv.offsetLeft - leiste.offsetLeft, rechts = links + aktiv.offsetWidth;
+    if (links < leiste.scrollLeft || rechts > leiste.scrollLeft + leiste.clientWidth) leiste.scrollLeft = Math.max(0, links - 12);
   }
 
   // ---------------------------------------------------------------- Eingaben
@@ -419,7 +441,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
   #ruestung(s) {
     const r = s.abgeleitet.ruestung;
     return el("div", { class: "ma-ruestung" },
-      el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "RK" }), el("span", { class: "ma-gross-wert", text: r.kuerzel })),
+      el("div", { class: "ma-gross", title: `Rüstungsklasse ${r.kuerzel}: ${r.name}` }, el("span", { class: "ma-gross-name", text: "RK" }), el("span", { class: "ma-gross-wert", text: r.kuerzel })),
       el("div", {}, el("strong", { text: r.name }), el("p", { class: "info", text: r.rs
         ? [`Rüstungsschutz ${r.rs} (−${r.rs} LP bei schweren Treffern)`, r.verlust === "alle" ? "kein positiver Abwehrbonus" : Number(r.verlust) ? `Abwehrbonus −${r.verlust}` : null,
           r.metall?.anb ? `Angriffsbonus −${r.metall.anb}` : null, r.metall?.b ? `B −${r.metall.b}` : null, r.metall?.gw ? `Gw −${r.metall.gw}` : null].filter(Boolean).join(", ") + " (Kodex S. 71-73)."
@@ -717,11 +739,11 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const klassen = Object.entries(window.KODEX.klassen).map(([k, v]) => [k, v.name]);
     const rassen = Object.keys(window.KODEX.rassen).map((r) => [r, r]);
     const typFeld = this.isEditable && !this.#verwaltet
-      ? el("select", { "data-typ": "1", onchange: (ev) => { const k = ev.target.value, kl = window.KODEX.klassen[k]; this.actor.update({ "system.typ": k, "system.typName": kl?.name ?? "", "system.typArt": kl?.art ?? "" }); } },
+      ? el("select", { "data-typ": "1", "aria-label": "Abenteurertyp", onchange: (ev) => { const k = ev.target.value, kl = window.KODEX.klassen[k]; this.actor.update({ "system.typ": k, "system.typName": kl?.name ?? "", "system.typArt": kl?.art ?? "" }); } },
         el("option", { value: "", text: "–" }), klassen.map(([k, n]) => el("option", { value: k, selected: k === s.typ, text: n })))
       : el("span", { class: "ma-wert", text: s.typName || "–" });
     const textbereich = async (titel, pfad, wert) => {
-      if (this.isEditable) { const t = el("textarea", { "data-pfad": pfad, rows: "6" }); t.value = wert ?? ""; return karte(titel, null, t); }
+      if (this.isEditable) { const t = el("textarea", { "data-pfad": pfad, rows: "6", "aria-label": titel }); t.value = wert ?? ""; return karte(titel, null, t); }
       const div = el("div", { class: "ma-text" });
       const TE = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
       div.innerHTML = wert ? await TE.enrichHTML(wert, { relativeTo: this.actor }) : "<p>–</p>";
@@ -792,11 +814,11 @@ export class AbenteurerBogen extends ActorSheetV2 {
     if (!l.gruppen.length) return karte("Jetzt lernbar", "ma-k-lernbar", el("p", { class: "info", text: `Mit ${fmt(l.ep)} EP und ${fmt(l.gold)} GS ist gerade nichts lernbar.` }));
     return karte("Jetzt lernbar", "ma-k-lernbar", kopf, l.gruppen.map((g) => el("div", { class: "ma-lerngruppe" },
       el("h4", { text: `${g.titel} (${g.eintraege.length})` }),
-      el("div", { class: "ma-lernbar-liste" }, g.eintraege.map((e) => el("button", { type: "button", class: "ma-lernbar", title: e.weitere ? `weitere ${e.weitere} Stufe(n) bezahlbar, in der Lernliste auf einmal buchbar` : null, onclick: () => e.aktion() },
+      el("div", { class: "ma-lernbar-liste" }, g.eintraege.map((e) => el("button", { type: "button", class: "ma-lernbar", title: e.weitere ? `weitere ${e.weitere} Stufe(n) bezahlbar, unter „Erschaffung & Lernen“ › Jetzt lernbar auf einmal buchbar` : null, onclick: () => e.aktion() },
         el("span", { text: e.titel }), el("small", { text: e.kosten })))))),
       el("div", { class: "ma-knopfreihe" },
         el("button", { type: "button", class: "ma-knopf", onclick: () => this.#wechseln("lernbaum") }, icon("fa-sitemap"), " Lernbaum"),
-        el("button", { type: "button", class: "ma-knopf", onclick: () => { const z = this.#werkzeug?.zustand(); if (z) { z.ansicht = "tabellen"; this.#werkzeug.neuZeichnen(); } this.#wechseln("werkzeug"); } }, icon("fa-list"), " Vollständige Lernliste")));
+        el("button", { type: "button", class: "ma-knopf", onclick: () => { const z = this.#werkzeug?.zustand(); if (z) { z.ansicht = "fert"; z.lernFilter = "lernbar"; this.#werkzeug.neuZeichnen(); } this.#wechseln("werkzeug"); } }, icon("fa-list"), " Alles Lernbare")));
   }
 
   /**

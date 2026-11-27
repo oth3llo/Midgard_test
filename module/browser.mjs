@@ -77,6 +77,7 @@ export class KompendiumBrowser extends ApplicationV2 {
   #kat = "fertigkeiten";
   #suche = "";
   #filter = {};          // kat -> {feld: Set der gewählten Werte | {von, bis} bei Zahlen}
+  #offeneGruppen = new Set(); // eingeklappte Filtergruppen, die aufgeklappt wurden
   #sortierung = {};      // kat -> {feld, ab}
   #auswahl = null;       // _id des gewählten Eintrags
   #daten = {};           // kat -> [{_id, name, img, system, uuid}]
@@ -207,7 +208,8 @@ export class KompendiumBrowser extends ApplicationV2 {
         gruppe.append(el("div", { class: "mb-bereich" }, zahl("von", werte[0]), el("span", { text: "bis" }), zahl("bis", werte.at(-1))));
       } else {
         const gewaehlt = filter[f] instanceof Set ? filter[f] : (filter[f] = new Set());
-        gruppe.append(el("div", { class: "mb-chips" }, werte.map((w) => el("button", {
+        const viele = werte.length > 10;
+        const chips = el("div", { class: viele && !this.#offeneGruppen.has(f) ? "mb-chips mb-eingeklappt" : "mb-chips" }, werte.map((w) => el("button", {
           type: "button", class: gewaehlt.has(String(w)) ? "mb-chip an" : "mb-chip", "data-feld": f, "data-wert": String(w), "aria-pressed": String(gewaehlt.has(String(w))), text: anzeige(w),
           onclick: (ev) => {
             const an = !gewaehlt.has(String(w));
@@ -216,7 +218,20 @@ export class KompendiumBrowser extends ApplicationV2 {
             ev.currentTarget.setAttribute("aria-pressed", String(an));
             neu();
           },
-        }))));
+        })));
+        gruppe.append(chips);
+        if (viele) {
+          const offen = () => !chips.classList.contains("mb-eingeklappt");
+          gruppe.append(el("button", {
+            type: "button", class: "mb-mehr", "aria-expanded": String(offen()), text: offen() ? "weniger" : `alle ${werte.length} zeigen`,
+            onclick: (ev) => {
+              chips.classList.toggle("mb-eingeklappt");
+              if (offen()) this.#offeneGruppen.add(f); else this.#offeneGruppen.delete(f);
+              ev.currentTarget.textContent = offen() ? "weniger" : `alle ${werte.length} zeigen`;
+              ev.currentTarget.setAttribute("aria-expanded", String(offen()));
+            },
+          }));
+        }
       }
       leiste.append(gruppe);
     }
@@ -245,12 +260,12 @@ export class KompendiumBrowser extends ApplicationV2 {
       el("thead", {}, el("tr", {}, kopf("name", "Name"), def.spalten.map(([f, t]) => { const k = kopf(f, t); if (eintraege.some((e) => typeof feld(e.system, f) === "number")) k.classList.add("zahl"); return k; }))),
       el("tbody", {}, liste.map((e) => el("tr", {
         "data-id": e._id, class: [e._id === this.#auswahl ? "gewaehlt" : "", e.grund ? "mb-gesperrt" : ""].filter(Boolean).join(" ") || null,
-        draggable: e.uuid && !e.grund ? "true" : null, tabindex: "0", title: e.grund ? `Noch nicht verwendbar: ${e.grund}` : null,
+        draggable: e.uuid && !e.grund ? "true" : null, tabindex: "0", "aria-label": e.grund ? `${e.name}, noch nicht verwendbar: ${e.grund}` : e.name, title: e.grund ? `Noch nicht verwendbar: ${e.grund}` : null,
         ondragstart: (ev) => { if (e.grund) { ev.preventDefault(); return; } ev.dataTransfer.setData("text/plain", JSON.stringify({ type: "Item", uuid: e.uuid })); },
         onclick: () => { this.#auswahl = e._id; this.#listeZeichnen(wurzel, eintraege); },
         ondblclick: () => this.#oeffnen(e),
         onkeydown: (ev) => { if (ev.key === "Enter") this.#oeffnen(e); },
-      }, el("td", {}, el("span", { class: "mb-name" }, el("img", { src: e.img, alt: "" }), e.name), e.grund ? el("small", { class: "mb-grund", text: e.grund }) : null),
+      }, el("td", {}, el("span", { class: "mb-name", title: e.name }, el("img", { src: e.img, alt: "" }), el("span", { class: "mb-name-text", text: e.name })), e.grund ? el("small", { class: "mb-grund", text: e.grund }) : null),
       def.spalten.map(([f, , fmt]) => { const t = (fmt ?? anzeige)(feld(e.system, f)); return el("td", { text: t, title: String(t).length > 14 ? t : null, class: typeof feld(e.system, f) === "number" ? "zahl" : null }); })))));
     ziel.replaceChildren(el("p", { class: "mb-anzahl", text: `${liste.length} von ${eintraege.length} Einträgen` }), tabelle);
     this.#detailZeichnen(wurzel, eintraege.find((e) => e._id === this.#auswahl));
@@ -263,7 +278,8 @@ export class KompendiumBrowser extends ApplicationV2 {
       ziel.replaceChildren(el("p", { class: "mb-leer", text: "Eintrag anklicken für Details. Doppelklick öffnet ihn, Ziehen legt ihn auf einen Bogen." }));
       return;
     }
-    const zeilen = Object.entries(e.system).filter(([k, v]) => k !== "beschreibung" && v !== "" && v !== null && !(Array.isArray(v) && !v.length) && !(typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length));
+    const INTERN = new Set(["beschreibung", "ausgeruestet", "getragen"]);
+    const zeilen = Object.entries(e.system).filter(([k, v]) => !INTERN.has(k) && v !== false && detailText(k, v) !== "");
     ziel.replaceChildren(...[
       el("h3", {}, el("img", { src: e.img, alt: "" }), e.name),
       e.uuid ? el("button", { type: "button", class: "mb-oeffnen", onclick: () => this.#oeffnen(e) }, el("i", { class: "fa-solid fa-up-right-from-square", "aria-hidden": "true" }), " Öffnen") : null,

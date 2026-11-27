@@ -260,6 +260,11 @@
 .midgard-cmt.midgard-cmt .raster3 {display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .8rem 1rem;}
 .midgard-cmt.midgard-cmt .inline {display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;}
 .midgard-cmt.midgard-cmt .knopfreihe {display: flex; gap: .7rem; flex-wrap: wrap; margin: .9rem 0;}
+.midgard-cmt.midgard-cmt .lern-filter {gap: 0;}
+.midgard-cmt.midgard-cmt .lern-filter button {flex: 1 1 0; margin: 0; border-radius: 0;}
+.midgard-cmt.midgard-cmt .lern-filter button:first-child {border-radius: 4px 0 0 4px;}
+.midgard-cmt.midgard-cmt .lern-filter button:last-child {border-radius: 0 4px 4px 0;}
+.midgard-cmt.midgard-cmt .konto-kachel {min-width: 0; hyphens: manual;}
 .midgard-cmt.midgard-cmt .methoden {display: flex; flex-direction: column; gap: .4rem;}
 .midgard-cmt.midgard-cmt .methoden label, .midgard-cmt.midgard-cmt .schalter {display: flex; gap: .5rem; align-items: center;}
 .midgard-cmt.midgard-cmt .schalter {margin: 0 0 1rem; font-size: .92rem;}
@@ -309,7 +314,7 @@
 .midgard-cmt.midgard-cmt .wahl label {display: flex; gap: .5rem; align-items: center;}
 .midgard-cmt.midgard-cmt .topf-kopf {display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap;}
 .midgard-cmt.midgard-cmt .topf-kopf h3 {margin: .2rem 0 0;}
-.midgard-cmt.midgard-cmt .topf-rest {font-size: 1.05rem; color: var(--f, var(--akzent)); white-space: nowrap;}
+.midgard-cmt.midgard-cmt .topf-rest {font-size: 1.05rem; color: var(--text); white-space: nowrap;}
 .midgard-cmt.midgard-cmt .topf-rest.leer {color: var(--gut);}
 .midgard-cmt.midgard-cmt .topf-rest.ueber {color: var(--schlecht);}
 .midgard-cmt.midgard-cmt .optionen {display: flex; flex-wrap: wrap; gap: .65rem; margin: .7rem 0;}
@@ -435,17 +440,19 @@
 .midgard-cmt.midgard-cmt .seitenleiste .nr {border-radius: 50%; background: transparent; color: var(--text); font-family: var(--schrift-titel); box-shadow: inset 0 0 0 2px var(--f);}
 .midgard-cmt.midgard-cmt .seitenleiste ol button.fertig .nr {background: var(--f); color: var(--ft);}
 .midgard-cmt.midgard-cmt .seitenleiste ol button.aktiv .nr {box-shadow: inset 0 0 0 2px var(--gold); color: var(--rahmen-text);}
+.midgard-cmt.midgard-cmt .seitenleiste ol button.aktiv.fertig .nr {color: var(--ft);}
 .midgard-cmt.midgard-cmt .nav-titel {font-family: var(--schrift-kapitaelchen); text-transform: none; letter-spacing: .04em; font-size: 1rem; color: var(--leise); border-bottom: 1px solid var(--linie); padding-bottom: .2rem;}
 .midgard-cmt.midgard-cmt .kopf {background: linear-gradient(var(--rahmen-hell), var(--rahmen)); color: var(--rahmen-text); border-bottom: 3px solid var(--gold);}
 .midgard-cmt.midgard-cmt .kopf h1, .midgard-cmt.midgard-cmt .kopf-name {color: var(--rahmen-text);}
 .midgard-cmt.midgard-cmt .kopf p {color: color-mix(in srgb, var(--rahmen-text) 70%, #fff 30%);}
 .midgard-cmt.midgard-cmt thead th {font-family: var(--schrift-titel); background: linear-gradient(var(--rahmen-hell), var(--rahmen)); color: var(--rahmen-text); border-bottom: 2px solid var(--gold); font-weight: 700;}
+.midgard-cmt.midgard-cmt thead th small {color: inherit; opacity: .9;}
 .midgard-cmt.midgard-cmt tbody tr:nth-child(even) {background: color-mix(in srgb, var(--grund) 45%, transparent);}
 .midgard-cmt.midgard-cmt .eig-kachel {background: linear-gradient(var(--rahmen-hell), var(--rahmen)); color: var(--rahmen-text); border-color: var(--gold-dunkel);}
 .midgard-cmt.midgard-cmt .eig-kachel small {color: var(--rahmen-text); font-family: var(--schrift-kapitaelchen);}
 .midgard-cmt.midgard-cmt .eig-kachel strong {color: color-mix(in srgb, var(--rahmen-text) 30%, #fff 70%);}
-.midgard-cmt.midgard-cmt .eig-kachel.wichtig-haupt {box-shadow: 0 0 0 2px var(--a3), var(--hebung);}
-.midgard-cmt.midgard-cmt .eig-kachel.wichtig-alt {box-shadow: 0 0 0 2px var(--a5), var(--hebung);}
+.midgard-cmt.midgard-cmt .eig-kachel.wichtig-haupt {background: linear-gradient(var(--rahmen-hell), var(--rahmen)); box-shadow: 0 0 0 3px var(--a3), var(--hebung);}
+.midgard-cmt.midgard-cmt .eig-kachel.wichtig-alt {background: linear-gradient(var(--rahmen-hell), var(--rahmen)); box-shadow: 0 0 0 3px var(--a5), var(--hebung);}
 .midgard-cmt.midgard-cmt .eig-kachel.ungueltig {box-shadow: 0 0 0 2px var(--schlecht), var(--hebung);}
 .midgard-cmt.midgard-cmt .konto-kachel {background: var(--flaeche); border-left: 5px solid var(--f);}
 .midgard-cmt.midgard-cmt .konto-kachel::before {background: var(--bild-konto, var(--icon)) center / contain no-repeat; image-rendering: auto;}
@@ -526,7 +533,9 @@
 .midgard-cmt.midgard-cmt .lernzeile {grid-template-columns: 1fr;}
 }
 .midgard-cmt.midgard-cmt .bogen {container-type: inline-size;}
-@container (max-width: 860px) { .bogen-raster { grid-template-columns: minmax(0, 1fr); } }
+@container (max-width: 860px) {
+.midgard-cmt.midgard-cmt .bogen-raster {grid-template-columns: minmax(0, 1fr);}
+}
 .midgard-cmt.midgard-cmt .fert-tab th:first-child {white-space: normal;}
 .midgard-cmt.midgard-cmt .fert-tab .z {text-align: right; width: 1%; white-space: nowrap;}
 .midgard-cmt.midgard-cmt .fert-tab td.herkunft {white-space: normal; width: 7.5rem; color: var(--leise);}
@@ -587,7 +596,7 @@
 .midgard-cmt.midgard-cmt .lernbaum .lb-knoten {position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
   min-width: 1.85rem; height: 1.85rem; margin: 0 2px; padding: 0 .15rem; font-family: var(--schrift-titel); font-size: .85rem; line-height: 1;
   color: var(--leise); background: var(--grund); box-shadow: var(--kante); cursor: default; transform: none;}
-.midgard-cmt.midgard-cmt .lernbaum .lb-knoten .lb-zahl {font-size: .62rem; color: inherit; opacity: .85;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten .lb-zahl {font-size: .75rem; color: inherit; opacity: .85;}
 .midgard-cmt.midgard-cmt .lernbaum button.lb-knoten {cursor: pointer;}
 .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.gelernt {background: var(--ast, var(--akzent)); color: var(--ast-text, var(--auf-akzent)); font-weight: 700;}
 .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.teilweise {background: linear-gradient(135deg, var(--ast, var(--akzent)) 50%, var(--grund) 50%); color: var(--text); font-weight: 700;}
@@ -611,14 +620,14 @@
 .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.lernbar {animation: none;}
 }
 @container (max-width: 820px) {
-  .midgard-cmt.midgard-cmt .lernbaum .lb-zweig { grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr); gap: .3rem .6rem; }
-  .midgard-cmt.midgard-cmt .lernbaum .lb-knoten { min-width: 1.55rem; height: 1.65rem; font-size: .78rem; }
-  .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.neu { min-width: 2.1rem; }
-  .midgard-cmt.midgard-cmt .lernbaum .lb-kette li + li::before { width: .35rem; }
+.midgard-cmt.midgard-cmt .lernbaum .lb-zweig {grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr); gap: .3rem .6rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten {min-width: 1.55rem; height: 1.65rem; font-size: .78rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.neu {min-width: 2.1rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-kette li + li::before {width: .35rem;}
 }
 @container (max-width: 620px) {
-  .midgard-cmt.midgard-cmt .lernbaum .lb-zweig { grid-template-columns: minmax(0, 1fr); }
-  .midgard-cmt.midgard-cmt .lernbaum .lb-ast-stand { margin-left: 0; flex-basis: 100%; }
+.midgard-cmt.midgard-cmt .lernbaum .lb-zweig {grid-template-columns: minmax(0, 1fr);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ast-stand {margin-left: 0; flex-basis: 100%;}
 }
 .midgard-cmt.midgard-cmt .einkauf-zeile {display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .3rem .4rem; border-bottom: 1px solid var(--linie);}
 .midgard-cmt.midgard-cmt .einkauf-zeile.gewaehlt {background: color-mix(in srgb, var(--akzent) 12%, transparent);}
@@ -734,6 +743,10 @@
 .midgard-browser .mb-tabelle tr[data-id]:hover, .midgard-browser .mb-tabelle tr[data-id]:focus-visible { background: var(--akzent-hell); outline: none; }
 .midgard-browser .mb-tabelle tr.gewaehlt { background: var(--akzent-hell); box-shadow: inset 3px 0 0 var(--akzent); }
 .midgard-browser .mb-name { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.midgard-browser .mb-name { max-width: 22rem; }
+.midgard-browser .mb-name-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.midgard-browser .mb-chips.mb-eingeklappt .mb-chip:nth-child(n+11):not(.an) { display: none; }
+.midgard-browser .midgard-cmt button.mb-mehr { margin-top: 4px; padding: 0 4px; min-height: 0; background: none; border: 0; box-shadow: none; color: var(--akzent); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
 .midgard-browser .mb-name img, .midgard-browser .mb-detail h3 img { width: 22px; height: 22px; border: none; flex: none; }
 .midgard-browser .mb-detail { overflow: auto; min-height: 0; padding: 10px 12px; background: var(--grund); border: 2px solid var(--rand); box-shadow: var(--hebung); }
 .midgard-browser .mb-detail h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; }
@@ -1149,14 +1162,58 @@ html.midgard-handy-aktiv :is(#interface, #ui-left, #ui-right, #ui-top, #ui-botto
 .midgard-handy .midgard-cmt.im-foundry .seitenleiste ol button span:not(.nr) { display: none; }
 .midgard-handy .midgard-cmt.im-foundry .seitenleiste ol button.aktiv span:not(.nr) { display: inline; }
 .midgard-handy .midgard-cmt.im-foundry main { padding: .8rem .5rem 0; }
+/* Werkzeug am Handy: der Inhalt muss auf den ersten Bildschirm. Kopf nur mit Bild und Name, Leiste in einer Zeile,
+   Schritte und Lernen je eine waagerechte Zeile (Lernen mit Beschriftung statt Farbpunkten), ohne Versionshinweis */
+.midgard-abenteurer.midgard-handy:has(.ma-panel[data-panel="werkzeug"].aktiv) .ma-kopf { grid-template-columns: 36px minmax(0, 1fr); padding: 6px 10px; align-items: center; }
+.midgard-abenteurer.midgard-handy:has(.ma-panel[data-panel="werkzeug"].aktiv) .ma-portrait { width: 36px; height: 36px; }
+.midgard-abenteurer.midgard-handy:has(.ma-panel[data-panel="werkzeug"].aktiv) :is(.ma-vorraete, .ma-unter, .ma-konto, .ma-kopf-knoepfe, .ma-werkzeug-knopf, .ma-export-knopf) { display: none; }
+.midgard-abenteurer.midgard-handy:has(.ma-panel[data-panel="werkzeug"].aktiv) .ma-name { font-size: 1.1rem; margin: 0; }
+.midgard-abenteurer.midgard-handy .ma-werkzeug-leiste { flex-wrap: nowrap; }
+.midgard-abenteurer.midgard-handy .ma-werkzeug-stand { flex: 1 1 auto; min-width: 0; font-size: .8rem; line-height: 1.25; }
+.midgard-abenteurer.midgard-handy .ma-werkzeug-leiste .ma-knopf { padding: 4px 8px; font-size: .85rem; white-space: nowrap; }
+.midgard-handy .midgard-cmt.im-foundry .seitenleiste { padding: 4px 6px; }
+.midgard-handy .midgard-cmt.im-foundry .nav-titel { margin: .25rem .2rem .1rem; font-size: .75rem; }
+.midgard-handy .midgard-cmt.im-foundry :is(.versionshinweis, .speicherhinweis) { display: none; }
+.midgard-handy .midgard-cmt.im-foundry .seitenleiste ol.cmt-lernen-nav button span:not(.nr) { display: inline; font-size: .85rem; }
+.midgard-handy .midgard-cmt.im-foundry .seitenleiste ol.cmt-lernen-nav .nr.punkt { width: .5rem; height: .5rem; margin: 0 .2rem 0 0; }
+.midgard-handy .midgard-cmt.im-foundry .seitenleiste ol.cmt-lernen-nav button { padding: .25rem .5rem; white-space: nowrap; }
+/* Kampfwerte am Handy: zwei statt vier Spalten, kleinere Ziffern; Bonustabelle notfalls in sich waagerecht scrollbar */
+.midgard-abenteurer.midgard-handy [data-panel=kampf] .ma-k-kampf .ma-grosswerte { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.midgard-abenteurer.midgard-handy .ma-gross-wert { font-size: .95rem; white-space: nowrap; }
+.midgard-abenteurer.midgard-handy .ma-gross { min-width: 0; }
+.midgard-abenteurer.midgard-handy table.ma-boni { display: block; overflow-x: auto; font-size: .85rem; }
+.midgard-abenteurer.midgard-handy table.ma-boni :is(th, td) { padding: 3px 5px; white-space: nowrap; }
 html.midgard-handy-aktiv:has(.application.midgard-handy) .midgard-handy-knopf { display: none; }
+/* Reiter am Handy: mit Beschriftung, mindestens 44 px hoch, seitlich wischbar (der aktive wird ins Bild gerückt) */
+.midgard-abenteurer.midgard-handy .ma-reiter { scroll-snap-type: x proximity; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 92%, transparent); mask-image: linear-gradient(90deg, #000 92%, transparent); }
+.midgard-abenteurer.midgard-handy .ma-reiter::-webkit-scrollbar { display: none; }
+.midgard-abenteurer.midgard-handy .ma-reiter button, .midgard-abenteurer.midgard-handy .ma-reiter button:not(.aktiv) { min-height: 44px; padding: 4px 10px; scroll-snap-align: start; }
+.midgard-abenteurer.midgard-handy .ma-reiter button:not(.aktiv) span { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+/* Tippflächen am Handy mindestens 44 × 44 px */
+.midgard-abenteurer.midgard-handy .ma-wurzel :is(button, a):is(.ma-werkzeug-knopf, .ma-export-knopf, .ma-knopf, .ma-zustand, .ma-uebergabe-knopf, .ma-freigabe-knopf) { min-height: 44px; }
+/* LP/AP: Raster mit 44-px-Spalten für − und +, damit nichts über den Rand ragt (retro.css gibt Knöpfen zusätzlich Außenabstand) */
+.midgard-abenteurer.midgard-handy .ma-vorrat { grid-template-columns: 2.2em 44px minmax(0, 1fr) 44px; }
+.midgard-abenteurer.midgard-handy .ma-vorrat button:is(.ma-minus, .ma-plus) { width: 44px; height: 44px; min-width: 44px; margin: 0; }
+/* breite Tabellen (vom Bogen als .ma-breit markiert) in sich waagerecht scrollbar statt abgeschnitten */
+.midgard-abenteurer.midgard-handy table.ma-breit { display: block; overflow-x: auto; max-width: 100%; }
+.midgard-abenteurer.midgard-handy .ma-item { min-height: 44px; display: inline-flex; align-items: center; }
+/* Würfel-Links im Text: Tippfläche unsichtbar vergrößern, ohne dass sich etwas verschiebt */
+.midgard-abenteurer.midgard-handy a.ma-wurf:not(.ma-gross) { padding: 14px 12px; margin: -14px -12px; }
+.midgard-abenteurer.midgard-handy .ma-eig-name.ma-wurf { display: block; padding: 9px 0; margin: -9px 0; }
+.midgard-handy .midgard-cmt.im-foundry .seitenleiste ol button { min-width: 44px; min-height: 44px; }
+.midgard-handy .midgard-cmt.im-foundry :is(button.mini, details > summary) { min-width: 44px; min-height: 44px; }
+.midgard-handy .midgard-cmt.im-foundry details > summary { display: flex; align-items: center; gap: .4rem; }
+.midgard-handy .midgard-cmt .lernbaum .lb-knoten, .midgard-handy .midgard-cmt .lernbaum .lb-knoten.neu { min-width: 44px; height: 44px; }
+.midgard-abenteurer.midgard-handy a.ma-wurf.ma-zauberwurf { padding: 14px 18px; margin: -14px -18px; }
+.midgard-handy .midgard-cmt .lernbaum .lb-legende .lb-knoten { min-width: 0; width: 1rem; height: 1rem; }
+.midgard-handy .midgard-cmt :is(input[type="checkbox"], input[type="radio"]) { width: 22px; height: 22px; flex: none; }
 /* auf dem Handy scrollt die ganze Seite (Kopf und Reiter wandern mit), nicht nur der Inhalt */
 .application.midgard-handy { display: flex; flex-direction: column; }
 .application.midgard-handy .window-content { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .midgard-abenteurer.midgard-handy .ma-wurzel { height: auto; min-height: 100%; }
 .midgard-abenteurer.midgard-handy .ma-inhalt { flex: none; overflow: visible; }
 .midgard-abenteurer.midgard-handy .ma-reiter { flex-wrap: nowrap; overflow-x: auto; padding: 6px 6px 0; gap: 2px; }
-.midgard-abenteurer.midgard-handy .ma-reiter button, .midgard-abenteurer.midgard-handy .ma-reiter button:not(.aktiv) { padding: 4px 5px; min-height: 0; margin: 0; }
+.midgard-abenteurer.midgard-handy .ma-reiter button, .midgard-abenteurer.midgard-handy .ma-reiter button:not(.aktiv) { margin: 0; }
 .midgard-handy-knopf { position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 50; width: auto; padding: 10px 14px; font-weight: 700; }
 html.retro .midgard-handy .ma-wurzel { background: transparent; color: var(--text); }
 html.retro .midgard-handy :is(.ma-kopf, .ma-reiter) { background: linear-gradient(180deg, #121c78, #070b38); }
@@ -1437,8 +1494,10 @@ img[src*="midgard5-cmt/bilder/"]:not([src*="/textur/"]),
 /* Entwicklung: „Jetzt lernbar“ als anklickbare Kacheln */
 .midgard-abenteurer .ma-lerngruppe h4 { margin: 8px 0 4px; }
 .midgard-abenteurer .ma-lernbar-liste { display: flex; flex-wrap: wrap; gap: 6px; }
-.midgard-abenteurer .ma-wurzel button.ma-lernbar { display: flex; flex-direction: column; align-items: flex-start; width: auto; height: auto; padding: 3px 8px; text-align: left; line-height: 1.2; border: 1px solid var(--rahmen, #8a7a62); background: color-mix(in srgb, var(--rahmen, #8a7a62) 8%, transparent); }
-.midgard-abenteurer .ma-wurzel button.ma-lernbar small { font-size: .75rem; opacity: .8; }
+/* Textfarbe ausdrücklich setzen: die Knopf-Textfarbe des klassischen Stils ist hell und stand hier auf hellem Grund */
+.midgard-abenteurer .ma-wurzel button.ma-lernbar { display: flex; flex-direction: column; align-items: flex-start; width: auto; height: auto; padding: 3px 8px; text-align: left; line-height: 1.2; border: 1px solid var(--rahmen, #8a7a62); background: color-mix(in srgb, var(--rahmen, #8a7a62) 8%, transparent); color: var(--text); text-shadow: none; }
+.midgard-abenteurer .ma-wurzel button.ma-lernbar small { font-size: .75rem; color: var(--leise); }
+.midgard-abenteurer .ma-wurzel button.ma-lernbar:hover { background: color-mix(in srgb, var(--rahmen, #8a7a62) 16%, transparent); color: var(--text); }
 .midgard-abenteurer .ma-wurzel button.ma-lernbar:hover, .midgard-abenteurer .ma-wurzel button.ma-lernbar:focus-visible { outline: 2px solid var(--gold, #c9a227); outline-offset: 1px; }
 
 /* Kompendium-Fenster: Knopf „In die Welt übernehmen“ */
@@ -1623,7 +1682,7 @@ html.retro, html.retro .midgard-cmt {
   --grund: #0a1040;
   --flaeche: #1a2a9a;
   --text: #f4f2ff;
-  --leise: #b4bdff;
+  --leise: #c6cdff;
   --rand: #eef0ff;
   --schatten: rgba(0, 0, 0, .55);
   --linie: #4256d0;
@@ -1717,7 +1776,7 @@ html.retro :is(.karte, .dialog, .bogen, .lerntabelle, .konto-kachel, .wichtig-in
 }
 html.retro .karte { margin: 10px 10px 1.6rem; padding: 1.1rem 1.1rem 1rem; }
 html.retro .karte::before { display: none; }
-html.retro .karte > h3:first-child { background: none; box-shadow: none; color: var(--akzent); font-size: .78rem; margin: 0 0 .8rem; padding-bottom: .55rem; border-bottom: 2px solid #ffffff30; }
+html.retro .karte > h3:first-child { background: none; box-shadow: none; color: var(--akzent); font-family: var(--schrift-text); font-size: 1.15rem; font-weight: 700; line-height: 1.3; margin: 0 0 .8rem; padding-bottom: .55rem; border-bottom: 2px solid #ffffff30; }
 html.retro .karte > h3:first-child::before, html.retro .topf-kopf h3::before { content: "\25B6"; display: inline-block; width: auto; height: auto; margin-right: .5em; background: none; box-shadow: none; color: var(--akzent); font-size: .9em; transform: none; }
 html.retro .dialog { padding: 0 1.1rem 1.1rem; font: 18px/1.45 var(--schrift-text); }
 html.retro .dialog > h3:first-child { background: none; color: var(--akzent) !important; font-size: .8rem; padding: 1rem 0 .6rem; margin: 0 0 .4rem; border-bottom: 2px solid #ffffff30; }
@@ -1803,3 +1862,6 @@ html.retro textarea.senden-text { width: 100%; font: 400 .9rem/1.35 ui-monospace
   html.retro button.haupt:not(:disabled) { animation: retro-blinken 1.6s steps(2, jump-none) infinite; }
 }
 @keyframes retro-blinken { 50% { box-shadow: 0 0 0 2px #060a2c, 0 0 0 4px #ffffff, 0 0 0 6px #060a2c; } }
+
+/* Waffentabelle in der Rückfrage: Zwischenüberschrift in der Textschrift (die Titelschrift ist zu breit) */
+html.retro .waffen-tabelle h4 { font-family: var(--schrift-text); font-size: 1rem; font-weight: 700; color: var(--akzent); letter-spacing: 0; }
