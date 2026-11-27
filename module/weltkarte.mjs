@@ -208,6 +208,7 @@ export class Weltkarte extends ApplicationV2 {
   #bearbeiten = false;  // Spielleitung: Beschriftungen verschieben, anlegen, umbenennen
   #neu = false;         // Werkzeug "neuer Ort": nächster Klick legt an
   #offen = null;        // ID des gewählten Ortes (Detailansicht in der Seitenleiste)
+  #formularFuer = null; // Spielleitung: Ort, dessen Eingabefelder offen sind (Stift)
   #filter = "";         // Filtertext der Ortsliste
   #aufgeklappt = new Set(["eigene"]); // geöffnete Gruppen der Ortsliste
   #seite = null;
@@ -589,6 +590,7 @@ export class Weltkarte extends ApplicationV2 {
     const o = this.#orte.find((x) => x.id === id);
     if (!o || !this.#fenster) return;
     const neu = this.#offen !== id;
+    if (neu) this.#formularFuer = null;
     this.#offen = id;
     if (!this.#seiteOffen) this.#seiteUmschalten(true);
     this.#fenster.querySelectorAll(".wk-ort").forEach((e) => e.classList.toggle("aktiv", e.dataset.id === id));
@@ -599,6 +601,7 @@ export class Weltkarte extends ApplicationV2 {
 
   #abwaehlen() {
     this.#offen = null;
+    this.#formularFuer = null;
     this.#fenster?.querySelectorAll(".wk-ort.aktiv").forEach((e) => e.classList.remove("aktiv"));
     if (this.#sicht) this.#anordnen();
     this.#seiteZeichnen();
@@ -685,30 +688,29 @@ export class Weltkarte extends ApplicationV2 {
     this.#fenster?.querySelector(`.wk-ort[data-id="${CSS.escape(id)}"]`)?.classList.toggle("markiert", an);
   }
 
-  /** Details eines Ortes; für die Spielleitung mit Eingabefeldern und Wissen je Charakter. */
+  /** Details eines Ortes: Leseansicht für alle; die Spielleitung öffnet die Eingabefelder mit dem Stift (im Bearbeitungsmodus der Karte immer offen). */
   #detail(o) {
     const sl = this.#sl;
+    const formular = sl && (this.#bearbeiten || this.#formularFuer === o.id);
     const art = o.art || standardArt(o.typ);
+    const stift = sl && !this.#bearbeiten ? el("button", {
+      type: "button", class: `wk-stift${formular ? " an" : ""}`, "aria-pressed": String(formular),
+      title: formular ? "Bearbeiten beenden" : "Texte und Wissen bearbeiten",
+      onclick: () => { this.#formularFuer = formular ? null : o.id; this.#seiteZeichnen(); },
+    }, el("i", { class: `fa-solid ${formular ? "fa-check" : "fa-pen"}` })) : null;
     const teile = [
-      el("button", { type: "button", class: "wk-zu", title: "Zurück zur Ortsliste", onclick: () => this.#abwaehlen() }, el("i", { class: "fa-solid fa-chevron-left" }), " Alle Orte"),
+      el("div", { class: "wk-detailkopf" },
+        el("button", { type: "button", class: "wk-zu", title: "Zurück zur Ortsliste", onclick: () => this.#abwaehlen() }, el("i", { class: "fa-solid fa-chevron-left" }), " Alle Orte"), stift),
       el("h3", { text: o.name }),
       art ? el("div", { class: "wk-art", text: art }) : null,
+      sl && o.allen && !formular ? el("div", { class: "wk-tags" }, el("span", { class: "wk-tag", text: "allen Spielern bekannt" })) : null,
     ];
-    const bild = ortsbild(o), stufe = this.#stufe(o);
+    const bild = ortsbild(o), stufe = sl ? 3 : this.#stufe(o);
     if (bild.pfad && stufe !== 2) teile.push(el("img", { class: `wk-ortsbild${stufe === 1 ? " verschleiert" : ""}`, src: bild.pfad, alt: "", loading: "lazy", onerror: (ev) => ev.currentTarget.remove() }));
-    if (sl) teile.push(el("div", { class: "wk-bildhinweis", title: `Eigenes Bild: bilder/karte/orte/${o.id}.webp`, text: bild.pfad ? `Bild: ${bild.pfad.split("/bilder/")[1]}` : `Kein Bild: bilder/karte/kategorie/${bild.kategorie}.webp oder bilder/karte/orte/${o.id}.webp` }));
+    if (formular) teile.push(this.#formular(o, bild));
+    else teile.push(...this.#lesen(o, stufe));
+
     if (sl) {
-      if (!o.text && !texteFreigeschaltet()) teile.push(el("p", { class: "wk-hinweis-freischalten", text: "Die Beschreibungen aller Orte werden mit dem PDF-Import von „Die Welt“ freigeschaltet (Einstellungen → Regelwerke importieren). Bis dahin kannst du hier eigene Texte schreiben." }));
-      teile.push(el("label", { class: "wk-feld" }, el("span", { text: "Beschreibung (für alle, die den Ort kennen)" }),
-        el("textarea", { class: "wk-text", rows: 5, placeholder: "Kurze Zusammenfassung …", onchange: (ev) => this.#ortAendern(o, { text: ev.currentTarget.value }) }, o.text ?? "")));
-      teile.push(el("label", { class: "wk-feld" }, el("span", { text: "Quelle" }),
-        el("input", { type: "text", class: "wk-quelle-feld", value: o.quelle ?? "", placeholder: "z. B. Die Welt S. 30", onchange: (ev) => this.#ortAendern(o, { quelle: ev.currentTarget.value }) })));
-      teile.push(el("label", { class: "wk-feld" }, el("span", { class: "wk-feldkopf" }, "Gerücht (sehen Spieler ab „Gerücht“) ",
-          el("select", { class: "wk-geruecht-wahr", title: "Wahrheitsgehalt, nur für die Spielleitung", onchange: (ev) => this.#ortAendern(o, { geruechtWahr: ev.currentTarget.value }, true) },
-            el("option", { value: "", selected: !o.geruechtWahr, text: "–" }), Object.entries(WAHRHEIT).map(([k, t]) => el("option", { value: k, selected: o.geruechtWahr === k, text: t })))),
-        el("textarea", { class: `wk-geruecht-text wahr-${o.geruechtWahr || "x"}`, rows: 3, placeholder: "Was man sich über diesen Ort erzählt …", onchange: (ev) => this.#ortAendern(o, { geruecht: ev.currentTarget.value }) }, o.geruecht ?? "")));
-      teile.push(el("label", { class: "wk-haken" }, el("input", { type: "checkbox", class: "wk-allen", checked: !!o.allen, onchange: (ev) => this.#ortAendern(o, { allen: ev.currentTarget.checked }, true) }), " allen Spielern bekannt"));
-      if (this.#bearbeiten) teile.push(this.#bearbeitungsfelder(o));
       const figuren = abenteurer();
       teile.push(el("div", { class: "wk-abschnitt", text: "Charaktere" }));
       if (!figuren.length) teile.push(el("p", { class: "wk-leer", text: "Noch keine Abenteurer in der Welt." }));
@@ -718,31 +720,67 @@ export class Weltkarte extends ApplicationV2 {
           el("div", { class: "wk-figurkopf" }, el("span", { class: "wk-figurname", text: a.name }),
             el("select", { class: "wk-status", onchange: (ev) => this.#wissenAendern(a, o.id, { status: ev.currentTarget.value }) },
               Object.entries(STATUS).map(([k, t]) => el("option", { value: k, selected: (e.status ?? "") === k, text: t })))),
-          el("textarea", { class: "wk-notiz", rows: 2, placeholder: `Hintergrund nur für ${a.name} …`, onchange: (ev) => this.#wissenAendern(a, o.id, { notiz: ev.currentTarget.value }) }, e.notiz ?? "")));
+          formular
+            ? el("textarea", { class: "wk-notiz", rows: 2, placeholder: `Hintergrund nur für ${a.name} …`, onchange: (ev) => this.#wissenAendern(a, o.id, { notiz: ev.currentTarget.value }) }, e.notiz ?? "")
+            : e.notiz ? el("p", { class: "wk-notiz-text", text: e.notiz }) : null));
       }
+      if (formular) teile.push(el("button", { type: "button", class: "wk-knopf wk-fertig", onclick: () => { this.#formularFuer = null; if (this.#bearbeiten) this.#abwaehlen(); else this.#seiteZeichnen(); } }, el("i", { class: "fa-solid fa-check" }), " Fertig"));
     } else {
-      const stufe = this.#stufe(o);
-      if (stufe >= 3) {
-        teile.push(o.text ? el("p", { class: "wk-beschreibung", text: o.text }) : null);
-        teile.push(o.text && o.quelle ? el("div", { class: "wk-quelle", text: `Quelle: ${o.quelle}` }) : null);
-      } else teile.push(el("p", { class: "wk-leer wk-stufe-hinweis", text: stufe === 1 ? "Nur vom Hörensagen bekannt." : "Bekannt ist nur der Name." }));
-      if (o.geruecht) teile.push(el("div", { class: "wk-geruecht" }, el("div", { class: "wk-geruecht-kopf", text: "Man erzählt sich" }), el("p", { text: o.geruecht })));
       let eigenes = stufe < 3;
       for (const a of this.#figuren()) {
         const e = wissen(a)[o.id];
         if (!e?.status) continue;
         eigenes = true;
         teile.push(el("div", { class: "wk-wissen" }, el("div", { class: "wk-figurkopf" }, el("span", { class: "wk-figurname", text: a.name }), el("span", { class: `wk-marke status-${e.status}`, text: STATUS[e.status] })),
-          e.notiz ? el("p", { class: "wk-beschreibung", text: e.notiz }) : null));
+          e.notiz ? el("p", { class: "wk-notiz-text", text: e.notiz }) : null));
       }
-      if (!o.text && !eigenes) teile.push(el("p", { class: "wk-leer", text: "Keine weiteren Angaben." }));
+      if (!o.text && !o.geruecht && !eigenes) teile.push(el("p", { class: "wk-leer", text: "Keine weiteren Angaben." }));
     }
-    return el("div", { class: "wk-detail", "data-id": o.id }, teile.filter(Boolean));
+    return el("div", { class: `wk-detail${formular ? " formular" : ""}`, "data-id": o.id }, teile.filter(Boolean));
+  }
+
+  /** Leseansicht: Beschreibung mit Quelle und Gerücht; die Spielleitung sieht zusätzlich den Wahrheitsgehalt. */
+  #lesen(o, stufe) {
+    const sl = this.#sl, teile = [];
+    if (stufe >= 3) {
+      if (o.text) {
+        teile.push(el("p", { class: "wk-beschreibung", text: o.text }));
+        if (o.quelle) teile.push(el("div", { class: "wk-quelle", title: "Quelle", text: o.quelle }));
+      } else if (sl) {
+        teile.push(el("p", { class: "wk-leer", text: texteFreigeschaltet() ? "Noch keine Beschreibung." : "Noch keine Beschreibung. Die Texte aller Orte werden mit dem PDF-Import von „Die Welt“ freigeschaltet (Einstellungen → Regelwerke importieren). Eigene Texte schreibst du über den Stift." }));
+      }
+    } else teile.push(el("p", { class: "wk-leer wk-stufe-hinweis", text: stufe === 1 ? "Nur vom Hörensagen bekannt." : "Bekannt ist nur der Name." }));
+    if (o.geruecht) {
+      const w = sl && WAHRHEIT[o.geruechtWahr] ? o.geruechtWahr : "";
+      teile.push(el("div", { class: `wk-geruecht${w ? ` wahr-${w}` : ""}` },
+        el("div", { class: "wk-geruecht-kopf" }, el("span", { text: "Man erzählt sich" }),
+          w ? el("span", { class: `wk-wahrheit wahr-${w}`, "data-wahr": w, title: "Wahrheitsgehalt, nur für die Spielleitung", text: WAHRHEIT[w] }) : null),
+        el("p", { text: o.geruecht })));
+    }
+    return teile;
+  }
+
+  /** Eingabefelder der Spielleitung: Texte, Gerücht, Sichtbarkeit, Bild und Beschriftung. */
+  #formular(o, bild) {
+    const feld = (titel, eingabe, hinweis) => el("label", { class: "wk-feld" },
+      el("span", { class: "wk-feldname" }, titel, hinweis ? el("small", { text: hinweis }) : null), eingabe);
+    return el("div", { class: "wk-formular" },
+      !o.text && !texteFreigeschaltet() ? el("p", { class: "wk-hinweis-freischalten", text: "Die Beschreibungen aller Orte werden mit dem PDF-Import von „Die Welt“ freigeschaltet (Einstellungen → Regelwerke importieren). Bis dahin kannst du hier eigene Texte schreiben." }) : null,
+      feld("Beschreibung", el("textarea", { class: "wk-text", rows: 5, placeholder: "Kurze Zusammenfassung …", onchange: (ev) => this.#ortAendern(o, { text: ev.currentTarget.value }) }, o.text ?? ""), "für alle, die den Ort kennen"),
+      feld("Quelle", el("input", { type: "text", class: "wk-quelle-feld", value: o.quelle ?? "", placeholder: "z. B. Die Welt S. 30", onchange: (ev) => this.#ortAendern(o, { quelle: ev.currentTarget.value }) })),
+      feld("Gerücht", el("textarea", { class: `wk-geruecht-text wahr-${o.geruechtWahr || "x"}`, rows: 3, placeholder: "Was man sich über diesen Ort erzählt …", onchange: (ev) => this.#ortAendern(o, { geruecht: ev.currentTarget.value }) }, o.geruecht ?? ""), "sehen Spieler ab „Gerücht“"),
+      el("div", { class: "wk-reihe wk-formzeile" },
+        el("span", { class: "wk-feldname", text: "Wahrheitsgehalt" }),
+        el("select", { class: "wk-geruecht-wahr", title: "Nur für die Spielleitung sichtbar", onchange: (ev) => this.#ortAendern(o, { geruechtWahr: ev.currentTarget.value }, true) },
+          el("option", { value: "", selected: !o.geruechtWahr, text: "offen" }), Object.entries(WAHRHEIT).map(([k, t]) => el("option", { value: k, selected: o.geruechtWahr === k, text: t })))),
+      el("label", { class: "wk-haken" }, el("input", { type: "checkbox", class: "wk-allen", checked: !!o.allen, onchange: (ev) => this.#ortAendern(o, { allen: ev.currentTarget.checked }, true) }), " allen Spielern bekannt"),
+      el("div", { class: "wk-bildhinweis", title: `Eigenes Bild: bilder/karte/orte/${o.id}.webp`, text: bild.pfad ? `Bild: ${bild.pfad.split("/bilder/")[1]}` : `Kein Bild: bilder/karte/kategorie/${bild.kategorie}.webp oder bilder/karte/orte/${o.id}.webp` }),
+      this.#bearbeitungsfelder(o));
   }
 
   #bearbeitungsfelder(o) {
-    const feld = (titel, eingabe) => el("label", { class: "wk-feld" }, el("span", { text: titel }), eingabe);
-    return el("fieldset", { class: "wk-bearbeitung" }, el("legend", { text: "Beschriftung" }),
+    const feld = (titel, eingabe) => el("label", { class: "wk-feld" }, el("span", { class: "wk-feldname", text: titel }), eingabe);
+    return el("details", { class: "wk-bearbeitung", open: this.#bearbeiten }, el("summary", { text: "Beschriftung auf der Karte" }),
       feld("Name", el("input", { type: "text", class: "wk-e-name", value: o.name, onchange: (ev) => this.#ortAendern(o, { name: ev.currentTarget.value.trim() || o.name }, true) })),
       feld("Anzeige mit Umbrüchen (|)", el("input", { type: "text", class: "wk-e-anzeige", value: o.anzeige ?? "", placeholder: "z. B. Meer der|Roten Sonne", onchange: (ev) => this.#ortAendern(o, { anzeige: ev.currentTarget.value }, true) })),
       feld("Typ", el("select", { class: "wk-e-typ", onchange: (ev) => this.#ortAendern(o, { typ: ev.currentTarget.value }, true) }, Object.entries(TYPEN).map(([k, t]) => el("option", { value: k, selected: o.typ === k, text: t })))),

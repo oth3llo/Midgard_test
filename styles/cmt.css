@@ -1551,7 +1551,6 @@ button.midgard-in-welt { display: flex; align-items: center; justify-content: ce
 .midgard-weltkarte .typ-ort { --wk-basis: 13px; font: 700 13px/1 "Almendra", Georgia, serif; color: #fff; text-shadow: 0 0 2px #000, 0 0 3px #000; text-align: left; }
 .midgard-weltkarte .typ-region.ergaenzt { --wk-basis: 22px; letter-spacing: 0.12em; color: rgba(255, 240, 196, 0.82); }
 .midgard-weltkarte .typ-fluss { --wk-basis: 13px; font: 400 13px/1 "IM Fell English", Georgia, serif; color: #cfe6ff; letter-spacing: 0.04em; text-shadow: 0 0 2px #061a44, 0 0 3px #061a44; }
-.midgard-weltkarte .wk-quelle { margin-top: 2px; font-size: 12px; font-style: italic; color: #cdbb90; }
 .midgard-weltkarte .typ-zusatz { --wk-basis: 12px; font: 400 12px/1.05 "IM Fell English", Georgia, serif; color: #f1e8d2; text-shadow: 0 0 2px #000, 0 0 3px #000; }
 .midgard-weltkarte .typ-ort .wk-punkt { position: absolute; left: 0; top: 0; width: calc(6px * var(--wk-p, 1)); height: calc(6px * var(--wk-p, 1)); transform: translate(-50%, -50%); border-radius: 50%; background: #1b1610; box-shadow: 0 0 0 calc(1.5px * var(--wk-p, 1)) #fff; }
 /* unsichtbar vergrößerte Klickfläche um den Punkt */
@@ -1578,19 +1577,9 @@ button.midgard-in-welt { display: flex; align-items: center; justify-content: ce
 /* Ortsbild in den Details: kleines Pixelbild, Gerücht verschwommen */
 .midgard-weltkarte .wk-ortsbild { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; margin: 6px 0 8px; border: 1px solid #6b5527; border-radius: 3px; image-rendering: pixelated; background: #0d0b07; clip-path: inset(0 round 3px); }
 .midgard-weltkarte .wk-ortsbild.verschleiert { filter: blur(5px) saturate(0.6) brightness(0.85); }
-.midgard-weltkarte .wk-bildhinweis { margin: -2px 0 6px; font-size: 11px; color: #8f8166; word-break: break-all; }
 .midgard-weltkarte .wk-marke.status-geruecht { background: #3b3b3b; color: #d8d8d8; font-style: italic; }
 .midgard-weltkarte .wk-marke.status-name { background: #3a3324; color: #e8dcc0; }
 /* Gerücht in den Details (Spieler) und Bearbeitung mit Wahrheitsgehalt (Spielleitung) */
-.midgard-weltkarte .wk-geruecht { margin: 10px 0 6px; padding: 6px 10px; border-left: 3px solid #8a7240; background: #241d13; border-radius: 0 3px 3px 0; }
-.midgard-weltkarte .wk-geruecht-kopf { font: 600 12px/1.2 "Cinzel", Georgia, serif; color: #cdbb90; margin-bottom: 2px; }
-.midgard-weltkarte .wk-geruecht p { margin: 0; font-style: italic; color: #eadfc4; }
-.midgard-weltkarte .wk-feldkopf { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.midgard-weltkarte .wk-feldkopf select { width: auto; flex: 0 0 auto; font-size: 12px; padding: 0 4px; height: 22px; }
-.midgard-weltkarte .wk-seite textarea.wk-geruecht-text { font-style: italic; border-left-width: 4px; }
-.midgard-weltkarte .wk-seite textarea.wk-geruecht-text.wahr-w { border-left-color: #4f8a3c; }
-.midgard-weltkarte .wk-seite textarea.wk-geruecht-text.wahr-h { border-left-color: #c49a2c; }
-.midgard-weltkarte .wk-seite textarea.wk-geruecht-text.wahr-f { border-left-color: #b0473a; }
 /* Überfahren: der Name kommt nach vorn, die übrigen treten zurück */
 .midgard-weltkarte .wk-ort { transition: opacity 0.12s; }
 .midgard-weltkarte .wk-fenster:not(.zieht) .wk-flaeche:has(.wk-ort:hover) .wk-ort:not(:hover):not(.aktiv) { opacity: 0.45; }
@@ -1647,20 +1636,11 @@ button.midgard-in-welt { display: flex; align-items: center; justify-content: ce
 /* Listeneintrag überfahren: Namen auf der Karte hervorheben, auch wenn er gerade aus- oder überdeckt ist */
 .midgard-weltkarte .wk-ort.markiert { display: block !important; z-index: 4; }
 .midgard-weltkarte .wk-ort.markiert .wk-name { visibility: visible !important; background: rgba(10, 8, 4, 0.7); box-shadow: 0 0 0 2px #e6c46a; }
-.midgard-weltkarte .wk-detail h3 { margin: 0 0 2px; border: none; font: 600 18px/1.2 "Cinzel", Georgia, serif; color: #ffe2a0; }
-.midgard-weltkarte .wk-detail .wk-zu { align-self: flex-start; width: auto; height: 26px; min-height: 0; margin: 0 0 6px -4px; padding: 0 8px; line-height: 24px; background: none; border: 1px solid transparent; border-radius: 3px; color: #e6c46a; font-size: 13px; }
 .midgard-weltkarte .wk-detail .wk-zu:hover { border-color: #6b5527; background: #2a2216; }
-.midgard-weltkarte .wk-art { font: italic 500 15px "Cormorant Garamond", Georgia, serif; color: #cdbb90; margin-bottom: 6px; }
-.midgard-weltkarte .wk-beschreibung { margin: 4px 0; white-space: pre-line; }
 .midgard-weltkarte .wk-leer { margin: 4px 0; font-style: italic; opacity: 0.7; }
 .midgard-weltkarte .wk-abschnitt { margin: 10px 0 4px; padding-top: 6px; border-top: 1px solid #6b5527; font: 600 13px "Cinzel", Georgia, serif; color: #e6c46a; }
-.midgard-weltkarte .wk-feld { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; font-size: 12px; color: #cdbb90; }
-.midgard-weltkarte .wk-seite textarea, .midgard-weltkarte .wk-seite input[type="text"], .midgard-weltkarte .wk-seite input[type="search"], .midgard-weltkarte .wk-seite input[type="number"], .midgard-weltkarte .wk-seite select { width: 100%; background: #f4ecd8; color: #1b1610; border: 1px solid #8a7240; border-radius: 3px; font: 13px/1.35 var(--schrift-text); }
-.midgard-weltkarte .wk-seite textarea { resize: vertical; min-height: 2.6em; }
 .midgard-weltkarte .wk-haken { display: flex; align-items: center; gap: 4px; margin: 4px 0; font-size: 13px; }
 .midgard-weltkarte .wk-reihe { display: flex; gap: 8px; }
-.midgard-weltkarte .wk-bearbeitung { margin: 8px 0; padding: 4px 8px 8px; border: 1px dashed #8a7240; border-radius: 3px; }
-.midgard-weltkarte .wk-bearbeitung legend { padding: 0 4px; font-size: 12px; color: #e6c46a; }
 .midgard-weltkarte .wk-figurzeile, .midgard-weltkarte .wk-wissen { margin: 6px 0; }
 .midgard-weltkarte .wk-figurkopf { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .midgard-weltkarte .wk-figurkopf select { width: auto; flex: 0 0 auto; }
@@ -1676,6 +1656,58 @@ button.midgard-in-welt { display: flex; align-items: center; justify-content: ce
 .midgard-handy .midgard-abenteurer .ma-nachschlagen > summary, .midgard-abenteurer.midgard-handy .ma-nachschlagen > summary { min-height: 44px; display: flex; align-items: center; }
 .midgard-abenteurer.midgard-handy .ma-k-konto .ma-grosswerte { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .midgard-abenteurer .ma-k-konto .ma-gross-name { hyphens: manual; overflow-wrap: break-word; }
+
+/* Detailansicht: Leseansicht wie ein Eintrag im Atlas, Eingabefelder der Spielleitung erst hinter dem Stift */
+.midgard-weltkarte .wk-detailkopf { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0 0 4px; }
+.midgard-weltkarte .wk-detail .wk-zu { width: auto; height: 26px; min-height: 0; margin: 0 0 0 -4px; padding: 0 8px; line-height: 24px; background: none; border: 1px solid transparent; border-radius: 3px; color: #e6c46a; font-size: 13px; }
+.midgard-weltkarte .wk-detail .wk-zu:hover { border-color: #6b5527; background: #2a2216; }
+.midgard-weltkarte .wk-stift { flex: 0 0 26px; width: 26px; height: 26px; min-height: 0; margin: 0; padding: 0; line-height: 24px; background: none; border: 1px solid #4a3c22; border-radius: 50%; color: #a8977a; font-size: 11px; }
+.midgard-weltkarte .wk-stift:hover { color: #ffe2a0; border-color: #8a7240; background: #2a2216; box-shadow: none; }
+.midgard-weltkarte .wk-stift.an { color: #1b1610; background: #b8913a; border-color: #e6c46a; }
+.midgard-weltkarte .wk-detail h3 { margin: 0; border: none; font: 600 20px/1.15 "Cinzel", Georgia, serif; color: #ffe2a0; letter-spacing: 0.02em; text-shadow: 0 1px 0 #000; }
+.midgard-weltkarte .wk-art { font: italic 500 16px/1.2 "Cormorant Garamond", Georgia, serif; color: #cdbb90; margin: 1px 0 6px; }
+.midgard-weltkarte .wk-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: -2px 0 6px; }
+.midgard-weltkarte .wk-tag { font-size: 11px; padding: 0 7px; border: 1px solid #6b5527; border-radius: 8px; color: #d9c79a; }
+.midgard-weltkarte .wk-beschreibung { position: relative; margin: 6px 0 2px; padding-top: 12px; white-space: pre-line; color: #eadfc4; line-height: 1.5; }
+.midgard-weltkarte .wk-beschreibung::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, #8a7240 20%, #8a7240 80%, transparent); }
+.midgard-weltkarte .wk-quelle { margin: 4px 0 2px; text-align: right; font: italic 500 13px "Cormorant Garamond", Georgia, serif; color: #a8977a; }
+.midgard-weltkarte .wk-geruecht { margin: 12px 0 6px; padding: 8px 12px 10px; border: 1px solid #4a3c22; border-left: 3px solid #8a7240; background: linear-gradient(180deg, #241d13, #1f1911); border-radius: 0 4px 4px 0; }
+.midgard-weltkarte .wk-geruecht.wahr-w { border-left-color: #4f8a3c; }
+.midgard-weltkarte .wk-geruecht.wahr-h { border-left-color: #c49a2c; }
+.midgard-weltkarte .wk-geruecht.wahr-f { border-left-color: #b0473a; }
+.midgard-weltkarte .wk-geruecht-kopf { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; font: 600 11px/1.2 "Cinzel", Georgia, serif; letter-spacing: 0.06em; text-transform: uppercase; color: #cdbb90; }
+.midgard-weltkarte .wk-geruecht p { margin: 0; font: italic 500 16px/1.35 "Cormorant Garamond", Georgia, serif; color: #eadfc4; }
+.midgard-weltkarte .wk-wahrheit { font: 11px/16px var(--schrift-text); letter-spacing: 0; text-transform: none; padding: 0 7px; border-radius: 8px; background: #3a3324; color: #e8dcc0; }
+.midgard-weltkarte .wk-wahrheit.wahr-w { background: #2f4a26; color: #d6f0c8; }
+.midgard-weltkarte .wk-wahrheit.wahr-h { background: #4d3d14; color: #f6e2a6; }
+.midgard-weltkarte .wk-wahrheit.wahr-f { background: #4f231d; color: #f4cfc8; }
+.midgard-weltkarte .wk-notiz-text { margin: 2px 0 0; padding-left: 8px; border-left: 2px solid #4a3c22; font-style: italic; color: #d9c79a; white-space: pre-line; }
+
+/* Eingabefelder (Stift): dunkel wie die Seitenleiste, Beschriftung über dem Feld */
+.midgard-weltkarte .wk-formular { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 4px; }
+.midgard-weltkarte .wk-feld { display: flex; flex-direction: column; gap: 3px; margin: 0; }
+.midgard-weltkarte .wk-feldname { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; font: 600 11px/1.2 "Cinzel", Georgia, serif; letter-spacing: 0.05em; color: #e6c46a; }
+.midgard-weltkarte .wk-feldname small { font: italic 11px var(--schrift-text); letter-spacing: 0; color: #8f8166; }
+.midgard-weltkarte .wk-formzeile { align-items: center; justify-content: space-between; }
+.midgard-weltkarte .wk-seite .wk-formzeile select { width: auto; min-width: 9em; flex: 0 0 auto; }
+.midgard-weltkarte .wk-seite textarea, .midgard-weltkarte .wk-seite input[type="text"], .midgard-weltkarte .wk-seite input[type="search"], .midgard-weltkarte .wk-seite input[type="number"], .midgard-weltkarte .wk-seite select { width: 100%; background: #120f0a; color: #f2e8d0; border: 1px solid #4a3c22; border-radius: 3px; font: 13px/1.4 var(--schrift-text); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5); }
+.midgard-weltkarte .wk-seite textarea { resize: vertical; min-height: 2.6em; padding: 6px 8px; }
+.midgard-weltkarte .wk-seite textarea:focus, .midgard-weltkarte .wk-seite input:focus, .midgard-weltkarte .wk-seite select:focus { outline: none; border-color: #b8913a; box-shadow: 0 0 0 1px #b8913a55; }
+.midgard-weltkarte .wk-seite ::placeholder { color: #6f6350; }
+.midgard-weltkarte .wk-seite select option { background: #1b1610; color: #f2e8d0; }
+.midgard-weltkarte .wk-seite textarea.wk-geruecht-text { font: italic 500 15px/1.35 "Cormorant Garamond", Georgia, serif; border-left-width: 3px; }
+.midgard-weltkarte .wk-seite textarea.wk-geruecht-text.wahr-w { border-left-color: #4f8a3c; }
+.midgard-weltkarte .wk-seite textarea.wk-geruecht-text.wahr-h { border-left-color: #c49a2c; }
+.midgard-weltkarte .wk-seite textarea.wk-geruecht-text.wahr-f { border-left-color: #b0473a; }
+.midgard-weltkarte .wk-bildhinweis { font-size: 11px; color: #8f8166; word-break: break-all; }
+.midgard-weltkarte .wk-bearbeitung { border: 1px solid #4a3c22; border-radius: 3px; padding: 0 8px; }
+.midgard-weltkarte .wk-bearbeitung[open] { padding-bottom: 8px; }
+.midgard-weltkarte .wk-bearbeitung > summary { cursor: pointer; padding: 5px 0; font: 600 11px/1.2 "Cinzel", Georgia, serif; letter-spacing: 0.05em; color: #cdbb90; }
+.midgard-weltkarte .wk-bearbeitung > .wk-feld, .midgard-weltkarte .wk-bearbeitung > .wk-reihe { margin: 6px 0; }
+.midgard-weltkarte .wk-hinweis-freischalten { margin: 0; padding: 6px 8px; border: 1px dashed #6b5527; border-radius: 3px; font-size: 12px; color: #d9c79a; }
+.midgard-weltkarte .wk-bearbeitung .wk-reihe > .wk-feld { flex: 1; }
+.midgard-weltkarte .wk-detail .wk-fertig { align-self: flex-end; margin-top: 10px; background: #2a2216; color: #ffe2a0; border: 1px solid #8a7240; border-radius: 3px; }
+.midgard-weltkarte .wk-detail .wk-fertig:hover { background: #b8913a; color: #1b1610; border-color: #e6c46a; box-shadow: none; }
 
 /* Midgard-CMT, Handy-Fassung am Spieltisch: Stil der 16-Bit-Rollenspiele (frühe 90er).
    Blaue Menüfenster mit doppeltem Rahmen, Pixelschrift, gelber Auswahlcursor. Wird nur von tisch.html
