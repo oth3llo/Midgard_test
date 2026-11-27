@@ -1732,7 +1732,7 @@
     { id: "fert", titel: "Fertigkeiten" },
     { id: "waffen", titel: "Waffen" },
     { id: "zauber", titel: "Zauber", nur: () => !!(L.zauberKosten[S.klasse] && Object.keys(L.zauberKosten[S.klasse]).length) },
-    { id: "baum", titel: "Lernbaum" },
+    { id: "baum", titel: "Lernbaum", nur: () => !FOUNDRY }, // in Foundry: Reiter „Entwicklung“ im Bogen
     { id: "protokoll", titel: "Protokoll" },
   ];
   function gradAus(es) {
@@ -1920,38 +1920,69 @@
 
   // ---------------------------------------------------------------- Steigern und Lernen
   function kostenZeile(label, wert, klasse_) { return h("tr", { class: klasse_ || "" }, h("th", {}, label), h("td", {}, wert)); }
-  function steigernDialog(g) {
-    const sp = S.spiel, ziel = g.wert + 1, te = teFuer(g.gruppe, ziel);
-    if (te === null) return;
+  // Kosten einer Steigerung von g.wert bis ziel, je Stufe: Praxispunkte decken zuerst die unteren Stufen;
+  // durch Gold ersetzte EP (höchstens die Hälfte, 10 GS je EP) werden von oben nach unten verteilt, damit
+  // eine Korrektur auf eine Zwischenstufe die zuletzt bezahlten Stufen samt ihrem Gold erstattet.
+  function steigerKosten(g, ziel, pp, goldEP, belohnung) {
+    const stufen = [];
+    let ppRest = pp, te = 0;
+    for (let z = g.wert + 1; z <= ziel; z++) {
+      const t = teFuer(g.gruppe, z);
+      if (t === null) break;
+      const p = Math.min(ppRest, t), rest = t - p;
+      ppRest -= p; te += t;
+      stufen.push({ z, te: t, pp: p, ep: belohnung ? Math.ceil(rest * g.ep / 2) : rest * g.ep, gold: belohnung ? 0 : rest * 20 });
+    }
+    const epVoll = stufen.reduce((n, x) => n + x.ep, 0);
+    const maxGold = belohnung ? 0 : fl(epVoll / 2);
+    let g10 = Math.min(goldEP, maxGold);
+    const ersetzt = g10;
+    for (let i = stufen.length - 1; i >= 0 && g10 > 0; i--) {
+      const r = Math.min(g10, stufen[i].ep);
+      stufen[i].ep -= r; stufen[i].gold += r * 10; g10 -= r;
+    }
+    return { stufen, te, goldEP: ersetzt, maxGold, ep: stufen.reduce((n, x) => n + x.ep, 0), gold: stufen.reduce((n, x) => n + x.gold, 0) };
+  }
+  function steigernDialog(g, vorgabe = {}) {
+    const sp = S.spiel;
+    if (teFuer(g.gruppe, g.wert + 1) === null) return;
+    const ziele = [];
+    for (let z = g.wert + 1; teFuer(g.gruppe, z) !== null; z++) ziele.push(z);
     const ppVerf = sp.pp[g.key] || 0;
-    let pp = Math.min(ppVerf, te), goldEP = 0, belohnung = false;
-    fenster(`${g.titel}: +${g.wert} auf +${ziel}`, (zu, neu) => {
-      const rest = te - pp;
-      const epVoll = belohnung ? Math.ceil(rest * g.ep / 2) : rest * g.ep;
-      const maxGold = belohnung ? 0 : fl(epVoll / 2);
-      goldEP = Math.min(goldEP, maxGold);
-      const ep = epVoll - goldEP, gold = belohnung ? 0 : rest * 20 + goldEP * 10;
+    let ziel = ziele.includes(vorgabe.ziel) ? vorgabe.ziel : ziele[0];
+    const teBis = (z) => steigerKosten(g, z, 0, 0, false).te;
+    let pp = Math.min(ppVerf, teBis(ziel)), goldEP = vorgabe.goldEP || 0, belohnung = false;
+    // beim Wechsel des Ziels: so viel Gold statt EP eintragen, wie mindestens nötig ist
+    const goldNoetig = () => { const k = steigerKosten(g, ziel, pp, 0, belohnung); return Math.min(k.maxGold, Math.max(0, k.ep - sp.ep)); };
+    fenster(`${g.titel}: von +${g.wert} steigern`, (zu, neu) => {
+      const k = steigerKosten(g, ziel, pp, goldEP, belohnung);
+      goldEP = k.goldEP;
+      const { ep, gold, te } = k;
       const fehlt = [ep > sp.ep ? `${fmt(ep - sp.ep)} EP` : null, gold > sp.gold ? `${fmt(gold - sp.gold)} GS` : null].filter(Boolean);
       return [
+        h("div", { class: "raster2" },
+          feld("Steigern auf", h("select", { "aria-label": "Zielstufe", onchange: (ev) => { ziel = +ev.target.value; pp = Math.min(ppVerf, teBis(ziel)); goldEP = goldNoetig(); neu(); } },
+            ziele.map((z) => h("option", { value: z, selected: z === ziel }, `+${z} (${teBis(z)} TE)`))))),
         h("table", { class: "kosten" }, h("tbody", {},
           kostenZeile("Trainingseinheiten", `${te} TE (${g.ep} EP je TE, 20 GS je TE)`),
           pp ? kostenZeile("davon mit Praxispunkten", `${pp} TE`) : null,
+          goldEP ? kostenZeile("durch Gold ersetzt", `${fmt(goldEP)} EP (${fmt(goldEP * 10)} GS)`) : null,
           kostenZeile("Kosten", h("strong", {}, `${fmt(ep)} EP, ${fmt(gold)} GS`)),
           kostenZeile("Konto danach", `${fmt(sp.ep - ep)} EP, ${fmt(sp.gold - gold)} GS`, fehlt.length ? "fehlt" : ""))),
         h("div", { class: "raster2" },
           feld(`Praxispunkte einsetzen (vorhanden: ${ppVerf})`, h("input", { type: "number", class: "zahl", min: 0, max: Math.min(ppVerf, te), value: pp, disabled: !ppVerf,
             onchange: (ev) => { pp = Math.max(0, Math.min(ppVerf, te, zahl(ev.target.value) || 0)); neu(); } })),
-          feld(`EP durch Gold ersetzen (höchstens ${fmt(maxGold)} EP, 10 GS je EP)`, h("input", { type: "number", class: "zahl breit", min: 0, max: maxGold, value: goldEP, disabled: !maxGold,
-            onchange: (ev) => { goldEP = Math.max(0, Math.min(maxGold, zahl(ev.target.value) || 0)); neu(); } }))),
-        h("label", { class: "schalter" }, h("input", { type: "checkbox", checked: belohnung, onchange: (ev) => { belohnung = ev.target.checked; neu(); } }),
+          feld(`EP durch Gold ersetzen (höchstens ${fmt(k.maxGold)} EP, 10 GS je EP)`, h("input", { type: "number", class: "zahl breit", min: 0, max: k.maxGold, value: goldEP, disabled: !k.maxGold,
+            onchange: (ev) => { goldEP = Math.max(0, Math.min(k.maxGold, zahl(ev.target.value) || 0)); neu(); } }))),
+        h("label", { class: "schalter" }, h("input", { type: "checkbox", checked: belohnung, onchange: (ev) => { belohnung = ev.target.checked; if (belohnung) goldEP = 0; neu(); } }),
           " Kostenlose Ausbildung als Belohnung: halbe EP, kein Gold (Kodex S. 154)"),
         fehlt.length ? h("p", { class: "fehlt" }, `Es fehlen ${fehlt.join(" und ")}.`) : null,
         h("div", { class: "knopfreihe" },
           h("button", { type: "button", class: "haupt", disabled: fehlt.length > 0, onclick: () => {
             zu();
-            buchen(`${g.titel} auf +${ziel}: ${te} TE` + (pp ? ` (${pp} PP)` : "") + ` – ${fmt(ep)} EP, ${fmt(gold)} GS` + (belohnung ? " (Belohnung)" : ""), (s) => {
+            buchen(`${g.titel} auf +${ziel}: ${te} TE` + (pp ? ` (${pp} PP)` : "") + ` – ${fmt(ep)} EP, ${fmt(gold)} GS` + (goldEP ? ` (${fmt(goldEP)} EP durch Gold)` : "") + (belohnung ? " (Belohnung)" : ""), (s) => {
               s.werte[g.key] = ziel; if (pp) s.pp[g.key] = ppVerf - pp; s.ep -= ep; s.gold -= gold;
-              zahlungMerken(s, g.key, ziel, { ep, gold, pp });
+              for (const x of k.stufen) zahlungMerken(s, g.key, x.z, { ep: x.ep, gold: x.gold, pp: x.pp });
             });
           } }, "Steigern"),
           h("button", { type: "button", onclick: zu }, "Abbrechen"))];
@@ -2016,9 +2047,9 @@
           h("button", { type: "button", onclick: zu }, "Schließen"))];
     }, { breit: true });
   }
-  function zauberDialog(startGruppe, startName) {
+  function zauberDialog(startGruppe, startName, vorgabe = {}) {
     const sp = S.spiel, gruppen = Object.keys(L.zauberKosten[S.klasse] || {});
-    let name = startName || "", gruppe = startGruppe || gruppen[0], stufe = 1, art = "lehrer", pp = 0, goldEP = 0, gescheitert = false, belohnung = false;
+    let name = startName || "", gruppe = startGruppe || gruppen[0], stufe = 1, art = "lehrer", pp = 0, goldEP = vorgabe.goldEP || 0, gescheitert = false, belohnung = false;
     let frei = false; // Zauber, der nicht in der Arkanum-Liste steht
     fenster("Zauber lernen", (zu, neu) => {
       const liste = ZAUBER.filter((z) => z.gruppe === gruppe).sort((a, b) => a.stufe - b.stufe || a.name.localeCompare(b.name, "de"));
@@ -2149,7 +2180,7 @@
   }
   const lernKachel = (titel, unter, onclick) => h("button", { type: "button", class: "option lernbar", onclick }, h("span", {}, titel), h("small", {}, unter));
   function lernbarHinweis() {
-    return info("Nur, was mit den verfügbaren EP und GS jetzt lernbar ist. Ein Klick fragt nach und bucht, Praxispunkte werden zuerst verrechnet. Gold statt EP, Belohnungen und Spruchrollen: unter „Alle mit Kosten“.");
+    return info("Nur, was mit den verfügbaren EP und GS jetzt lernbar ist, auch mit Gold statt EP (beim Steigern und bei Zaubern bis zur Hälfte der EP, 10 GS je EP). Ein Klick fragt nach und bucht, Praxispunkte werden zuerst verrechnet. Belohnungen und Spruchrollen: unter „Alle mit Kosten“.");
   }
   function volleLerntabelle() {
     return h("details", { class: "volle-lerntabelle" }, h("summary", {}, "Vollständige Lerntabelle (alle Kosten, zum Nachschlagen und Drucken)"), lerntabelle(klasse()));
@@ -2164,7 +2195,8 @@
         karte(waffen ? "Gelernte Waffenfertigkeiten steigern" : "Gelernte Fertigkeiten steigern", steigern.length
           ? h("div", { class: "lernliste" }, steigern.map(({ g, stufen }) => h("div", { class: "lernzeile" },
             h("strong", {}, `${g.titel} ${vz(g.wert)}`),
-            h("div", { class: "optionen" }, stufen.map((k) => lernKachel(`+${k.ziel}`, kostenText(k) + (k.pp ? `, ${k.pp} PP` : ""), () => lernlisteSteigern(g, k)))))))
+            h("div", { class: "optionen" }, stufen.map((k) => k.goldEP ? lernKachel(`+${k.ziel} mit Gold`, mitGoldText(k, k.goldEP), () => steigernDialog(g, { ziel: k.ziel, goldEP: k.goldEP }))
+              : lernKachel(`+${k.ziel}`, kostenText(k) + (k.pp ? `, ${k.pp} PP` : ""), () => lernlisteSteigern(g, k)))))))
           : info(waffen ? "Für keine gelernte Waffenfertigkeit reichen EP und Gold für die nächste Stufe." : "Für keine gelernte Fertigkeit reichen EP und Gold für die nächste Stufe.")),
         karte(waffen ? "Neue Waffenfertigkeit lernen" : "Neue Fertigkeit lernen", neu.length
           ? h("div", { class: "optionen" }, neu.map((x) => waffen ? lernKachel(`${x.e.lname} +${x.start}`, kostenText(x), () => lernlisteNeu(x))
@@ -2190,7 +2222,8 @@
       const gruppen = [...new Set(d.zauber.map((k) => k.gruppe))];
       return [kontoKacheln(), lernFilterSchalter(), lernbarHinweis(),
         karte("Zauber lernen", gruppen.length ? gruppen.map((g) => h("div", { class: "waffenstufe" }, h("h4", {}, g),
-          h("div", { class: "optionen" }, d.zauber.filter((k) => k.gruppe === g).map((k) => lernKachel(k.z.name, `Stufe ${k.z.stufe} · ${kostenText(k)}${k.pp ? `, ${k.pp} PP` : ""}`, () => lernlisteZauber(k))))))
+          h("div", { class: "optionen" }, d.zauber.filter((k) => k.gruppe === g).map((k) => k.goldEP ? lernKachel(`${k.z.name} (mit Gold)`, `Stufe ${k.z.stufe} · ${mitGoldText(k, k.goldEP)}`, () => zauberDialog(k.gruppe, k.z.name, { goldEP: k.goldEP }))
+            : lernKachel(k.z.name, `Stufe ${k.z.stufe} · ${kostenText(k)}${k.pp ? `, ${k.pp} PP` : ""}`, () => lernlisteZauber(k))))))
           : info("Für keinen weiteren Zauber reichen EP und Gold."))];
     }
     return [
@@ -2265,7 +2298,13 @@
         te += t;
         const pp = Math.min(ppVerf, te), rest = te - pp;
         const k = { ziel: g.wert + i, te, pp, ep: rest * g.ep, gold: rest * 20 };
-        if (!leistbar(k)) break;   // jede weitere Stufe kostet mehr
+        if (!leistbar(k)) {
+          // nur mit Gold statt EP bezahlbar: über das Steigerungsfenster mit Ziel und eingetragenem Gold
+          const gEP = goldStattEP(k);
+          if (!gEP) break;   // jede weitere Stufe kostet mehr
+          stufen.push(Object.assign({}, k, { goldEP: gEP }));
+          continue;
+        }
         stufen.push(k);
       }
       return { g, stufen };
@@ -2288,13 +2327,23 @@
         if (kenntZauber(z.name, gruppe) || (elf && z.urspr === "schwarzmagisch")) continue;
         const le = STUFEN_LE[z.stufe - 1], pp = Math.min(ppVerf, le), rest = le - pp;
         const k = { z, gruppe, le, pp, ep: rest * (basis + elfZuschlag()), gold: rest * 100 };
-        if (leistbar(k)) zauber.push(k);
+        const gEP = goldStattEP(k);
+        if (gEP !== null) zauber.push(gEP ? Object.assign(k, { goldEP: gEP }) : k);
       }
     }
     zauber.sort((a, b) => a.gruppe.localeCompare(b.gruppe, "de") || a.z.stufe - b.z.stufe || a.z.name.localeCompare(b.z.name, "de"));
     return { steigern, fert: neu(false), waffen: neu(true), zauber };
   }
   const lernAnzeige = (n) => String(n).replace(/:Sprache$/, " (Sprache)");
+  // Gold statt EP (Kodex S. 154): beim Steigern und bei Zaubern bis zur Hälfte der EP, je EP 10 GS; nicht beim
+  // Lernen neuer Fertigkeiten. Liefert die nötigen Gold-EP (0 = ohne Gold bezahlbar) oder null (auch so nicht).
+  function goldStattEP(k) {
+    const sp = S.spiel;
+    if (k.ep <= sp.ep && k.gold <= sp.gold) return 0;
+    const g = Math.max(0, k.ep - sp.ep);
+    return g <= fl(k.ep / 2) && k.gold + g * 10 <= sp.gold ? g : null;
+  }
+  const mitGoldText = (k, g) => `${fmt(k.ep - g)} EP, ${fmt(k.gold + g * 10)} GS (${fmt(g)} EP durch Gold ersetzt)`;
   const kostenText = (k) => [k.le ? `${k.le} LE` : null, k.te ? `${k.te} TE` : null, `${fmt(k.ep)} EP`, `${fmt(k.gold)} GS`].filter(Boolean).join(", ");
   function lernlisteSteigern(g, k) {
     const ppText = k.pp ? ` (davon ${k.pp} TE mit Praxispunkten)` : "";
@@ -2362,7 +2411,9 @@
   const BAUM_KOSTEN = { 10: "günstig", 20: "normal", 30: "teuer", 40: "sehr teuer" };
   const BAUM_GRUPPIERUNG = [["bereich", "nach Bereich"], ["kosten", "nach Lernkosten"], ["leit", "nach Leiteigenschaft"]];
   // Ansicht des Baums: gehört zur Sitzung, nicht zum Charakter (auch Beobachter können umschalten)
-  const baumAnsicht = { gruppierung: "bereich", nurErreichbar: false, korrektur: false };
+  // modus „lernbar“: nur Zweige mit bezahlbaren Stufen, je Zweig der aktuelle Wert und die bezahlbaren Knoten;
+  // „alles“: die ganze Lerntabelle zum Planen (und für Korrekturen der Spielleitung)
+  const baumAnsicht = { gruppierung: "bereich", modus: "lernbar", korrektur: false };
   // Lernbäume außerhalb der Wurzel (Reiter im Foundry-Bogen) zeichnen sich nach jeder Buchung sofort mit neu
   const baumBeobachter = new Set();
   function baumBereich(lname) {
@@ -2383,7 +2434,7 @@
       const zurueck = (w) => (w < g.wert && w >= g.basis ? { aktion: () => baumZuruecknehmen(g, w), titel: `Spielleitung: auf ${vz(w)} zurücksetzen, ${erstattungText(erstattung(g, w))} zurück` } : null);
       for (let w = Math.min(t.start, g.wert); w <= g.wert; w++) knoten.push({ wert: w, art: "gelernt", titel: `${vz(w)} gelernt`, korrektur: zurueck(w) });
       const ppVerf = sp.pp[g.key] || 0;
-      let te = 0, erreichbar = true, erreichbarAnzahl = 0;
+      let te = 0, erreichbar = true, erreichbarAnzahl = 0, goldKette = true;
       for (let ziel = g.wert + 1; ziel <= max; ziel++) {
         const tStufe = teFuer(g.gruppe, ziel);
         if (tStufe === null) break;
@@ -2392,8 +2443,17 @@
         const k = { ziel, te, pp, ep: rest * g.ep, gold: rest * 20 };
         erreichbar = erreichbar && leistbar(k);
         const erste = ziel === g.wert + 1;
+        // nur mit Gold statt EP bezahlbar (auch mehrere Stufen zusammen): eigener Knoten, öffnet das Fenster
+        // mit dieser Zielstufe und dem nötigen Gold
+        const gEP = !erreichbar && goldKette ? goldStattEP(k) : null;
+        if (gEP) {
+          erreichbarAnzahl++;
+          knoten.push({ wert: ziel, art: "gold", titel: `${vz(ziel)}: ${tStufe} TE für diese Stufe; ${erste ? "" : "bis hierhin zusammen "}mit Gold statt EP ${mitGoldText(k, gEP)}`, aktion: () => steigernDialog(g, { ziel, goldEP: gEP }) });
+          continue;
+        }
+        if (!erreichbar) goldKette = false;
         const titel = `${vz(ziel)}: ${tStufe} TE für diese Stufe; ${erste ? "" : "bis hierhin zusammen "}${kosten(k)}`
-          + (erreichbar ? "" : erste ? " (EP oder Gold reichen nicht; im Fenster lässt sich Gold statt EP einsetzen)" : " (noch nicht bezahlbar)");
+          + (erreichbar ? "" : erste ? " (EP und Gold reichen auch mit Gold statt EP nicht)" : " (noch nicht bezahlbar)");
         if (erreichbar) erreichbarAnzahl++;
         knoten.push({ wert: ziel, art: erreichbar ? "lernbar" : "teuer", titel,
           aktion: erreichbar ? () => lernlisteSteigern(g, k) : erste ? () => steigernDialog(g) : null });
@@ -2443,12 +2503,13 @@
         const le = STUFEN_LE[st - 1], pp = Math.min(ppVerf, le), rest = le - pp;
         const k = { le, pp, ep: rest * (basis + elfZuschlag()), gold: rest * 100 };
         const ok = frei > 0 && k.ep <= sp.ep && k.gold <= sp.gold;
+        const gEP = frei > 0 && !ok ? goldStattEP(k) : null;
         bekanntGesamt += bekannt;
-        if (ok) erreichbar += frei;
-        const art = ok ? "lernbar" : !frei ? (bekannt ? "gelernt" : "gesperrt") : bekannt ? "teilweise" : "teuer";
+        if (ok || gEP) erreichbar += frei;
+        const art = ok ? "lernbar" : gEP ? "gold" : !frei ? (bekannt ? "gelernt" : "gesperrt") : bekannt ? "teilweise" : "teuer";
         return { wert: st, art, zahl: `${bekannt}/${hier.length}`,
-          titel: `Spruchstufe ${st}: ${bekannt} von ${hier.length} bekannt; je Zauber ${kostenText(k)}${pp ? ` (davon ${pp} LE mit Praxispunkten)` : ""}` + (frei && !ok ? " (EP oder Gold reichen nicht)" : ""),
-          aktion: frei ? () => zauberDialog(gruppe, hier.find((z) => !kenntZauber(z.name, gruppe))?.name) : null };
+          titel: `Spruchstufe ${st}: ${bekannt} von ${hier.length} bekannt; je Zauber ${gEP ? `mit Gold statt EP ${mitGoldText(k, gEP)}` : kostenText(k)}${pp ? ` (davon ${pp} LE mit Praxispunkten)` : ""}` + (frei && !ok && !gEP ? " (EP oder Gold reichen nicht)" : ""),
+          aktion: frei ? () => zauberDialog(gruppe, hier.find((z) => !kenntZauber(z.name, gruppe))?.name, { goldEP: gEP || 0 }) : null };
       });
       zweige.push({ id: "Z:" + gruppe, titel: gruppe, zauber: true, ep: basis + elfZuschlag(), gelernt: bekanntGesamt > 0, erreichbar, knoten });
     }
@@ -2535,10 +2596,14 @@
     const gesperrt = sperren().lernen;
     const zeichne = () => {
       const aeste = baumAeste(), sp = S.spiel;
-      const sichtbar = (z) => !baumAnsicht.nurErreichbar || z.gelernt || z.erreichbar > 0;
+      const korrektur = baumAnsicht.korrektur && darfVergeben();
+      const kompakt = baumAnsicht.modus === "lernbar" && !korrektur;
+      const sichtbar = (z) => !kompakt || (z.erreichbar > 0 && !z.gesperrt);
+      // kompakt: vom gelernten Teil nur der aktuelle Wert, dazu alle jetzt bezahlbaren Knoten
+      // (Zaubergruppen: nur die Spruchstufen, in denen jetzt ein Zauber bezahlbar ist)
+      const knotenSichtbar = (z) => (k, i) => !kompakt || k.art === "lernbar" || k.art === "gold" || (!z.zauber && k.art === "gelernt" && z.knoten[i + 1]?.art !== "gelernt");
       const zaehle = (liste, f) => liste.reduce((n, z) => n + (f(z) ? 1 : 0), 0);
       const alle = aeste.flatMap((a) => a.zweige);
-      const korrektur = baumAnsicht.korrektur && darfVergeben();
       const knotenEl = (k, z) => {
         const kind = [h("span", { class: "lb-wert" }, k.neu ? vz(k.wert) : k.wert), k.zahl ? h("small", { class: "lb-zahl" }, k.zahl) : null];
         const klasse_ = `lb-knoten ${k.art}${k.neu ? " neu" : ""}`;
@@ -2556,14 +2621,16 @@
             z.le ? h("span", { title: "Leiteigenschaft" }, z.le) : null,
             z.gruppe ? h("span", { title: "Steigerungsgruppe" }, `Gr. ${z.gruppe}`) : null,
             h("span", { class: `lb-kosten k${z.ep}`, title: z.zauber ? "EP je LE für diese Zaubergruppe" : `EP je TE für ${kl.name}: ${BAUM_KOSTEN[z.ep] || ""}` }, `${z.ep} EP/${z.zauber ? "LE" : "TE"}`))),
-        h("ol", { class: "lb-kette" }, z.knoten.map((k, i) => h("li", { class: i && ["gelernt", "teilweise"].includes(z.knoten[i - 1].art) && ["gelernt", "teilweise", "lernbar"].includes(k.art) ? "verbunden" : null }, knotenEl(k, z)))));
+        h("ol", { class: "lb-kette" }, z.knoten.map((k, i) => knotenSichtbar(z)(k, i)
+          ? h("li", { class: i && ["gelernt", "teilweise"].includes(z.knoten[i - 1].art) && ["gelernt", "teilweise", "lernbar", "gold"].includes(k.art) ? "verbunden" : null }, knotenEl(k, z)) : null)));
       const astEl = (a, i) => {
         const zw = a.zweige.filter(sichtbar);
+        if (kompakt && !zw.length) return null;
         return h("section", { class: `lb-ast f${(i % 7) + 1}`, "data-ast": a.id },
           h("header", { class: "lb-ast-kopf" },
             h("span", { class: "lb-ast-knoten", "aria-hidden": "true" }, a.titel.slice(0, 1)),
             h("h3", {}, a.titel, a.unter ? h("small", {}, ` ${a.unter}`) : null),
-            h("span", { class: "lb-ast-stand" }, `${zaehle(a.zweige, (z) => z.gelernt)} gelernt · ${zaehle(a.zweige, (z) => z.erreichbar > 0)} jetzt lernbar`)),
+            h("span", { class: "lb-ast-stand" }, kompakt ? `${zw.length} jetzt lernbar` : `${zaehle(a.zweige, (z) => z.gelernt)} gelernt · ${zaehle(a.zweige, (z) => z.erreichbar > 0)} jetzt lernbar`)),
           zw.length ? h("ol", { class: "lb-zweige" }, zw.map(zweigEl)) : info("Hier ist gerade nichts gelernt oder bezahlbar."));
       };
       box.replaceChildren(
@@ -2573,44 +2640,41 @@
             h("div", {}, h("strong", {}, `${kl.name}${S.rasse !== "Mensch" ? ` (${S.rasse})` : ""}`),
               h("small", {}, `Grad ${aktGrad()} · ${fmt(sp.ep)} EP · ${fmt(sp.gold)} GS · ${zaehle(alle, (z) => z.gelernt)} gelernt, ${zaehle(alle, (z) => z.erreichbar > 0)} jetzt lernbar`))),
           h("div", { class: "lb-steuerung" },
-            h("div", { class: "lb-umschalter", role: "group", "aria-label": "Äste ordnen" }, BAUM_GRUPPIERUNG.map(([id, text]) =>
+            h("div", { class: "lb-umschalter lb-modus", role: "group", "aria-label": "Umfang" }, [["lernbar", "Jetzt lernbar"], ["alles", "Ganzer Baum (planen)"]].map(([id, text]) =>
+              h("button", { type: "button", "data-modus": id, class: (kompakt ? "lernbar" : "alles") === id ? "aktiv" : null, "aria-pressed": String((kompakt ? "lernbar" : "alles") === id), onclick: () => { baumAnsicht.modus = id; if (id === "lernbar") baumAnsicht.korrektur = false; zeichne(); } }, text))),
+            kompakt ? null : h("div", { class: "lb-umschalter", role: "group", "aria-label": "Äste ordnen" }, BAUM_GRUPPIERUNG.map(([id, text]) =>
               h("button", { type: "button", class: baumAnsicht.gruppierung === id ? "aktiv" : null, "aria-pressed": String(baumAnsicht.gruppierung === id), onclick: () => { baumAnsicht.gruppierung = id; zeichne(); } }, text))),
-            h("label", { class: "schalter" }, h("input", { type: "checkbox", checked: baumAnsicht.nurErreichbar, onchange: (ev) => { baumAnsicht.nurErreichbar = ev.target.checked; zeichne(); } }), " nur Gelerntes und jetzt Lernbares"),
             darfVergeben() ? h("label", { class: "schalter lb-korrektur-schalter" }, h("input", { type: "checkbox", checked: baumAnsicht.korrektur, onchange: (ev) => { baumAnsicht.korrektur = ev.target.checked; zeichne(); } }), " Korrigieren (Spielleitung)") : null)),
         korrektur ? h("div", { class: "sperre-hinweis lb-korrektur-hinweis" }, "Korrekturmodus: Ein Klick auf eine gelernte Stufe (gestrichelt) setzt die Fertigkeit dorthin zurück und erstattet EP, Gold und Praxispunkte, die dafür bezahlt wurden. „zurücknehmen“ entfernt eine im Spiel gelernte Fertigkeit samt Lernkosten. Steigern und Lernen kosten auch hier EP und Gold; gesperrte Fertigkeiten lassen sich bezahlt trotzdem lernen. Werte aus der Erschaffung ändern sich nur in deren Schritten. Alles steht im Protokoll und lässt sich rückgängig machen.") : "",
         h("ul", { class: "lb-legende", "aria-label": "Legende" },
-          [["gelernt", "gelernt"], ["lernbar", "jetzt lernbar (Klick bucht nach Rückfrage)"], ["teuer", "EP oder Gold reichen noch nicht"], ["spaeter", "erst nach dem Lernen"], ["gesperrt", "nicht lernbar"]]
+          (kompakt ? [["gelernt", "aktueller Wert"], ["lernbar", "jetzt lernbar (Klick bucht nach Rückfrage, Praxispunkte zuerst)"], ["gold", "mit Gold statt EP lernbar (Klick öffnet das Fenster)"]]
+            : [["gelernt", "gelernt"], ["lernbar", "jetzt lernbar (Klick bucht nach Rückfrage)"], ["gold", "mit Gold statt EP lernbar"], ["teuer", "EP oder Gold reichen noch nicht"], ["spaeter", "erst nach dem Lernen"], ["gesperrt", "nicht lernbar"]])
             .map(([art, text]) => h("li", {}, h("span", { class: `lb-knoten ${art}`, "aria-hidden": "true" }), text)),
-          h("li", {}, h("span", { class: "lb-knoten teuer neu", "aria-hidden": "true" }), "Neu lernen (Startwert)")),
+          h("li", {}, h("span", { class: `lb-knoten ${kompakt ? "lernbar" : "teuer"} neu`, "aria-hidden": "true" }), "Neu lernen (Startwert)")),
         gesperrt ? h("div", { class: "sperre-hinweis warnung" }, gesperrt) : "",
-        h("div", { class: "lb-aeste" }, aeste.map(astEl)));
+        h("div", { class: "lb-aeste" }, aeste.map(astEl).filter(Boolean)),
+        kompakt ? baumAusgeblendet(alle, sp, () => { baumAnsicht.modus = "alles"; zeichne(); }) : "");
     };
     zeichne();
     if (extern) { const beobachter = () => (box.isConnected ? zeichne() : baumBeobachter.delete(beobachter)); baumBeobachter.add(beobachter); }
     return box;
   }
+  // Fußzeile der kompakten Ansicht: was fehlt und warum, mit Sprung in den ganzen Baum
+  function baumAusgeblendet(alle, sp, ganz) {
+    const lernbar = alle.filter((z) => z.erreichbar > 0 && !z.gesperrt).length;
+    const gelerntOhne = alle.filter((z) => z.gelernt && !z.erreichbar).length;
+    const teuer = alle.filter((z) => !z.gelernt && !z.gesperrt && !z.erreichbar).length;
+    const gesperrt = alle.filter((z) => z.gesperrt).length;
+    const teile = [gelerntOhne ? `${gelerntOhne} gelernte ohne bezahlbare nächste Stufe` : null, teuer ? `${teuer} neue, für die EP oder Gold noch nicht reichen` : null, gesperrt ? `${gesperrt} für diesen Charakter gesperrte` : null].filter(Boolean);
+    return h("div", { class: "lb-ausgeblendet" },
+      lernbar ? null : h("p", {}, h("strong", {}, `Mit ${fmt(sp.ep)} EP und ${fmt(sp.gold)} GS ist gerade nichts lernbar.`)),
+      teile.length ? h("p", {}, `Ausgeblendet: ${teile.join(", ")}. Gold statt EP ist schon eingerechnet; Belohnungen und Spruchrollen gehen über den ersten zu teuren Knoten im ganzen Baum.`) : null,
+      h("button", { type: "button", class: "klein-knopf", onclick: ganz }, "Ganzen Baum zeigen"));
+  }
   function ansichtBaum() {
     return [kontoKacheln(),
-      info("Die Lerntabelle als Baum: Jeder Ast ist ein Bereich, jeder Zweig eine Fertigkeit mit allen Stufen bis zum Höchstwert. Leuchtende Knoten sind mit den vorhandenen EP und dem Gold jetzt lernbar; ein Klick fragt nach und bucht. Der nächste, noch zu teure Knoten öffnet das ausführliche Fenster (Gold statt EP, Belohnung)."),
+      info("Die Lerntabelle als Baum. „Jetzt lernbar“ zeigt nur Zweige mit bezahlbaren Stufen, „Ganzer Baum“ alle Stufen bis zum Höchstwert. Ein Klick auf einen leuchtenden Knoten fragt nach und bucht."),
       lernbaum()];
-  }
-  /**
-   * Lernbares für den Charakterbogen (Reiter „Entwicklung“): je Fertigkeit die nächste bezahlbare Stufe,
-   * neue Fertigkeiten, Waffenfertigkeiten und Zauber, jeweils mit derselben Rückfrage und Buchung wie in
-   * der Lernliste. Null, solange kein Typ gewählt ist; mit Text, solange das Lernen gesperrt ist.
-   */
-  function lernbarFuerBogen() {
-    if (!klasse()) return null;
-    const gesperrt = sperren().lernen;
-    if (gesperrt) return { gesperrt, ep: S.spiel.ep, gold: S.spiel.gold, gruppen: [] };
-    const d = lernlisteDaten();
-    const pp = (k) => (k.pp ? `, ${k.pp} PP` : "");
-    return { ep: S.spiel.ep, gold: S.spiel.gold, gruppen: [
-      { titel: "Steigern", eintraege: d.steigern.map(({ g, stufen }) => ({ titel: `${g.titel} ${vz(g.wert)} → +${stufen[0].ziel}`, kosten: kostenText(stufen[0]) + pp(stufen[0]), weitere: stufen.length - 1, aktion: () => lernlisteSteigern(g, stufen[0]) })) },
-      { titel: "Neue Fertigkeiten", eintraege: d.fert.map((x) => ({ titel: `${lernAnzeige(x.e.lname)} +${x.start}`, kosten: kostenText(x), aktion: () => lernlisteNeu(x) })) },
-      { titel: "Neue Waffenfertigkeiten", eintraege: d.waffen.map((x) => ({ titel: `${x.e.lname} +${x.start}`, kosten: kostenText(x), aktion: () => lernlisteNeu(x) })) },
-      { titel: "Zauber", eintraege: d.zauber.map((k) => ({ titel: `${k.z.name} (${k.gruppe}, Stufe ${k.z.stufe})`, kosten: kostenText(k) + pp(k), aktion: () => lernlisteZauber(k) })) },
-    ].filter((g) => g.eintraege.length) };
   }
   function renderLernen(id) {
     if (!klasse()) return [info("Zuerst in der Erschaffung einen Abenteurertyp wählen.")];
@@ -2758,7 +2822,7 @@
       h("main", { class: "cmt-inhalt" })),
   ].filter(Boolean));
   neuZeichnen();
-  return { neuZeichnen, zustand: () => S, auswertung, lernbar: lernbarFuerBogen, lernbaum: () => lernbaum(true) };
+  return { neuZeichnen, zustand: () => S, auswertung, lernbaum: () => lernbaum(true) };
   }
 
   // ---------------------------------------------------------------- Charakter-Code

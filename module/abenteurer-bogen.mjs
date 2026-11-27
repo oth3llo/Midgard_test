@@ -45,9 +45,8 @@ export const REITER = [
   { id: "zauber", titel: "Zauber", icon: "fa-wand-sparkles" },
   { id: "ausruestung", titel: "Ausrüstung", icon: "fa-box-open" },
   { id: "persoenlich", titel: "Persönliches", icon: "fa-feather" },
+  // Entwicklung: Konto und Grad, für Charaktere aus dem Werkzeug dazu der Talentbaum (früher eigener Reiter „Lernbaum“)
   { id: "entwicklung", titel: "Entwicklung", icon: "fa-chart-line" },
-  // Lernbaum: nur für Charaktere aus dem Werkzeug, denn er rechnet mit dessen Lerntabelle und Konto
-  { id: "lernbaum", titel: "Lernbaum", icon: "fa-sitemap", nur: (s) => !!s.zustand && game.settings.get(SYSTEM_ID, "kodexImportiert") },
   { id: "werkzeug", titel: "Erschaffung & Lernen", icon: "fa-hammer", werkzeug: true },
 ];
 
@@ -151,7 +150,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
   #wechseln(id) {
     this.#reiter = id;
     if (id === "werkzeug" && !this.#werkzeugWurzel) { this.render(); return; }
-    if (id === "lernbaum" && this.element?.querySelector('[data-panel="lernbaum"] .ma-lernbaum-platz')) { this.render(); return; }
+    if (id === "entwicklung" && this.element?.querySelector('[data-panel="entwicklung"] .ma-lernbaum-platz')) { this.render(); return; }
     if (this.#veraltet && id !== "werkzeug") { this.#veraltet = false; this.render(); return; }
     for (const b of this.element.querySelectorAll("button[data-reiter]")) { const an = b.dataset.reiter === id; b.classList.toggle("aktiv", an); b.setAttribute("aria-selected", String(an)); }
     for (const p of this.element.querySelectorAll(".ma-panel")) p.classList.toggle("aktiv", p.dataset.panel === id);
@@ -777,8 +776,8 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const gradNachES = gradAus(s.es);
     const konto = el("div", { class: "ma-grosswerte" },
       el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Grad" }), el("span", { class: "ma-gross-wert", text: s.grad }), gradNachES > s.grad ? el("small", { class: "ma-hinweis", text: `Aufstieg auf Grad ${gradNachES} möglich` }) : null),
-      el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Erfahrungsschatz" }), el("span", { class: "ma-gross-wert", text: fmt(s.es) }), el("small", { text: gradNachES > s.grad ? `Grad ${gradNachES} erreicht, Aufstieg noch nicht bestätigt` : `Grad ${naechster} ab ${fmt(esNaechster)} ES` })),
-      el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Erfahrungspunkte" }), el("span", { class: "ma-gross-wert", text: fmt(s.ep) })),
+      el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Erfahrungs\u00ADschatz" }), el("span", { class: "ma-gross-wert", text: fmt(s.es) }), el("small", { text: gradNachES > s.grad ? `Grad ${gradNachES} erreicht, Aufstieg noch nicht bestätigt` : `Grad ${naechster} ab ${fmt(esNaechster)} ES` })),
+      el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Erfahrungs\u00ADpunkte" }), el("span", { class: "ma-gross-wert", text: fmt(s.ep) })),
       el("div", { class: "ma-gross" }, el("span", { class: "ma-gross-name", text: "Gold" }), el("span", { class: "ma-gross-wert", text: fmt(s.gold) }), el("small", { text: "GS" })));
     const eingabe = this.#verwaltet && !game.user.isGM ? null : el("div", { class: "ma-zeilen" },
       el("label", { class: "ma-zeile" }, el("span", { text: "ES" }), this.#slFeld("es", "ES", s.es, { roh: true })),
@@ -792,45 +791,29 @@ export class AbenteurerBogen extends ActorSheetV2 {
     const protokoll = (s.protokoll ?? []).length
       ? el("ol", { class: "ma-protokoll" }, s.protokoll.slice(0, 50).map((e) => el("li", {}, el("small", { text: e.zeit ? new Date(e.zeit).toLocaleString("de-DE") : "" }), " ", e.text)))
       : el("p", { class: "info", text: "Noch keine Buchungen." });
+    const baum = this.#talentbaum();
+    const nachschlagen = el("div", { class: "ma-raster-zwei" }, karte("Gradtabelle", "ma-k-grad", tabelle), karte("Protokoll", "ma-k-protokoll", protokoll));
     return [
       karte("Erfahrung und Grad", "ma-k-konto", konto, eingabe,
-        this.#verwaltet ? el("p", { class: "info" }, "EP ausgeben, Gold zum Lernen nutzen und Grad bestätigen: ", el("button", { type: "button", class: "ma-knopf", onclick: () => this.#wechseln("werkzeug") }, icon("fa-hammer"), " Erschaffung & Lernen")) : null),
-      this.#lernbarKarte(),
-      el("div", { class: "ma-raster-zwei" }, karte("Gradtabelle", "ma-k-grad", tabelle), karte("Protokoll", "ma-k-protokoll", protokoll)),
+        this.#verwaltet ? el("p", { class: "info" }, "Grad bestätigen, Gold buchen und alles mit Kosten: ", el("button", { type: "button", class: "ma-knopf", onclick: () => this.#wechseln("werkzeug") }, icon("fa-hammer"), " Erschaffung & Lernen")) : null),
+      baum,
+      // mit Talentbaum stehen Gradtabelle und Protokoll zum Aufklappen darunter, sonst offen
+      baum ? el("details", { class: "ma-nachschlagen" }, el("summary", { text: "Gradtabelle und Protokoll" }), nachschlagen) : nachschlagen,
     ].filter(Boolean);
   }
 
   /**
-   * „Jetzt lernbar“: was mit den aktuellen EP und dem Gold bezahlbar ist (aus der Lernliste des Werkzeugs).
-   * Ein Klick fragt nach und bucht wie dort; ohne Werkzeug (von Hand angelegte Figur) entfällt die Karte.
+   * Talentbaum: die Lerntabelle des Abenteurertyps als Baum (aus dem Werkzeug), zuerst nur das jetzt
+   * Lernbare. Klick auf einen leuchtenden Knoten fragt nach und bucht; der Bogen zeichnet sich danach neu.
+   * Nur für Charaktere aus dem Werkzeug nach dem Kodex-Import.
    */
-  #lernbarKarte() {
+  #talentbaum() {
     if (!this.#verwaltet || !game.settings.get(SYSTEM_ID, "kodexImportiert")) return null;
-    if (!this.#werkzeugWurzel) this.#werkzeugStarten();
-    const l = this.#werkzeug?.lernbar?.();
-    if (!l) return null;
-    const kopf = el("p", { class: "info", text: `Mit ${fmt(l.ep)} EP und ${fmt(l.gold)} GS jetzt lernbar. Ein Klick fragt nach und bucht; Praxispunkte werden zuerst verrechnet. Gold statt EP, Belohnungen und Spruchrollen: „Erschaffung & Lernen“.` });
-    if (l.gesperrt) return karte("Jetzt lernbar", "ma-k-lernbar", el("p", { class: "info", text: l.gesperrt }));
-    if (!l.gruppen.length) return karte("Jetzt lernbar", "ma-k-lernbar", el("p", { class: "info", text: `Mit ${fmt(l.ep)} EP und ${fmt(l.gold)} GS ist gerade nichts lernbar.` }));
-    return karte("Jetzt lernbar", "ma-k-lernbar", kopf, l.gruppen.map((g) => el("div", { class: "ma-lerngruppe" },
-      el("h4", { text: `${g.titel} (${g.eintraege.length})` }),
-      el("div", { class: "ma-lernbar-liste" }, g.eintraege.map((e) => el("button", { type: "button", class: "ma-lernbar", title: e.weitere ? `weitere ${e.weitere} Stufe(n) bezahlbar, unter „Erschaffung & Lernen“ › Jetzt lernbar auf einmal buchbar` : null, onclick: () => e.aktion() },
-        el("span", { text: e.titel }), el("small", { text: e.kosten })))))),
-      el("div", { class: "ma-knopfreihe" },
-        el("button", { type: "button", class: "ma-knopf", onclick: () => this.#wechseln("lernbaum") }, icon("fa-sitemap"), " Lernbaum"),
-        el("button", { type: "button", class: "ma-knopf", onclick: () => { const z = this.#werkzeug?.zustand(); if (z) { z.ansicht = "fert"; z.lernFilter = "lernbar"; this.#werkzeug.neuZeichnen(); } this.#wechseln("werkzeug"); } }, icon("fa-list"), " Alles Lernbare")));
-  }
-
-  /**
-   * Lernbaum: die Lerntabelle des Abenteurertyps als Baum (aus dem Werkzeug). Klick auf einen
-   * leuchtenden Knoten fragt nach und bucht wie die Lernliste; der Bogen zeichnet sich danach neu.
-   */
-  async _lernbaum() {
-    // teuer (Tausende Knoten): nur aufbauen, wenn der Reiter offen ist; #wechseln zeichnet beim Öffnen nach
-    if (this.#reiter !== "lernbaum") return el("div", { class: "ma-lernbaum-platz" });
+    // aufwendig: nur aufbauen, wenn der Reiter offen ist; #wechseln zeichnet beim Öffnen nach
+    if (this.#reiter !== "entwicklung") return el("div", { class: "ma-lernbaum-platz" });
     if (!this.#werkzeugWurzel) this.#werkzeugStarten();
     const baum = this.#werkzeug?.lernbaum?.();
-    return baum ? karte(null, "ma-k-lernbaum", baum) : null;
+    return baum ? karte("Talentbaum", "ma-k-lernbaum", baum) : null;
   }
 
   async _werkzeug() {

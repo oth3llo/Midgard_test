@@ -551,6 +551,9 @@
 .midgard-cmt.midgard-cmt .lernbaum .lb-stamm-knoten {width: 2.6rem; height: 2.6rem; font-size: 1.35rem; background: var(--rahmen); color: var(--rahmen-text);}
 .midgard-cmt.midgard-cmt .lernbaum .lb-steuerung {display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem;}
 .midgard-cmt.midgard-cmt .lernbaum .lb-steuerung .schalter {margin: 0;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ausgeblendet {margin-top: 1rem; padding: .6rem .8rem; border-top: 1px dashed var(--linie); color: var(--leise); font-size: .9rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ausgeblendet p {margin: 0 0 .5rem;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-ausgeblendet strong {color: var(--text);}
 .midgard-cmt.midgard-cmt .lernbaum .lb-umschalter {display: inline-flex; gap: 0;}
 .midgard-cmt.midgard-cmt .lernbaum .lb-umschalter button {margin: 2px 0 2px 2px; padding: .2rem .6rem; font-size: .9rem;}
 .midgard-cmt.midgard-cmt .lernbaum .lb-umschalter button.aktiv {background: var(--akzent); color: var(--auf-akzent);}
@@ -603,6 +606,9 @@
 .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.lernbar {background: var(--flaeche); color: var(--gut); font-weight: 700;
   box-shadow: 0 -2px 0 0 var(--gut), 0 2px 0 0 var(--gut), -2px 0 0 0 var(--gut), 2px 0 0 0 var(--gut), 0 0 0 5px color-mix(in srgb, var(--gut) 25%, transparent);
   animation: lb-leuchten 2.4s ease-in-out infinite;}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.gold {background: var(--flaeche); color: var(--text); font-weight: 700;
+  box-shadow: 0 -2px 0 0 var(--gold), 0 2px 0 0 var(--gold), -2px 0 0 0 var(--gold), 2px 0 0 0 var(--gold), 0 0 0 5px color-mix(in srgb, var(--gold) 30%, transparent);}
+.midgard-cmt.midgard-cmt .lernbaum .lb-knoten.gold::after {content: "GS"; position: absolute; right: -4px; top: -7px; padding: 0 2px; font-size: .7rem; line-height: 1.1; background: var(--gold); color: #1f1608;}
 .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.teuer {color: var(--leise); box-shadow: 0 -2px 0 0 var(--leise), 0 2px 0 0 var(--leise), -2px 0 0 0 var(--leise), 2px 0 0 0 var(--leise);}
 .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.spaeter {opacity: .5; box-shadow: 0 -1px 0 0 var(--linie), 0 1px 0 0 var(--linie), -1px 0 0 0 var(--linie), 1px 0 0 0 var(--linie); background: transparent;}
 .midgard-cmt.midgard-cmt .lernbaum .lb-knoten.gesperrt {opacity: .45; background: repeating-linear-gradient(45deg, transparent 0 3px, var(--linie) 3px 4px); box-shadow: 0 -1px 0 0 var(--leise), 0 1px 0 0 var(--leise), -1px 0 0 0 var(--leise), 1px 0 0 0 var(--leise);}
@@ -1492,13 +1498,7 @@ img[src*="midgard5-cmt/bilder/"]:not([src*="/textur/"]),
 .midgard-gegenstand .mg-text-knopf { width: auto; flex: 0 0 auto; padding: 1px 10px; }
 
 /* Entwicklung: „Jetzt lernbar“ als anklickbare Kacheln */
-.midgard-abenteurer .ma-lerngruppe h4 { margin: 8px 0 4px; }
-.midgard-abenteurer .ma-lernbar-liste { display: flex; flex-wrap: wrap; gap: 6px; }
 /* Textfarbe ausdrücklich setzen: die Knopf-Textfarbe des klassischen Stils ist hell und stand hier auf hellem Grund */
-.midgard-abenteurer .ma-wurzel button.ma-lernbar { display: flex; flex-direction: column; align-items: flex-start; width: auto; height: auto; padding: 3px 8px; text-align: left; line-height: 1.2; border: 1px solid var(--rahmen, #8a7a62); background: color-mix(in srgb, var(--rahmen, #8a7a62) 8%, transparent); color: var(--text); text-shadow: none; }
-.midgard-abenteurer .ma-wurzel button.ma-lernbar small { font-size: .75rem; color: var(--leise); }
-.midgard-abenteurer .ma-wurzel button.ma-lernbar:hover { background: color-mix(in srgb, var(--rahmen, #8a7a62) 16%, transparent); color: var(--text); }
-.midgard-abenteurer .ma-wurzel button.ma-lernbar:hover, .midgard-abenteurer .ma-wurzel button.ma-lernbar:focus-visible { outline: 2px solid var(--gold, #c9a227); outline-offset: 1px; }
 
 /* Kompendium-Fenster: Knopf „In die Welt übernehmen“ */
 button.midgard-in-welt { display: flex; align-items: center; justify-content: center; gap: 6px; width: calc(100% - 8px); margin: 4px; flex: 0 0 auto; }
@@ -1669,6 +1669,13 @@ button.midgard-in-welt { display: flex; align-items: center; justify-content: ce
 .midgard-weltkarte .wk-marke.status-aktuell { background: #b8913a; color: #1b1610; }
 .midgard-weltkarte .wk-marke.status-herkunft { background: #2d4a6b; color: #e6f0ff; }
 .midgard-weltkarte .wk-loeschen { margin-top: 6px; }
+
+/* Entwicklung: Gradtabelle und Protokoll unter dem Talentbaum zum Aufklappen */
+.midgard-abenteurer .ma-nachschlagen { margin: 8px 0; }
+.midgard-abenteurer .ma-nachschlagen > summary { cursor: pointer; padding: 6px 2px; font-weight: 700; min-height: 32px; }
+.midgard-handy .midgard-abenteurer .ma-nachschlagen > summary, .midgard-abenteurer.midgard-handy .ma-nachschlagen > summary { min-height: 44px; display: flex; align-items: center; }
+.midgard-abenteurer.midgard-handy .ma-k-konto .ma-grosswerte { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.midgard-abenteurer .ma-k-konto .ma-gross-name { hyphens: manual; overflow-wrap: break-word; }
 
 /* Midgard-CMT, Handy-Fassung am Spieltisch: Stil der 16-Bit-Rollenspiele (frühe 90er).
    Blaue Menüfenster mit doppeltem Rahmen, Pixelschrift, gelber Auswahlcursor. Wird nur von tisch.html
