@@ -3,7 +3,7 @@
 // Solange das Erschaffungs- und Lernwerkzeug einen Charakter verwaltet, sind die von ihm
 // berechneten Werte hier schreibgeschützt; geändert werden sie im Reiter „Erschaffung & Lernen“.
 import { EIGENSCHAFTEN, EIGENSCHAFT_NAMEN, ZAUBERGRUPPEN, ZUSTAENDE, bonus, vz, gradAus, abTabelle, wuerfelName } from "./regeln.mjs";
-import { ausWerkzeug, ladenWare, zauberDetails } from "./akteur.mjs";
+import { ausWerkzeug, ladenWare, zauberDetails, fertigkeitDetails } from "./akteur.mjs";
 import { SYSTEM_ID } from "./kategorien.mjs";
 import { KompendiumBrowser } from "./browser.mjs";
 import { erfolgswurf, pruefwurf, nachricht, esc } from "./wuerfe.mjs";
@@ -960,6 +960,7 @@ export class AbenteurerBogen extends ActorSheetV2 {
       abschliessen: () => this.#phaseSetzen("fertig"),
       laden: () => ladenWare(),   // Einkauf mit Startgeld bei der Erschaffung
       zauberDetails: (name, gruppe) => zauberDetails(name, gruppe),
+      fertigkeitDetails: (name, waffe) => fertigkeitDetails(name, waffe),   // Kodex-Text in den Lern-Rückfragen
       spielleitung: () => game.user.isGM,      // EP und PP nur durch die Spielleitung
       // Ausrüstung bei der Erschaffung: Kompendium neben dem Bogen öffnen, vorhandene Ausrüstung anzeigen
       kompendium: (kat) => KompendiumBrowser.oeffnen(kat, { neben: this }),

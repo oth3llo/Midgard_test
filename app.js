@@ -825,7 +825,7 @@
           return [
             waehlbar.length ? h("div", { class: "optionen" }, waehlbar.map((o) => h("button", {
               type: "button", class: "option",
-              onclick: () => lernenBestaetigen(o.name, `+${o.wert}`, `${o.kosten} LE`, () => { kaufen(o, t.id, false); neuZeichnen(); }),
+              onclick: () => lernenBestaetigen(o.name, `+${o.wert}`, `${o.kosten} LE`, () => { kaufen(o, t.id, false); neuZeichnen(); }, null, { lname: fertigkeitDaten(o.name)?.name || o.name }),
             }, h("span", {}, `${o.name}+${o.wert}`), h("small", {}, `${o.le} · ${o.stufe} · ${o.kosten} LE`))))
               : info(rest > 0 ? "Mit den freien LE ist hier nichts mehr lernbar." : "Alle LE dieser Gruppe sind verteilt."),
             ausgeblendet(opts.length - waehlbar.length, "zu teuer, schon vorhanden oder nicht erlaubt"),
@@ -845,7 +845,7 @@
     return h("select", { "aria-label": "Alltagsfertigkeit für das übrige LE", onchange: (ev) => {
       const o = waehlbar.find((x) => x.name === ev.target.value);
       ev.target.value = "";
-      if (o) lernenBestaetigen(o.name, `+${o.wert}`, "1 LE", () => { kaufen(o, topf, true); neuZeichnen(); });
+      if (o) lernenBestaetigen(o.name, `+${o.wert}`, "1 LE", () => { kaufen(o, topf, true); neuZeichnen(); }, null, { lname: fertigkeitDaten(o.name)?.name || o.name });
     } }, h("option", { value: "" }, "Alltagsfertigkeit wählen …"), waehlbar.map((o) => h("option", { value: o.name }, `${o.name}+${o.wert} (${o.le})`)));
   }
   function gekaufteListe(topf) {
@@ -925,7 +925,7 @@
               h("div", { class: "optionen" }, waehlbar.map((n) => {
                 const start = K.verteidigungsWaffen.includes(n) ? 1 : 5;
                 return h("button", { type: "button", class: "option",
-                  onclick: () => lernenBestaetigen(n, `+${start}`, `${le} LE`, () => { S.waffen.push({ name: n, wert: start, kosten: le, topf: "Waffen" }); neuZeichnen(); }, waffenTabelle(n)),
+                  onclick: () => lernenBestaetigen(n, `+${start}`, `${le} LE`, () => { S.waffen.push({ name: n, wert: start, kosten: le, topf: "Waffen" }); neuZeichnen(); }, waffenTabelle(n), { lname: n, waffe: true }),
                 }, h("span", {}, `${n}+${start}`), h("small", {}, `${le} LE`), waffenInhalt(n));
               }))) : null;
           });
@@ -1592,8 +1592,27 @@
   }
   // Bestätigung vor dem Lernen: „Willst du wirklich … lernen?“ (Nein schließt nur das Fenster)
   // extra: zusätzlicher Inhalt im Fenster (z. B. die Waffen einer Waffenfertigkeit mit Schaden)
-  function lernenBestaetigen(was, stufe, kosten, aktion, extra = null) {
-    frage("Lernen bestätigen", `Willst du wirklich ${was}${stufe ? ` auf Stufe ${stufe}` : ""} für ${kosten} lernen?`, "Ja, lernen", aktion, "Nein", extra);
+  // fert: { lname, waffe } zeigt über der Frage, was die Fertigkeit beinhaltet (Beschreibung aus dem Kodex)
+  function lernenBestaetigen(was, stufe, kosten, aktion, extra = null, fert = null) {
+    const beschr = fert ? fertigkeitBeschreibung(fert.lname, fert.waffe) : null;
+    fenster("Lernen bestätigen", (zu) => [beschr,
+      h("p", {}, `Willst du wirklich ${was}${stufe ? ` auf Stufe ${stufe}` : ""} für ${kosten} lernen?`), extra,
+      h("div", { class: "knopfreihe" },
+        h("button", { type: "button", class: "haupt", onclick: () => { zu(); aktion(); } }, "Ja, lernen"),
+        h("button", { type: "button", onclick: zu }, "Nein"))], beschr ? { breit: true } : {});
+  }
+  // Beschreibung einer Fertigkeit oder Waffenfertigkeit im Wortlaut des Kodex. In Foundry liefert
+  // opts.fertigkeitDetails den Text aus dem Kompendium (nach dem Kodex-Import aus der eigenen PDF);
+  // die Browser-Fassung hat keine Texte und zeigt nichts. Das Element bleibt bei neuem Zeichnen
+  // des Fensters dasselbe, der Text wird also nur einmal geladen.
+  function fertigkeitBeschreibung(lname, waffe) {
+    if (typeof opts.fertigkeitDetails !== "function" || !lname) return null;
+    const box = h("div", { class: "fert-beschreibung" }, h("small", { class: "ausgeblendet" }, "Beschreibung wird geladen …"));
+    Promise.resolve(opts.fertigkeitDetails(lname, !!waffe)).then((x) => x?.beschreibung || null, () => null).then((html) => {
+      if (html) box.innerHTML = html;
+      else box.replaceChildren(info(`Die Beschreibung von ${lernAnzeige(lname)} steht nach dem Import des Kodex (Regelwerk-PDF) im Kompendium.`));
+    });
+    return box;
   }
   // nur wählbare Optionen zeigen; der Rest wird gezählt und als Hinweis genannt
   function ausgeblendet(n, grund) { return n ? h("small", { class: "ausgeblendet" }, `${n} ${n === 1 ? "Option" : "Optionen"} ausgeblendet (${grund}).`) : null; }
@@ -1954,12 +1973,13 @@
     let pp = Math.min(ppVerf, teBis(ziel)), goldEP = vorgabe.goldEP || 0, belohnung = false;
     // beim Wechsel des Ziels: so viel Gold statt EP eintragen, wie mindestens nötig ist
     const goldNoetig = () => { const k = steigerKosten(g, ziel, pp, 0, belohnung); return Math.min(k.maxGold, Math.max(0, k.ep - sp.ep)); };
+    const beschr = fertigkeitBeschreibung(g.lname, g.waffe);
     fenster(`${g.titel}: von +${g.wert} steigern`, (zu, neu) => {
       const k = steigerKosten(g, ziel, pp, goldEP, belohnung);
       goldEP = k.goldEP;
       const { ep, gold, te } = k;
       const fehlt = [ep > sp.ep ? `${fmt(ep - sp.ep)} EP` : null, gold > sp.gold ? `${fmt(gold - sp.gold)} GS` : null].filter(Boolean);
-      return [
+      return [beschr,
         h("div", { class: "raster2" },
           feld("Steigern auf", h("select", { "aria-label": "Zielstufe", onchange: (ev) => { ziel = +ev.target.value; pp = Math.min(ppVerf, teBis(ziel)); goldEP = goldNoetig(); neu(); } },
             ziele.map((z) => h("option", { value: z, selected: z === ziel }, `+${z} (${teBis(z)} TE)`))))),
@@ -1986,19 +2006,20 @@
             });
           } }, "Steigern"),
           h("button", { type: "button", onclick: zu }, "Abbrechen"))];
-    });
+    }, beschr ? { breit: true } : {});
   }
   function lernDialog(e) {
     // e: { lname, gruppe, le (Leiteigenschaft), ep (EP je TE), waffe }
     const sp = S.spiel, t = L.te[e.gruppe], le = t.lernTE / 3;
     let spez = "", belohnung = false;
+    const beschr = fertigkeitBeschreibung(e.lname, e.waffe);
     fenster(`${e.lname} neu lernen`, (zu, neu) => {
       const ep = t.lernTE * e.ep + elfZuschlag() * le;
       const gold = belohnung ? 0 : le * 200;
       const fehlt = [ep > sp.ep ? `${fmt(ep - sp.ep)} EP` : null, gold > sp.gold ? `${fmt(gold - sp.gold)} GS` : null].filter(Boolean);
       const mehrfach = MEHRFACH.includes(e.lname);
       const schonDa = gelernteListe().some((g) => g.lname === e.lname && (!mehrfach || g.titel.toLowerCase().includes(`(${spez.trim().toLowerCase()})`)));
-      return [
+      return [beschr,
         h("table", { class: "kosten" }, h("tbody", {},
           kostenZeile("Startwert", `+${t.start}` + (e.waffe ? "" : ` (${e.le})`)),
           kostenZeile("Lerneinheiten", `${le} LE (= ${t.lernTE} TE an EP${elfZuschlag() ? ", Elf +6 EP je LE" : ""}, 200 GS je LE)`),
@@ -2022,7 +2043,7 @@
             });
           } }, "Lernen"),
           h("button", { type: "button", onclick: zu }, "Abbrechen"))];
-    });
+    }, beschr ? { breit: true } : {});
   }
   // Werte und Beschreibung eines Zaubers. In Foundry liefert opts.zauberDetails die Daten aus dem Zauber-
   // Kompendium (nach dem Arkanum-Import mit Beschreibung); sonst bleibt es bei Stufe, Art und Ursprung.
@@ -2358,7 +2379,7 @@
           zahlungMerken(s, g.key, z, { ep: rest * g.ep, gold: rest * 20, pp });
         }
       });
-    });
+    }, null, g);
   }
   function lernlisteNeu(x) {
     const { e } = x;
@@ -2367,19 +2388,20 @@
       s.ep -= x.ep; s.gold -= x.gold;
       zahlungMerken(s, lernSchluessel(e, spez), x.start, { ep: x.ep, gold: x.gold, pp: 0 });
     });
-    if (!MEHRFACH.includes(e.lname)) return lernenBestaetigen(lernAnzeige(e.lname), `+${x.start}`, kostenText(x), () => buche(""), e.waffe ? waffenTabelle(e.lname) : null);
+    if (!MEHRFACH.includes(e.lname)) return lernenBestaetigen(lernAnzeige(e.lname), `+${x.start}`, kostenText(x), () => buche(""), e.waffe ? waffenTabelle(e.lname) : null, e);
     // Sprachen, Landeskunde, Überleben: Angabe im selben Fenster
     let spez = "";
     const art = e.lname === "Landeskunde" ? "Land" : e.lname === "Überleben" ? "Gelände" : "Sprache bzw. Schrift";
+    const beschr = fertigkeitBeschreibung(e.lname, e.waffe);
     fenster("Lernen bestätigen", (zu, neuZ) => {
       const schonDa = spez.trim() && gelernteListe().some((g) => g.lname === e.lname && g.titel.toLowerCase().includes(`(${spez.trim().toLowerCase()})`));
-      return [h("p", {}, `Willst du wirklich ${lernAnzeige(e.lname)} auf Stufe +${x.start} für ${kostenText(x)} lernen?`),
+      return [beschr, h("p", {}, `Willst du wirklich ${lernAnzeige(e.lname)} auf Stufe +${x.start} für ${kostenText(x)} lernen?`),
         feld(art, h("input", { type: "text", value: spez, oninput: (ev) => { spez = ev.target.value; }, onchange: () => neuZ() })),
         schonDa ? h("p", { class: "fehlt" }, "Diese Angabe ist schon gelernt.") : null,
         h("div", { class: "knopfreihe" },
           h("button", { type: "button", class: "haupt", onclick: () => { if (!spez.trim() || schonDa) return neuZ(); zu(); buche(spez.trim()); } }, "Ja, lernen"),
           h("button", { type: "button", onclick: zu }, "Nein"))];
-    });
+    }, beschr ? { breit: true } : {});
   }
   function lernlisteZauber(k) {
     lernenBestaetigen(`den Zauber ${k.z.name} (${k.gruppe})`, String(k.z.stufe), kostenText(k) + (k.pp ? ` (davon ${k.pp} LE mit Praxispunkten)` : ""), () => {

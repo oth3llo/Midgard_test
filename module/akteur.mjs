@@ -145,6 +145,27 @@ export async function zauberDetails(name, gruppe) {
   return s;
 }
 
+/**
+ * Beschreibung einer Fertigkeit oder Waffenfertigkeit für die Rückfragen beim Lernen: aus dem Kompendium
+ * (nach dem Kodex-Import im Wortlaut des eigenen Kodex, Verweise aufbereitet). Ohne Import kein Text.
+ * Namen wie „Sprechen“ treffen auch „Sprechen:Sprache“.
+ */
+export async function fertigkeitDetails(name, waffe) {
+  const pack = game.packs.get(packId(waffe ? "waffenfertigkeiten" : "fertigkeiten"));
+  if (!pack || !name) return null;
+  const index = await pack.getIndex();
+  const klein = (n) => String(n).toLowerCase();
+  const e = index.find((x) => klein(x.name) === klein(name))
+    ?? index.find((x) => klein(x.name).split(":")[0] === klein(name).split(":")[0]);
+  if (!e) return null;
+  const daten = (await pack.getDocument(e._id))?.toObject?.();
+  let beschreibung = daten?.system?.beschreibung || "";
+  if (!beschreibung) return null;
+  const TE = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
+  try { if (TE?.enrichHTML) beschreibung = await TE.enrichHTML(beschreibung, { secrets: false }); } catch { /* roh anzeigen */ }
+  return { beschreibung };
+}
+
 /** Ware für den Einkauf bei der Erschaffung (Werkzeug opts.laden): Waffen, Rüstungen, Gegenstände mit Preis. */
 let ladenCache = null;
 export function ladenWare() {
