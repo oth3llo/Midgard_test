@@ -65,9 +65,12 @@ export class KompendiumBrowser extends ApplicationV2 {
     const akteur = (this.#akteur?.isOwner ? this.#akteur : null) ?? game.user.character ?? (eigene.length === 1 ? eigene[0] : null);
     return verwendbarkeit(akteur) ?? { name: null, pruefe: () => null };
   }
+  // Planen: auf Wunsch auch nicht Verwendbares zeigen, ausgegraut mit Grund und ohne Ziehen auf den Bogen
+  #alleZeigen = false;
   #sichtbar(eintraege) {
     const p = this.#pruefer();
     if (!p?.name || !GEFILTERT.includes(this.#kat)) return eintraege;
+    if (this.#alleZeigen) return eintraege.map((e) => { const grund = p.pruefe(this.#kat, e); return grund ? { ...e, grund } : e; });
     return eintraege.filter((e) => !p.pruefe(this.#kat, e));
   }
 
@@ -149,10 +152,11 @@ export class KompendiumBrowser extends ApplicationV2 {
     }
     const pruefer = GEFILTERT.includes(this.#kat) ? this.#pruefer() : null;
     if (pruefer && alle.length) {
-      const weg = alle.length - eintraege.length;
+      const weg = alle.length - eintraege.filter((e) => !e.grund).length;
       wurzel.insertBefore(el("p", { class: "mb-hinweis mb-verwendbar" }, el("i", { class: "fa-solid fa-filter", "aria-hidden": "true" }),
         pruefer.name ? ` Gezeigt wird, was ${pruefer.name} ${this.#kat === "zauber" ? "lernen" : "verwenden"} kann${weg ? ` (${weg} ausgeblendet: ${this.#kat === "zauber" ? "Zaubergruppe des Typs, Schwarze Magie bei Elfen" : "Mindestwerte, Größe, nur für Zauberer"})` : ""}.`
-          : " Dir ist noch kein Charakter zugewiesen; gezeigt wird alles."), wurzel.children[1]);
+          : " Dir ist noch kein Charakter zugewiesen; gezeigt wird alles.",
+        pruefer.name ? el("label", { class: "mb-alle" }, el("input", { type: "checkbox", checked: this.#alleZeigen, onchange: (ev) => { this.#alleZeigen = ev.target.checked; this.render(); } }), " auch nicht Verwendbares zeigen (zum Planen)") : null), wurzel.children[1]);
     }
     if (this.#ziel && eintraege.length) {
       wurzel.insertBefore(el("p", { class: "mb-hinweis mb-ziehen" }, el("i", { class: "fa-solid fa-hand-pointer", "aria-hidden": "true" }), ` Einträge auf den Bogen von ${this.#ziel} ziehen, um sie hinzuzufügen. Gegenstände, die es schon gibt, erhöhen die Anzahl.`), wurzel.children[1]);
@@ -240,12 +244,13 @@ export class KompendiumBrowser extends ApplicationV2 {
     const tabelle = el("table", { class: "mb-tabelle" },
       el("thead", {}, el("tr", {}, kopf("name", "Name"), def.spalten.map(([f, t]) => { const k = kopf(f, t); if (eintraege.some((e) => typeof feld(e.system, f) === "number")) k.classList.add("zahl"); return k; }))),
       el("tbody", {}, liste.map((e) => el("tr", {
-        "data-id": e._id, class: e._id === this.#auswahl ? "gewaehlt" : null, draggable: e.uuid ? "true" : null, tabindex: "0",
-        ondragstart: (ev) => ev.dataTransfer.setData("text/plain", JSON.stringify({ type: "Item", uuid: e.uuid })),
+        "data-id": e._id, class: [e._id === this.#auswahl ? "gewaehlt" : "", e.grund ? "mb-gesperrt" : ""].filter(Boolean).join(" ") || null,
+        draggable: e.uuid && !e.grund ? "true" : null, tabindex: "0", title: e.grund ? `Noch nicht verwendbar: ${e.grund}` : null,
+        ondragstart: (ev) => { if (e.grund) { ev.preventDefault(); return; } ev.dataTransfer.setData("text/plain", JSON.stringify({ type: "Item", uuid: e.uuid })); },
         onclick: () => { this.#auswahl = e._id; this.#listeZeichnen(wurzel, eintraege); },
         ondblclick: () => this.#oeffnen(e),
         onkeydown: (ev) => { if (ev.key === "Enter") this.#oeffnen(e); },
-      }, el("td", {}, el("span", { class: "mb-name" }, el("img", { src: e.img, alt: "" }), e.name)),
+      }, el("td", {}, el("span", { class: "mb-name" }, el("img", { src: e.img, alt: "" }), e.name), e.grund ? el("small", { class: "mb-grund", text: e.grund }) : null),
       def.spalten.map(([f, , fmt]) => { const t = (fmt ?? anzeige)(feld(e.system, f)); return el("td", { text: t, title: String(t).length > 14 ? t : null, class: typeof feld(e.system, f) === "number" ? "zahl" : null }); })))));
     ziel.replaceChildren(el("p", { class: "mb-anzahl", text: `${liste.length} von ${eintraege.length} Einträgen` }), tabelle);
     this.#detailZeichnen(wurzel, eintraege.find((e) => e._id === this.#auswahl));

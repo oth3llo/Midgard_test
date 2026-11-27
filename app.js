@@ -868,6 +868,41 @@
   }
 
   // ---------------------------------------------------------------- 8 Waffen
+  /**
+   * Waffen einer Waffenfertigkeit mit Nutzbarkeit für diesen Charakter (Mindestwerte, Größe, nur Zauberer),
+   * damit Spieler Fertigkeiten danach wählen können, welche Waffen sie damit führen (jetzt oder später).
+   */
+  function waffenDerFertigkeit(fert) {
+    const liste = (K.waffenListe[fert] || []).concat(K.weitereWaffen.filter((x) => x[0] === fert).map((x) => x.slice(1)));
+    return liste.map(([name, anf]) => {
+      let grund = null;
+      if (anf && !anforderungErfuellt(anf)) grund = anf;
+      else if (istKlein() && K.kleineVerboten.waffen.includes(name)) grund = "zu groß";
+      return { name, grund };
+    });
+  }
+  /** Für die Rückfrage beim Lernen: jetzt nutzbare Waffen mit Schaden und Mindestwerten, darunter die späteren. */
+  function waffenTabelle(fert) {
+    const daten = new Map((K.waffenListe[fert] || []).concat(K.weitereWaffen.filter((x) => x[0] === fert).map((x) => x.slice(1))).map((x) => [x[0], x]));
+    const w = waffenDerFertigkeit(fert);
+    if (!w.length) return null;
+    const jetzt = w.filter((x) => !x.grund), spaeter = w.filter((x) => x.grund);
+    return h("div", { class: "waffen-tabelle" },
+      h("h4", {}, `Damit nutzbar (${jetzt.length} von ${w.length})`),
+      jetzt.length ? h("table", { class: "kosten" },
+        h("thead", {}, h("tr", {}, h("th", {}, "Waffe"), h("th", {}, "Schaden"), h("th", {}, "Mindestwerte"))),
+        h("tbody", {}, jetzt.map((x) => { const d = daten.get(x.name) || []; return h("tr", {}, h("th", {}, x.name), h("td", { class: "schaden" }, d[2] || "–"), h("td", {}, d[1] || "keine")); })))
+        : info("Mit den jetzigen Werten noch keine Waffe dieser Fertigkeit nutzbar."),
+      spaeter.length ? h("small", { class: "spaeter" }, `Später: ${spaeter.map((x) => { const d = daten.get(x.name) || []; return `${x.name} ${d[2] || ""} (${x.grund})`; }).join(", ")}`) : null);
+  }
+  function waffenInhalt(fert) {
+    const w = waffenDerFertigkeit(fert);
+    if (!w.length) return null;
+    const jetzt = w.filter((x) => !x.grund), spaeter = w.filter((x) => x.grund);
+    return h("small", { class: "waffen-inhalt" },
+      jetzt.length ? jetzt.map((x) => x.name).join(", ") : "jetzt keine nutzbar",
+      spaeter.length ? h("span", { class: "spaeter" }, ` · später: ${spaeter.map((x) => `${x.name} (${x.grund})`).join(", ")}`) : null);
+  }
   function waffenErlaubt(name) {
     if (K.nurZauberer.includes(name) && !istZauberer()) return "nur für Zauberer";
     if (istKlein() && K.kleineVerboten.fertigkeiten.includes(name)) return `für ${S.rasse === "Gnom" ? "Gnome" : "Halblinge"} nicht nutzbar`;
@@ -879,7 +914,7 @@
     const rest = kl.waffenLE - verbraucht("Waffen");
     const extraGekauft = S.kaeufe.some((k) => k.topf === "Waffen" && k.extra);
     return [
-      info("Waffenfertigkeiten beginnen mit +5, Schilde und Parierwaffen mit +1 (S. 40-41). Die Liste der Waffen mit Mindestwerten für St und Gs steht im nächsten Schritt bei der Spezialisierung."),
+      info("Waffenfertigkeiten beginnen mit +5, Schilde und Parierwaffen mit +1 (S. 40-41). Unter jeder Fertigkeit stehen ihre Waffen; was mit den jetzigen Werten noch nicht geht, steht unter „später“ mit dem fehlenden Mindestwert."),
       karte(null,
         h("div", { class: "topf-kopf" }, h("h3", {}, "Waffen"), h("span", { class: "topf-rest" + (rest < 0 ? " ueber" : rest === 0 ? " leer" : "") }, `${rest} von ${kl.waffenLE} LE frei`)),
         (() => {
@@ -890,8 +925,8 @@
               h("div", { class: "optionen" }, waehlbar.map((n) => {
                 const start = K.verteidigungsWaffen.includes(n) ? 1 : 5;
                 return h("button", { type: "button", class: "option",
-                  onclick: () => lernenBestaetigen(n, `+${start}`, `${le} LE`, () => { S.waffen.push({ name: n, wert: start, kosten: le, topf: "Waffen" }); neuZeichnen(); }),
-                }, h("span", {}, `${n}+${start}`), h("small", {}, `${le} LE`));
+                  onclick: () => lernenBestaetigen(n, `+${start}`, `${le} LE`, () => { S.waffen.push({ name: n, wert: start, kosten: le, topf: "Waffen" }); neuZeichnen(); }, waffenTabelle(n)),
+                }, h("span", {}, `${n}+${start}`), h("small", {}, `${le} LE`), waffenInhalt(n));
               }))) : null;
           });
           return [stufen.some(Boolean) ? stufen : info(rest > 0 ? "Mit den freien LE ist keine weitere Waffenfertigkeit lernbar." : "Alle Waffen-LE sind verteilt."),
@@ -1542,8 +1577,8 @@
     w.document.close();
     w.addEventListener("load", () => w.print());
   }
-  function frage(titel, text, jaText, aktion, neinText = "Abbrechen") {
-    fenster(titel, (zu) => [h("p", {}, text), h("div", { class: "knopfreihe" },
+  function frage(titel, text, jaText, aktion, neinText = "Abbrechen", extra = null) {
+    fenster(titel, (zu) => [h("p", {}, text), extra, h("div", { class: "knopfreihe" },
       h("button", { type: "button", class: "haupt", onclick: () => { zu(); aktion(); } }, jaText),
       h("button", { type: "button", onclick: zu }, neinText))]);
   }
@@ -1556,8 +1591,9 @@
     });
   }
   // Bestätigung vor dem Lernen: „Willst du wirklich … lernen?“ (Nein schließt nur das Fenster)
-  function lernenBestaetigen(was, stufe, kosten, aktion) {
-    frage("Lernen bestätigen", `Willst du wirklich ${was}${stufe ? ` auf Stufe ${stufe}` : ""} für ${kosten} lernen?`, "Ja, lernen", aktion, "Nein");
+  // extra: zusätzlicher Inhalt im Fenster (z. B. die Waffen einer Waffenfertigkeit mit Schaden)
+  function lernenBestaetigen(was, stufe, kosten, aktion, extra = null) {
+    frage("Lernen bestätigen", `Willst du wirklich ${was}${stufe ? ` auf Stufe ${stufe}` : ""} für ${kosten} lernen?`, "Ja, lernen", aktion, "Nein", extra);
   }
   // nur wählbare Optionen zeigen; der Rest wird gezählt und als Hinweis genannt
   function ausgeblendet(n, grund) { return n ? h("small", { class: "ausgeblendet" }, `${n} ${n === 1 ? "Option" : "Optionen"} ausgeblendet (${grund}).`) : null; }
@@ -1938,6 +1974,7 @@
           kostenZeile("Lerneinheiten", `${le} LE (= ${t.lernTE} TE an EP${elfZuschlag() ? ", Elf +6 EP je LE" : ""}, 200 GS je LE)`),
           kostenZeile("Kosten", h("strong", {}, `${fmt(ep)} EP, ${fmt(gold)} GS`)),
           kostenZeile("Konto danach", `${fmt(sp.ep - ep)} EP, ${fmt(sp.gold - gold)} GS`, fehlt.length ? "fehlt" : ""))),
+        e.waffe ? waffenTabelle(e.lname) : null,
         mehrfach ? feld(e.lname === "Landeskunde" ? "Land" : e.lname === "Überleben" ? "Gelände" : "Sprache bzw. Schrift",
           h("input", { type: "text", value: spez, onchange: (ev) => { spez = ev.target.value; neu(); } })) : null,
         info("Beim Lernen neuer Fertigkeiten kann kein Gold EP ersetzen, und Praxispunkte zählen nicht (Kodex S. 154)."),
@@ -2098,7 +2135,7 @@
           : (elf && K.elfenNie.includes(e.lname) ? "Elfen nie" : null);
         const hinweisText = waffen && !sperre ? waffenErlaubt(e.lname) : null;
         return h("tr", { class: sperre ? "gesperrt" : "" },
-          h("th", {}, e.lname, sperre || hinweisText ? h("small", {}, ` (${sperre || hinweisText})`) : null),
+          h("th", {}, e.lname, sperre || hinweisText ? h("small", {}, ` (${sperre || hinweisText})`) : null, waffen ? waffenInhalt(e.lname) : null),
           h("td", {}, waffen ? "" : e.le), h("td", {}, e.gruppe), h("td", {}, "+" + t.start), h("td", {}, le), h("td", {}, fmt(ep)), h("td", {}, fmt(le * 200)),
           h("td", {}, sperre ? null : h("button", { type: "button", class: "klein-knopf", onclick: () => lernDialog(e) }, "Lernen")));
       }))));
@@ -2240,7 +2277,7 @@
       s.ep -= x.ep; s.gold -= x.gold;
       zahlungMerken(s, lernSchluessel(e, spez), x.start, { ep: x.ep, gold: x.gold, pp: 0 });
     });
-    if (!MEHRFACH.includes(e.lname)) return lernenBestaetigen(lernAnzeige(e.lname), `+${x.start}`, kostenText(x), () => buche(""));
+    if (!MEHRFACH.includes(e.lname)) return lernenBestaetigen(lernAnzeige(e.lname), `+${x.start}`, kostenText(x), () => buche(""), e.waffe ? waffenTabelle(e.lname) : null);
     // Sprachen, Landeskunde, Überleben: Angabe im selben Fenster
     let spez = "";
     const art = e.lname === "Landeskunde" ? "Land" : e.lname === "Überleben" ? "Gelände" : "Sprache bzw. Schrift";

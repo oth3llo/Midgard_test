@@ -639,6 +639,14 @@
 .midgard-cmt.midgard-cmt .zauberwerte th {width: 40%;}
 .midgard-cmt.midgard-cmt .zauber-beschreibung {max-height: 50vh; overflow-y: auto; margin: .6rem 0; padding-right: .3rem;}
 .midgard-cmt.midgard-cmt .zauber-beschreibung p {margin: 0 0 .6rem;}
+.midgard-cmt.midgard-cmt .waffen-inhalt {display: block; font-weight: 400; line-height: 1.3; margin-top: .15rem;}
+.midgard-cmt.midgard-cmt .waffen-inhalt .spaeter {opacity: .7;}
+.midgard-cmt.midgard-cmt th > .waffen-inhalt {font-size: .78rem;}
+.midgard-cmt.midgard-cmt .waffen-tabelle {margin: .4rem 0 .8rem;}
+.midgard-cmt.midgard-cmt .waffen-tabelle h4 {margin: .2rem 0 .3rem;}
+.midgard-cmt.midgard-cmt .waffen-tabelle table {width: 100%;}
+.midgard-cmt.midgard-cmt .waffen-tabelle td.schaden {font-weight: 700; white-space: nowrap;}
+.midgard-cmt.midgard-cmt .waffen-tabelle .spaeter {display: block; margin-top: .35rem; opacity: .75; line-height: 1.3;}
 
 /* Schriften und Grundmaße auch außerhalb der Bögen (Journale, Chat, Dialoge) */
 :root { --schrift-titel: "Alegreya", "Palatino Linotype", Georgia, serif; --schrift-kapitaelchen: "Alegreya SC", "Alegreya", Georgia, serif; --schrift-text: "Alegreya", "Palatino Linotype", Georgia, serif; --radius: 4px; }
@@ -1158,6 +1166,12 @@ html.retro .midgard-abenteurer.midgard-handy :is(.karte, .ma-k-lernbaum) { backg
 html.retro .midgard-abenteurer.midgard-handy .karte > h3:first-child { background: none; color: var(--akzent); border-bottom: 2px solid #ffffff30; }
 html.retro .midgard-abenteurer.midgard-handy :is(.typ, .option) { border: 0; border-radius: 4px; }
 html.retro .midgard-abenteurer.midgard-handy .ma-werkzeug-leiste { background: #070b38; color: var(--akzent); border-bottom: 3px solid #e9ecff; }
+
+/* Kompendium-Browser: nicht Verwendbares beim Planen ausgegraut */
+.midgard-browser .mb-tabelle tr.mb-gesperrt { opacity: .5; }
+.midgard-browser .mb-tabelle tr.mb-gesperrt .mb-name { text-decoration: line-through; text-decoration-thickness: 1px; }
+.midgard-browser .mb-grund { display: block; font-size: .8em; color: var(--schlecht, #a8261d); }
+.midgard-browser .mb-alle { display: inline-flex; align-items: center; gap: 4px; margin-left: 10px; white-space: nowrap; }
 
 /* Charakter-Code importieren */
 .midgard-import-wurzel textarea { width: 100%; min-height: 9rem; font-family: monospace; font-size: .8rem; }
