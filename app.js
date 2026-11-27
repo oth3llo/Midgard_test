@@ -1168,6 +1168,8 @@
       }
       return null;
     };
+    // Spieler sehen nur, was ihr Charakter verwenden kann (wie im Kompendium-Browser); die Spielleitung sieht alles, gesperrt
+    const sichtbar = darfVergeben() ? angebot : angebot.filter((x) => !sperrgrund(x));
     const kaufen = (x) => {
       const vorh = e.kauf.find((k) => k.kat === x.kat && k.name === x.name);
       if (vorh) vorh.anzahl++; else e.kauf.push({ kat: x.kat, name: x.name, preis: x.preis, anzahl: 1 });
@@ -1179,12 +1181,12 @@
         h("div", { class: "inline filter laden-filter" },
           h("select", { "aria-label": "Kategorie", onchange: (ev) => { S.ladenKat = ev.target.value; S.ladenSuche = ""; neuZeichnen(); } }, kats.map((k) => h("option", { value: k, selected: k === S.ladenKat }, k))),
           h("input", { type: "search", placeholder: "Suchen", value: S.ladenSuche || "", oninput: (ev) => { S.ladenSuche = ev.target.value; const pos = ev.target.selectionStart; neuZeichnen(); const f = wurzel.querySelector(".laden-filter input"); if (f) { f.focus(); f.setSelectionRange(pos, pos); } } })),
-        h("div", { class: "laden-liste" }, angebot.map((x) => {
+        h("div", { class: "laden-liste" }, sichtbar.map((x) => {
           const grund = sperrgrund(x), zuTeuer = x.preis > rest;
           return h("div", { class: "einkauf-zeile" + (grund ? " gesperrt" : "") },
             h("span", { class: "einkauf-name" }, h("strong", {}, x.name), h("small", {}, [x.preisText || geld(x.preis), x.gewicht ? `${String(x.gewicht).replace(".", ",")} kg` : null, x.schaden, x.anf, grund].filter(Boolean).join(" · "))),
             h("button", { type: "button", class: "mini", disabled: !!grund || zuTeuer, title: zuTeuer ? "Startgeld reicht nicht" : null, "aria-label": `${x.name} kaufen`, onclick: () => kaufen(x) }, "+"));
-        }), angebot.length ? null : info("Nichts gefunden.")),
+        }), sichtbar.length ? null : info("Nichts gefunden.")),
       ],
       e.kauf.length ? [h("h4", {}, "Gekauft"), h("div", { class: "laden-liste" }, e.kauf.map((k) => h("div", { class: "einkauf-zeile gewaehlt" },
         h("span", { class: "einkauf-name" }, h("strong", {}, k.name), h("small", {}, `${k.anzahl} × ${geld(k.preis)} = ${geld(k.preis * k.anzahl)}`)),

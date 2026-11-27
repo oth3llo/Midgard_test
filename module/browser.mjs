@@ -2,6 +2,7 @@
 // Einträge lassen sich auf Bögen und in die Seitenleiste ziehen (Foundry-Format {type, uuid}).
 import { pdfImportStarten } from "./pdf-import.mjs";
 import { KATEGORIEN, FELDNAMEN, SYSTEM_ID, packId, feld, anzeige, detailText } from "./kategorien.mjs";
+import { verwendbarkeit, GEFILTERT } from "./verwendbar.mjs";
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -38,6 +39,7 @@ export class KompendiumBrowser extends ApplicationV2 {
     const b = (this.#instanz ??= new KompendiumBrowser());
     if (kat && KATEGORIEN[kat]) b.#kat = kat;
     b.#ziel = neben?.actor?.name ?? null;
+    b.#akteur = neben?.actor ?? null;
     const opt = { force: true };
     const pos = neben?.position;
     if (pos && Number.isFinite(pos.left) && Number.isFinite(pos.width)) {
@@ -50,6 +52,24 @@ export class KompendiumBrowser extends ApplicationV2 {
     return b.render(opt);
   }
   #ziel = null;          // Name des Charakters, für den gerade gesucht wird
+  #akteur = null;        // Akteur des Bogens, neben dem der Browser geöffnet wurde
+
+  /**
+   * Spieler sehen bei Waffen und Zaubern nur, was ihr Charakter verwenden bzw. lernen kann (verwendbar.mjs).
+   * Charakter: der Bogen, von dem aus geöffnet wurde, sonst der zugewiesene, sonst der einzige eigene.
+   * Die Spielleitung sieht alles.
+   */
+  #pruefer() {
+    if (game.user.isGM) return null;
+    const eigene = game.actors?.filter?.((a) => a.type === "abenteurer" && a.isOwner) ?? [];
+    const akteur = (this.#akteur?.isOwner ? this.#akteur : null) ?? game.user.character ?? (eigene.length === 1 ? eigene[0] : null);
+    return verwendbarkeit(akteur) ?? { name: null, pruefe: () => null };
+  }
+  #sichtbar(eintraege) {
+    const p = this.#pruefer();
+    if (!p?.name || !GEFILTERT.includes(this.#kat)) return eintraege;
+    return eintraege.filter((e) => !p.pruefe(this.#kat, e));
+  }
 
   #kat = "fertigkeiten";
   #suche = "";
@@ -118,13 +138,21 @@ export class KompendiumBrowser extends ApplicationV2 {
   }
 
   async _renderHTML() {
-    const eintraege = await this.#laden(this.#kat);
+    const alle = await this.#laden(this.#kat);
+    const eintraege = this.#sichtbar(alle);
     // gleiche Gestaltung wie der Charakterbogen (Farben, Schrift, Knöpfe)
     const wurzel = el("div", { class: "mb-wurzel midgard-cmt" });
     wurzel.append(this.#reiter(), el("div", { class: "mb-haupt" }, this.#filterleiste(eintraege), el("div", { class: "mb-liste" }), el("aside", { class: "mb-detail" })));
     if (this.#ausKompendium[this.#kat] && !eintraege.length) {
       wurzel.insertBefore(el("p", { class: "mb-hinweis" }, "Dieses Kompendium ist noch leer. Es wird durch den Import der eigenen Regelwerk-PDF gefüllt (Der Kodex, Das Arkanum, Bestiarium und weitere Quellenbücher)",
         game.user.isGM ? [": ", el("button", { type: "button", text: "Regelwerk-PDF importieren", onclick: () => pdfImportStarten() })] : ", das macht der Spielleiter."), wurzel.children[1]);
+    }
+    const pruefer = GEFILTERT.includes(this.#kat) ? this.#pruefer() : null;
+    if (pruefer && alle.length) {
+      const weg = alle.length - eintraege.length;
+      wurzel.insertBefore(el("p", { class: "mb-hinweis mb-verwendbar" }, el("i", { class: "fa-solid fa-filter", "aria-hidden": "true" }),
+        pruefer.name ? ` Gezeigt wird, was ${pruefer.name} ${this.#kat === "zauber" ? "lernen" : "verwenden"} kann${weg ? ` (${weg} ausgeblendet: ${this.#kat === "zauber" ? "Zaubergruppe des Typs, Schwarze Magie bei Elfen" : "Mindestwerte, Größe, nur für Zauberer"})` : ""}.`
+          : " Dir ist noch kein Charakter zugewiesen; gezeigt wird alles."), wurzel.children[1]);
     }
     if (this.#ziel && eintraege.length) {
       wurzel.insertBefore(el("p", { class: "mb-hinweis mb-ziehen" }, el("i", { class: "fa-solid fa-hand-pointer", "aria-hidden": "true" }), ` Einträge auf den Bogen von ${this.#ziel} ziehen, um sie hinzuzufügen. Gegenstände, die es schon gibt, erhöhen die Anzahl.`), wurzel.children[1]);
@@ -261,6 +289,8 @@ export function knopfEinbauen(_app, html) {
   knopf.addEventListener("click", () => KompendiumBrowser.oeffnen());
   const ort = wurzel.querySelector(".header-actions") ?? wurzel.querySelector(".directory-header") ?? wurzel;
   ort.append(knopf);
+  // Spieler: Waffen- und Zauberkompendium nur über den Browser (dort gefiltert nach dem eigenen Charakter)
+  if (!game.user.isGM) for (const kat of GEFILTERT) for (const e of wurzel.querySelectorAll(`[data-pack="${packId(kat)}"]`)) e.remove();
   if (game.user.isGM) {
     const pdf = el("button", { type: "button", class: "midgard-browser-knopf midgard-pdf-knopf", title: "Beschreibungen aus Kodex, Arkanum oder Quellenbüchern (eigene PDF) übernehmen" }, el("i", { class: "fa-solid fa-file-pdf" }), " Regelwerk-PDF importieren");
     pdf.addEventListener("click", () => pdfImportStarten());
